@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, TrendingUp, BarChart2,
-  FileText, MessageSquare, Bell, Star, ChevronRight, Newspaper
+  FileText, MessageSquare, Bell, Star, ChevronRight, Newspaper, Calendar
 } from 'lucide-react'
 import type { Profile } from '@/types'
 
@@ -19,6 +19,7 @@ const navItems = [
   { href: '/client/forum',         icon: MessageSquare,   label: 'Forum' },
   { href: '/client/annonces',      icon: Bell,            label: 'Annonces' },
   { href: '/client/watchlist',     icon: Star,            label: 'Ma Watchlist' },
+  { href: '/client/calendrier',    icon: Calendar,        label: 'Calendrier AGO' },
 ]
 
 export default function ClientSidebar({ profile }: { profile: Profile }) {
