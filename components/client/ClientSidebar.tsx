@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
@@ -27,17 +28,14 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
       style={{ background: 'var(--noir-surface)', borderRight: '1px solid var(--noir-border)' }}>
 
       {/* Logo */}
-      <div className="px-5 py-5 border-b" style={{ borderColor: 'var(--noir-border)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #D4AF37, #B8960C)' }}>
-            <span className="text-black font-bold text-xs">EP</span>
-          </div>
-          <div>
-            <div className="text-xs font-bold tracking-[0.15em]" style={{ color: '#D4AF37' }}>ELINOJA</div>
-            <div className="text-[10px] tracking-[0.1em]" style={{ color: '#5C5C5C' }}>PATRIMOINE</div>
-          </div>
-        </div>
+      <div className="px-5 py-4 border-b flex items-center justify-center" style={{ borderColor: 'var(--noir-border)' }}>
+        <Image
+          src="/logo.jpeg"
+          alt="Elinoja Patrimoine"
+          width={140}
+          height={60}
+          style={{ objectFit: 'contain' }}
+        />
       </div>
 
       {/* Subscription badge */}

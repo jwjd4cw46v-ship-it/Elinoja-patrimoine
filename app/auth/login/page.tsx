@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 import { Eye, EyeOff, TrendingUp, Shield, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -67,14 +68,12 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #080808 0%, #111111 60%, #0A0A0A 100%)' }}>
 
-        {/* Grid background */}
         <div className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage: 'linear-gradient(#D4AF37 1px, transparent 1px), linear-gradient(90deg, #D4AF37 1px, transparent 1px)',
             backgroundSize: '60px 60px',
           }} />
 
-        {/* Glow orb */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full opacity-5"
           style={{ background: 'radial-gradient(circle, #D4AF37 0%, transparent 70%)' }} />
 
@@ -83,15 +82,13 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="relative z-10">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #D4AF37, #B8960C)' }}>
-              <span className="text-black font-bold text-sm">EP</span>
-            </div>
-            <span className="text-xs font-semibold tracking-[0.3em] text-gold-500" style={{ color: '#D4AF37' }}>
-              ELINOJA PATRIMOINE
-            </span>
-          </div>
+          <Image
+            src="/logo.jpeg"
+            alt="Elinoja Patrimoine"
+            width={180}
+            height={80}
+            style={{ objectFit: 'contain' }}
+          />
         </motion.div>
 
         <motion.div
@@ -138,14 +135,14 @@ export default function LoginPage() {
           className="w-full max-w-[400px]">
 
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #D4AF37, #B8960C)' }}>
-              <span className="text-black font-bold text-xs">EP</span>
-            </div>
-            <span className="text-xs font-semibold tracking-[0.25em]" style={{ color: '#D4AF37' }}>
-              ELINOJA PATRIMOINE
-            </span>
+          <div className="lg:hidden flex items-center justify-center mb-10">
+            <Image
+              src="/logo.jpeg"
+              alt="Elinoja Patrimoine"
+              width={160}
+              height={70}
+              style={{ objectFit: 'contain' }}
+            />
           </div>
 
           <h2 className="text-2xl font-semibold mb-2" style={{ color: '#F5F5F5' }}>
