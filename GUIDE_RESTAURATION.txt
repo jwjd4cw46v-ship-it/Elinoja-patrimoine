@@ -1,0 +1,116 @@
+=====================================================
+   ELINOJA PATRIMOINE — GUIDE DE RESTAURATION
+=====================================================
+
+Chaque fichier est nommé avec son chemin complet.
+Les "/" sont remplacés par "_".
+
+EXEMPLE :
+  app_admin_clients_page.tsx
+  => à mettre dans : app/admin/clients/page.tsx
+
+LISTE COMPLÈTE DES FICHIERS ET OÙ LES PLACER :
+-------------------------------------------------
+
+RACINE DU PROJET :
+  package.json              → package.json
+  next.config.js            → next.config.js
+  tailwind.config.js        → tailwind.config.js
+  tsconfig.json             → tsconfig.json
+  postcss.config.js         → postcss.config.js
+  middleware.ts             → middleware.ts
+  vercel.json               → vercel.json
+  README.md                 → README.md
+
+DOSSIER app/ :
+  app_globals.css           → app/globals.css
+  app_layout.tsx            → app/layout.tsx
+  app_page.tsx              → app/page.tsx
+
+DOSSIER app/auth/ :
+  app_auth_login_page.tsx               → app/auth/login/page.tsx
+  app_auth_forgot-password_page.tsx     → app/auth/forgot-password/page.tsx
+
+DOSSIER app/admin/ :
+  app_admin_layout.tsx                          → app/admin/layout.tsx
+  app_admin_page.tsx                            → app/admin/page.tsx
+  app_admin_clients_page.tsx                    → app/admin/clients/page.tsx
+  app_admin_analyses-techniques_page.tsx        → app/admin/analyses-techniques/page.tsx
+  app_admin_analyses-fondamentales_page.tsx     → app/admin/analyses-fondamentales/page.tsx
+  app_admin_cmf_page.tsx                        → app/admin/cmf/page.tsx
+  app_admin_forum_page.tsx                      → app/admin/forum/page.tsx
+  app_admin_annonces_page.tsx                   → app/admin/annonces/page.tsx
+  app_admin_parametres_page.tsx                 → app/admin/parametres/page.tsx
+
+DOSSIER app/client/ :
+  app_client_layout.tsx                 → app/client/layout.tsx
+  app_client_page.tsx                   → app/client/page.tsx
+  app_client_analyses_page.tsx          → app/client/analyses/page.tsx
+  app_client_fondamentales_page.tsx     → app/client/fondamentales/page.tsx
+  app_client_cmf_page.tsx               → app/client/cmf/page.tsx
+  app_client_forum_page.tsx             → app/client/forum/page.tsx
+  app_client_annonces_page.tsx          → app/client/annonces/page.tsx
+  app_client_watchlist_page.tsx         → app/client/watchlist/page.tsx
+
+DOSSIER app/api/ :
+  app_api_admin_clients_create_route.ts → app/api/admin/clients/create/route.ts
+  app_api_admin_clients_update_route.ts → app/api/admin/clients/update/route.ts
+  app_api_admin_clients_delete_route.ts → app/api/admin/clients/delete/route.ts
+
+DOSSIER components/ :
+  components_admin_AdminSidebar.tsx           → components/admin/AdminSidebar.tsx
+  components_admin_AdminHeader.tsx            → components/admin/AdminHeader.tsx
+  components_admin_AdminDashboardClient.tsx   → components/admin/AdminDashboardClient.tsx
+  components_admin_TechnicalAnalysisForm.tsx  → components/admin/TechnicalAnalysisForm.tsx
+  components_client_ClientSidebar.tsx         → components/client/ClientSidebar.tsx
+  components_client_ClientHeader.tsx          → components/client/ClientHeader.tsx
+
+DOSSIER hooks/ :
+  hooks_useRealtime.ts      → hooks/useRealtime.ts
+  hooks_useProfile.ts       → hooks/useProfile.ts
+
+DOSSIER lib/ :
+  lib_supabase_client.ts    → lib/supabase/client.ts
+  lib_supabase_server.ts    → lib/supabase/server.ts
+
+DOSSIER types/ :
+  types_index.ts            → types/index.ts
+
+DOSSIER utils/ :
+  utils_index.ts            → utils/index.ts
+
+DOSSIER supabase/ :
+  supabase_migrations_001_schema_complet.sql
+                            → supabase/migrations/001_schema_complet.sql
+
+=====================================================
+   ÉTAPES DE MISE EN LIGNE (téléphone uniquement)
+=====================================================
+
+1. SUPABASE (supabase.com)
+   - Créer un projet
+   - SQL Editor → coller le contenu de :
+     supabase_migrations_001_schema_complet.sql
+   - Authentication → Users → créer votre compte admin
+   - SQL Editor → exécuter :
+     UPDATE profiles SET role = 'admin' WHERE email = 'votre@email.com';
+   - Récupérer : Project URL + anon key + service_role key
+
+2. GITHUB (github.com)
+   - Créer un repo "elinoja-patrimoine"
+   - Créer chaque fichier via "Add file → Create new file"
+   - Taper le chemin DESTINATION (colonne droite ci-dessus)
+     ex: app/admin/clients/page.tsx
+   - Coller le contenu du fichier correspondant
+
+3. VERCEL (vercel.com)
+   - Connecter avec GitHub
+   - Importer le repo
+   - Ajouter les 4 variables d'environnement :
+     NEXT_PUBLIC_SUPABASE_URL
+     NEXT_PUBLIC_SUPABASE_ANON_KEY
+     SUPABASE_SERVICE_ROLE_KEY
+     NEXT_PUBLIC_APP_URL
+   - Deploy !
+
+=====================================================

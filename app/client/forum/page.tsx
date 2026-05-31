@@ -1,0 +1,380 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import toast from 'react-hot-toast'
+import { format, formatDistanceToNow } from 'date-fns'
+import { fr } from 'date-fns/locale'
+import type { ForumPost, ForumReply } from '@/types'
+
+export default function ForumPage() {
+  const [posts, setPosts]       = useState<ForumPost[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [search, setSearch]     = useState('')
+  const [showNewPost, setShowNewPost] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null)
+  const [userId, setUserId]     = useState<string | null>(null)
+  const supabase = createClient()
+
+  async function fetchPosts() {
+    const { data } = await supabase
+      .from('forum_posts')
+      .select('*, author:profiles(full_name, role)')
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (data) setPosts(data as any)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+    fetchPosts()
+
+    const channel = supabase
+      .channel('forum-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, () => fetchPosts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, () => {
+        if (selectedPost) fetchReplies(selectedPost.id)
+        fetchPosts()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  const [replies, setReplies]   = useState<ForumReply[]>([])
+  const [replyText, setReplyText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  async function fetchReplies(postId: string) {
+    const { data } = await supabase
+      .from('forum_replies')
+      .select('*, author:profiles(full_name, role)')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+    if (data) setReplies(data as any)
+  }
+
+  async function openPost(post: ForumPost) {
+    setSelectedPost(post)
+    await fetchReplies(post.id)
+    // Increment views
+    await supabase.from('forum_posts').update({ views_count: (post.views_count || 0) + 1 }).eq('id', post.id)
+  }
+
+  async function submitReply() {
+    if (!replyText.trim() || !selectedPost || !userId) return
+    setSubmitting(true)
+    const { error } = await supabase.from('forum_replies').insert({
+      post_id:   selectedPost.id,
+      content:   replyText.trim(),
+      author_id: userId,
+    })
+    if (error) toast.error('Erreur lors de la publication')
+    else {
+      setReplyText('')
+      fetchReplies(selectedPost.id)
+    }
+    setSubmitting(false)
+  }
+
+  async function likePost(post: ForumPost) {
+    await supabase.from('forum_posts').update({ likes_count: (post.likes_count || 0) + 1 }).eq('id', post.id)
+    fetchPosts()
+  }
+
+  const filtered = posts.filter(p =>
+    p.title.toLowerCase().includes(search.toLowerCase()) ||
+    p.content?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold" style={{ color: '#F5F5F5' }}>Forum Investisseurs</h1>
+          <p className="text-sm mt-0.5" style={{ color: '#707070' }}>
+            {posts.length} discussion{posts.length !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <motion.button whileTap={{ scale: 0.97 }}
+          onClick={() => setShowNewPost(true)}
+          className="btn-gold flex items-center gap-2">
+          <Plus size={15} /> Nouveau sujet
+        </motion.button>
+      </div>
+
+      <div className="relative">
+        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#5C5C5C' }} />
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Rechercher une discussion..." className="input-premium pl-9 max-w-sm" />
+      </div>
+
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="card-premium p-5 space-y-2">
+              <div className="skeleton h-5 w-64" />
+              <div className="skeleton h-4 w-full" />
+              <div className="flex gap-4"><div className="skeleton h-3 w-20" /><div className="skeleton h-3 w-20" /></div>
+            </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16">
+          <MessageSquare size={40} className="mx-auto mb-3 opacity-20" style={{ color: '#5C5C5C' }} />
+          <p style={{ color: '#5C5C5C' }}>Aucune discussion</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((post, i) => (
+            <motion.div key={post.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              onClick={() => openPost(post)}
+              className="card-premium p-5 cursor-pointer group"
+              style={post.is_pinned ? { borderColor: 'rgba(212,175,55,0.25)' } : {}}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {post.is_pinned && <Pin size={12} style={{ color: '#D4AF37', flexShrink: 0 }} />}
+                    {post.is_locked && <Lock size={12} style={{ color: '#707070', flexShrink: 0 }} />}
+                    {post.ticker && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded badge-watch">{post.ticker}</span>
+                    )}
+                    <span className="text-xs px-2 py-0.5 rounded"
+                      style={{ background: 'var(--noir-elevated)', color: '#707070' }}>
+                      {post.category}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-sm group-hover:text-white transition-colors line-clamp-1"
+                    style={{ color: '#E0E0E0' }}>
+                    {post.title}
+                  </h3>
+                  <p className="text-xs mt-1 line-clamp-1" style={{ color: '#5C5C5C' }}>{post.content}</p>
+                </div>
+                <div className="flex-shrink-0 text-right">
+                  <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                    {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t"
+                style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
+                    style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
+                    {(post.author as any)?.full_name?.charAt(0) || '?'}
+                  </div>
+                  <span className="text-xs" style={{ color: '#707070' }}>
+                    {(post.author as any)?.full_name}
+                    {(post.author as any)?.role === 'admin' && (
+                      <span className="ml-1 text-[10px] font-bold" style={{ color: '#D4AF37' }}>ADMIN</span>
+                    )}
+                  </span>
+                </div>
+                <button onClick={e => { e.stopPropagation(); likePost(post) }}
+                  className="flex items-center gap-1 text-xs transition-colors"
+                  style={{ color: '#5C5C5C' }}
+                  onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+                  onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+                  <ThumbsUp size={12} /> {post.likes_count || 0}
+                </button>
+                <div className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
+                  <Reply size={12} /> {post.replies_count || 0}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* New Post Modal */}
+      <AnimatePresence>
+        {showNewPost && userId && (
+          <NewPostModal userId={userId} onClose={() => setShowNewPost(false)} onCreated={fetchPosts} />
+        )}
+      </AnimatePresence>
+
+      {/* Post Detail Modal */}
+      <AnimatePresence>
+        {selectedPost && (
+          <PostDetailModal
+            post={selectedPost}
+            replies={replies}
+            replyText={replyText}
+            submitting={submitting}
+            onReplyChange={setReplyText}
+            onSubmitReply={submitReply}
+            onLike={() => likePost(selectedPost)}
+            onClose={() => { setSelectedPost(null); setReplies([]) }}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function NewPostModal({ userId, onClose, onCreated }: { userId: string; onClose: () => void; onCreated: () => void }) {
+  const [form, setForm] = useState({ title: '', content: '', category: 'Général', ticker: '' })
+  const [loading, setLoading] = useState(false)
+  const supabase = createClient()
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    const { error } = await supabase.from('forum_posts').insert({
+      ...form, author_id: userId, ticker: form.ticker || null,
+    })
+    if (error) toast.error('Erreur lors de la publication')
+    else { toast.success('Discussion créée'); onCreated(); onClose() }
+    setLoading(false)
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.8)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }}
+        className="w-full max-w-lg rounded-2xl border p-6"
+        style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold" style={{ color: '#F5F5F5' }}>Nouvelle discussion</h2>
+          <button onClick={onClose}><X size={16} style={{ color: '#5C5C5C' }} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+            placeholder="Titre de la discussion" required className="input-premium" />
+          <div className="grid grid-cols-2 gap-3">
+            <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+              className="input-premium">
+              {['Général','Analyse','Question','Actualité','IPO'].map(c => <option key={c}>{c}</option>)}
+            </select>
+            <input value={form.ticker} onChange={e => setForm(p => ({ ...p, ticker: e.target.value.toUpperCase() }))}
+              placeholder="Ticker (optionnel)" className="input-premium" />
+          </div>
+          <textarea value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
+            placeholder="Décrivez votre sujet..." required rows={4} className="input-premium resize-none" />
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="btn-ghost flex-1">Annuler</button>
+            <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
+              className="btn-gold flex-1 flex items-center justify-center gap-2">
+              {loading ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : 'Publier'}
+            </motion.button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function PostDetailModal({ post, replies, replyText, submitting, onReplyChange, onSubmitReply, onLike, onClose }: {
+  post: ForumPost; replies: ForumReply[]; replyText: string; submitting: boolean
+  onReplyChange: (t: string) => void; onSubmitReply: () => void; onLike: () => void; onClose: () => void
+}) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      style={{ background: 'rgba(0,0,0,0.8)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }}
+        className="w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl border flex flex-col"
+        style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)', maxHeight: '85vh' }}>
+
+        <div className="px-5 py-4 border-b flex items-start justify-between flex-shrink-0"
+          style={{ borderColor: 'var(--noir-border)' }}>
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="flex items-center gap-2 mb-1">
+              {post.ticker && <span className="badge-watch text-[10px] font-bold px-2 py-0.5 rounded">{post.ticker}</span>}
+              <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--noir-elevated)', color: '#707070' }}>{post.category}</span>
+            </div>
+            <h2 className="font-semibold" style={{ color: '#F5F5F5' }}>{post.title}</h2>
+          </div>
+          <button onClick={onClose}><X size={16} style={{ color: '#5C5C5C' }} /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Original post */}
+          <div className="p-4 rounded-xl" style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
+                style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
+                {(post.author as any)?.full_name?.charAt(0)}
+              </div>
+              <span className="text-sm font-medium" style={{ color: '#A0A0A0' }}>
+                {(post.author as any)?.full_name}
+                {(post.author as any)?.role === 'admin' && (
+                  <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
+                )}
+              </span>
+              <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
+                {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
+              </span>
+            </div>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>{post.content}</p>
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t" style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+              <button onClick={onLike} className="flex items-center gap-1 text-xs" style={{ color: '#707070' }}>
+                <ThumbsUp size={12} /> {post.likes_count || 0} j'aime
+              </button>
+            </div>
+          </div>
+
+          {/* Replies */}
+          {replies.map((r, i) => (
+            <motion.div key={r.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="ml-6 p-4 rounded-xl"
+              style={{
+                background: (r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.05)' : 'var(--noir-elevated)',
+                border: `1px solid ${(r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.2)' : 'var(--noir-border)'}`,
+              }}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                  style={{ background: (r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)', color: (r.author as any)?.role === 'admin' ? '#D4AF37' : '#A0A0A0' }}>
+                  {(r.author as any)?.full_name?.charAt(0)}
+                </div>
+                <span className="text-xs font-medium" style={{ color: '#A0A0A0' }}>
+                  {(r.author as any)?.full_name}
+                  {(r.author as any)?.role === 'admin' && (
+                    <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
+                  )}
+                </span>
+                <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
+                  {formatDistanceToNow(new Date(r.created_at), { locale: fr, addSuffix: true })}
+                </span>
+              </div>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>{r.content}</p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Reply box */}
+        {!post.is_locked && (
+          <div className="px-5 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+            <div className="flex gap-3">
+              <textarea value={replyText} onChange={e => onReplyChange(e.target.value)}
+                placeholder="Votre réponse..."
+                rows={2}
+                className="input-premium flex-1 resize-none text-sm"
+                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }}
+              />
+              <motion.button whileTap={{ scale: 0.95 }} onClick={onSubmitReply}
+                disabled={!replyText.trim() || submitting}
+                className="btn-gold px-4 self-end flex items-center gap-2"
+                style={{ opacity: !replyText.trim() ? 0.5 : 1 }}>
+                {submitting
+                  ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  : <Reply size={14} />}
+              </motion.button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
