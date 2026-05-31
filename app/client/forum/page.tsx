@@ -1,24 +1,26 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { ForumPost, ForumReply } from '@/types'
 
 export default function ForumPage() {
-  const [posts, setPosts]       = useState<ForumPost[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [search, setSearch]     = useState('')
+  const [posts, setPosts]           = useState<ForumPost[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState('')
   const [showNewPost, setShowNewPost] = useState(false)
   const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null)
-  const [userId, setUserId]     = useState<string | null>(null)
+  const [userId, setUserId]         = useState<string | null>(null)
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
   const supabase = createClient()
 
-  async function fetchPosts() {
+  // ── Charger les posts ──────────────────────────────
+  const fetchPosts = useCallback(async () => {
     const { data } = await supabase
       .from('forum_posts')
       .select('*, author:profiles(full_name, role)')
@@ -26,15 +28,31 @@ export default function ForumPage() {
       .order('created_at', { ascending: false })
     if (data) setPosts(data as any)
     setLoading(false)
+  }, [])
+
+  // ── Charger les likes de l'utilisateur ────────────
+  async function fetchUserLikes(uid: string) {
+    const { data } = await supabase
+      .from('forum_likes')
+      .select('post_id')
+      .eq('user_id', uid)
+      .not('post_id', 'is', null)
+    if (data) {
+      setLikedPosts(new Set(data.map(l => l.post_id).filter(Boolean)))
+    }
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+    supabase.auth.getUser().then(({ data }) => {
+      const uid = data.user?.id ?? null
+      setUserId(uid)
+      if (uid) fetchUserLikes(uid)
+    })
     fetchPosts()
 
     const channel = supabase
       .channel('forum-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, () => fetchPosts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_posts' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'forum_replies' }, () => {
         if (selectedPost) fetchReplies(selectedPost.id)
         fetchPosts()
@@ -44,9 +62,10 @@ export default function ForumPage() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  const [replies, setReplies]   = useState<ForumReply[]>([])
-  const [replyText, setReplyText] = useState('')
+  const [replies, setReplies]       = useState<ForumReply[]>([])
+  const [replyText, setReplyText]   = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [likingPost, setLikingPost] = useState<string | null>(null)
 
   async function fetchReplies(postId: string) {
     const { data } = await supabase
@@ -60,8 +79,10 @@ export default function ForumPage() {
   async function openPost(post: ForumPost) {
     setSelectedPost(post)
     await fetchReplies(post.id)
-    // Increment views
-    await supabase.from('forum_posts').update({ views_count: (post.views_count || 0) + 1 }).eq('id', post.id)
+    await supabase
+      .from('forum_posts')
+      .update({ views_count: (post.views_count || 0) + 1 })
+      .eq('id', post.id)
   }
 
   async function submitReply() {
@@ -80,9 +101,40 @@ export default function ForumPage() {
     setSubmitting(false)
   }
 
-  async function likePost(post: ForumPost) {
-    await supabase.from('forum_posts').update({ likes_count: (post.likes_count || 0) + 1 }).eq('id', post.id)
-    fetchPosts()
+  // ── Toggle like avec fonction SQL ─────────────────
+  async function toggleLike(post: ForumPost) {
+    if (!userId) { toast.error('Connectez-vous pour liker'); return }
+    if (likingPost === post.id) return // éviter double-clic
+    setLikingPost(post.id)
+
+    const { data, error } = await supabase.rpc('toggle_post_like', {
+      p_post_id:  post.id,
+      p_user_id:  userId,
+    })
+
+    if (error) {
+      toast.error('Erreur')
+    } else {
+      // Mettre à jour l'état local immédiatement (sans attendre le realtime)
+      const isNowLiked = data.liked as boolean
+      const newCount   = data.likes_count as number
+
+      setLikedPosts(prev => {
+        const next = new Set(prev)
+        if (isNowLiked) next.add(post.id)
+        else next.delete(post.id)
+        return next
+      })
+
+      setPosts(prev => prev.map(p =>
+        p.id === post.id ? { ...p, likes_count: newCount } : p
+      ))
+
+      if (selectedPost?.id === post.id) {
+        setSelectedPost(prev => prev ? { ...prev, likes_count: newCount } : null)
+      }
+    }
+    setLikingPost(null)
   }
 
   const filtered = posts.filter(p =>
@@ -118,7 +170,10 @@ export default function ForumPage() {
             <div key={i} className="card-premium p-5 space-y-2">
               <div className="skeleton h-5 w-64" />
               <div className="skeleton h-4 w-full" />
-              <div className="flex gap-4"><div className="skeleton h-3 w-20" /><div className="skeleton h-3 w-20" /></div>
+              <div className="flex gap-4">
+                <div className="skeleton h-3 w-20" />
+                <div className="skeleton h-3 w-20" />
+              </div>
             </div>
           ))}
         </div>
@@ -129,78 +184,88 @@ export default function ForumPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((post, i) => (
-            <motion.div key={post.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              onClick={() => openPost(post)}
-              className="card-premium p-5 cursor-pointer group"
-              style={post.is_pinned ? { borderColor: 'rgba(212,175,55,0.25)' } : {}}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    {post.is_pinned && <Pin size={12} style={{ color: '#D4AF37', flexShrink: 0 }} />}
-                    {post.is_locked && <Lock size={12} style={{ color: '#707070', flexShrink: 0 }} />}
-                    {post.ticker && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded badge-watch">{post.ticker}</span>
-                    )}
-                    <span className="text-xs px-2 py-0.5 rounded"
-                      style={{ background: 'var(--noir-elevated)', color: '#707070' }}>
-                      {post.category}
+          {filtered.map((post, i) => {
+            const isLiked = likedPosts.has(post.id)
+            return (
+              <motion.div key={post.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+                onClick={() => openPost(post)}
+                className="card-premium p-5 cursor-pointer group"
+                style={post.is_pinned ? { borderColor: 'rgba(212,175,55,0.25)' } : {}}>
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {post.is_pinned && <Pin size={12} style={{ color: '#D4AF37', flexShrink: 0 }} />}
+                      {post.is_locked && <Lock size={12} style={{ color: '#707070', flexShrink: 0 }} />}
+                      {post.ticker && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded badge-watch">{post.ticker}</span>
+                      )}
+                      <span className="text-xs px-2 py-0.5 rounded"
+                        style={{ background: 'var(--noir-elevated)', color: '#707070' }}>
+                        {post.category}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-sm group-hover:text-white transition-colors line-clamp-1"
+                      style={{ color: '#E0E0E0' }}>
+                      {post.title}
+                    </h3>
+                    <p className="text-xs mt-1 line-clamp-1" style={{ color: '#5C5C5C' }}>{post.content}</p>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                      {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 mt-3 pt-3 border-t"
+                  style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
+                      style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
+                      {(post.author as any)?.full_name?.charAt(0) || '?'}
+                    </div>
+                    <span className="text-xs" style={{ color: '#707070' }}>
+                      {(post.author as any)?.full_name}
+                      {(post.author as any)?.role === 'admin' && (
+                        <span className="ml-1 text-[10px] font-bold" style={{ color: '#D4AF37' }}>ADMIN</span>
+                      )}
                     </span>
                   </div>
-                  <h3 className="font-semibold text-sm group-hover:text-white transition-colors line-clamp-1"
-                    style={{ color: '#E0E0E0' }}>
-                    {post.title}
-                  </h3>
-                  <p className="text-xs mt-1 line-clamp-1" style={{ color: '#5C5C5C' }}>{post.content}</p>
-                </div>
-                <div className="flex-shrink-0 text-right">
-                  <div className="text-xs" style={{ color: '#5C5C5C' }}>
-                    {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
-                  </div>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-4 mt-3 pt-3 border-t"
-                style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
-                    style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
-                    {(post.author as any)?.full_name?.charAt(0) || '?'}
+                  {/* Bouton Like */}
+                  <button
+                    onClick={e => { e.stopPropagation(); toggleLike(post) }}
+                    disabled={likingPost === post.id}
+                    className="flex items-center gap-1 text-xs transition-all px-2 py-1 rounded-lg"
+                    style={{
+                      color:      isLiked ? '#D4AF37' : '#5C5C5C',
+                      background: isLiked ? 'rgba(212,175,55,0.1)' : 'transparent',
+                      border:     isLiked ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+                    }}>
+                    <ThumbsUp size={12} fill={isLiked ? '#D4AF37' : 'none'} />
+                    <span>{post.likes_count || 0}</span>
+                  </button>
+
+                  <div className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
+                    <Reply size={12} /> {post.replies_count || 0}
                   </div>
-                  <span className="text-xs" style={{ color: '#707070' }}>
-                    {(post.author as any)?.full_name}
-                    {(post.author as any)?.role === 'admin' && (
-                      <span className="ml-1 text-[10px] font-bold" style={{ color: '#D4AF37' }}>ADMIN</span>
-                    )}
-                  </span>
                 </div>
-                <button onClick={e => { e.stopPropagation(); likePost(post) }}
-                  className="flex items-center gap-1 text-xs transition-colors"
-                  style={{ color: '#5C5C5C' }}
-                  onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
-                  onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
-                  <ThumbsUp size={12} /> {post.likes_count || 0}
-                </button>
-                <div className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
-                  <Reply size={12} /> {post.replies_count || 0}
-                </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            )
+          })}
         </div>
       )}
 
-      {/* New Post Modal */}
       <AnimatePresence>
         {showNewPost && userId && (
           <NewPostModal userId={userId} onClose={() => setShowNewPost(false)} onCreated={fetchPosts} />
         )}
       </AnimatePresence>
 
-      {/* Post Detail Modal */}
       <AnimatePresence>
         {selectedPost && (
           <PostDetailModal
@@ -208,9 +273,10 @@ export default function ForumPage() {
             replies={replies}
             replyText={replyText}
             submitting={submitting}
+            isLiked={likedPosts.has(selectedPost.id)}
             onReplyChange={setReplyText}
             onSubmitReply={submitReply}
-            onLike={() => likePost(selectedPost)}
+            onLike={() => toggleLike(selectedPost)}
             onClose={() => { setSelectedPost(null); setReplies([]) }}
           />
         )}
@@ -219,7 +285,10 @@ export default function ForumPage() {
   )
 }
 
-function NewPostModal({ userId, onClose, onCreated }: { userId: string; onClose: () => void; onCreated: () => void }) {
+// ── Nouveau Post ───────────────────────────────────────────
+function NewPostModal({ userId, onClose, onCreated }: {
+  userId: string; onClose: () => void; onCreated: () => void
+}) {
   const [form, setForm] = useState({ title: '', content: '', category: 'Général', ticker: '' })
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
@@ -264,7 +333,9 @@ function NewPostModal({ userId, onClose, onCreated }: { userId: string; onClose:
             <button type="button" onClick={onClose} className="btn-ghost flex-1">Annuler</button>
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
               className="btn-gold flex-1 flex items-center justify-center gap-2">
-              {loading ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : 'Publier'}
+              {loading
+                ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                : 'Publier'}
             </motion.button>
           </div>
         </form>
@@ -273,9 +344,17 @@ function NewPostModal({ userId, onClose, onCreated }: { userId: string; onClose:
   )
 }
 
-function PostDetailModal({ post, replies, replyText, submitting, onReplyChange, onSubmitReply, onLike, onClose }: {
-  post: ForumPost; replies: ForumReply[]; replyText: string; submitting: boolean
-  onReplyChange: (t: string) => void; onSubmitReply: () => void; onLike: () => void; onClose: () => void
+// ── Detail Post ────────────────────────────────────────────
+function PostDetailModal({ post, replies, replyText, submitting, isLiked, onReplyChange, onSubmitReply, onLike, onClose }: {
+  post: ForumPost
+  replies: ForumReply[]
+  replyText: string
+  submitting: boolean
+  isLiked: boolean
+  onReplyChange: (t: string) => void
+  onSubmitReply: () => void
+  onLike: () => void
+  onClose: () => void
 }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -290,8 +369,13 @@ function PostDetailModal({ post, replies, replyText, submitting, onReplyChange, 
           style={{ borderColor: 'var(--noir-border)' }}>
           <div className="flex-1 min-w-0 pr-4">
             <div className="flex items-center gap-2 mb-1">
-              {post.ticker && <span className="badge-watch text-[10px] font-bold px-2 py-0.5 rounded">{post.ticker}</span>}
-              <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--noir-elevated)', color: '#707070' }}>{post.category}</span>
+              {post.ticker && (
+                <span className="badge-watch text-[10px] font-bold px-2 py-0.5 rounded">{post.ticker}</span>
+              )}
+              <span className="text-xs px-2 py-0.5 rounded"
+                style={{ background: 'var(--noir-elevated)', color: '#707070' }}>
+                {post.category}
+              </span>
             </div>
             <h2 className="font-semibold" style={{ color: '#F5F5F5' }}>{post.title}</h2>
           </div>
@@ -299,8 +383,9 @@ function PostDetailModal({ post, replies, replyText, submitting, onReplyChange, 
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Original post */}
-          <div className="p-4 rounded-xl" style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
+          {/* Post original */}
+          <div className="p-4 rounded-xl"
+            style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
@@ -316,26 +401,43 @@ function PostDetailModal({ post, replies, replyText, submitting, onReplyChange, 
                 {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
               </span>
             </div>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>{post.content}</p>
-            <div className="flex items-center gap-3 mt-3 pt-3 border-t" style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
-              <button onClick={onLike} className="flex items-center gap-1 text-xs" style={{ color: '#707070' }}>
-                <ThumbsUp size={12} /> {post.likes_count || 0} j'aime
+            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
+              {post.content}
+            </p>
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t"
+              style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+              <button onClick={onLike}
+                className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg transition-all"
+                style={{
+                  color:      isLiked ? '#D4AF37' : '#707070',
+                  background: isLiked ? 'rgba(212,175,55,0.1)' : 'transparent',
+                  border:     isLiked ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+                }}>
+                <ThumbsUp size={12} fill={isLiked ? '#D4AF37' : 'none'} />
+                {post.likes_count || 0} j'aime
               </button>
             </div>
           </div>
 
-          {/* Replies */}
+          {/* Réponses */}
           {replies.map((r, i) => (
-            <motion.div key={r.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            <motion.div key={r.id}
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               className="ml-6 p-4 rounded-xl"
               style={{
-                background: (r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.05)' : 'var(--noir-elevated)',
-                border: `1px solid ${(r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.2)' : 'var(--noir-border)'}`,
+                background: (r.author as any)?.role === 'admin'
+                  ? 'rgba(212,175,55,0.05)' : 'var(--noir-elevated)',
+                border: `1px solid ${(r.author as any)?.role === 'admin'
+                  ? 'rgba(212,175,55,0.2)' : 'var(--noir-border)'}`,
               }}>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
-                  style={{ background: (r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)', color: (r.author as any)?.role === 'admin' ? '#D4AF37' : '#A0A0A0' }}>
+                  style={{
+                    background: (r.author as any)?.role === 'admin'
+                      ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
+                    color: (r.author as any)?.role === 'admin' ? '#D4AF37' : '#A0A0A0',
+                  }}>
                   {(r.author as any)?.full_name?.charAt(0)}
                 </div>
                 <span className="text-xs font-medium" style={{ color: '#A0A0A0' }}>
@@ -348,21 +450,21 @@ function PostDetailModal({ post, replies, replyText, submitting, onReplyChange, 
                   {formatDistanceToNow(new Date(r.created_at), { locale: fr, addSuffix: true })}
                 </span>
               </div>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>{r.content}</p>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
+                {r.content}
+              </p>
             </motion.div>
           ))}
         </div>
 
-        {/* Reply box */}
+        {/* Zone de réponse */}
         {!post.is_locked && (
           <div className="px-5 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
             <div className="flex gap-3">
               <textarea value={replyText} onChange={e => onReplyChange(e.target.value)}
-                placeholder="Votre réponse..."
-                rows={2}
+                placeholder="Votre réponse..." rows={2}
                 className="input-premium flex-1 resize-none text-sm"
-                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }}
-              />
+                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }} />
               <motion.button whileTap={{ scale: 0.95 }} onClick={onSubmitReply}
                 disabled={!replyText.trim() || submitting}
                 className="btn-gold px-4 self-end flex items-center gap-2"
