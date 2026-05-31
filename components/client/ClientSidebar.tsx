@@ -11,35 +11,35 @@ import {
 import type { Profile } from '@/types'
 
 const navItems = [
-  { href: '/client',              icon: LayoutDashboard, label: 'Tableau de bord' },
-  { href: '/client/analyses',     icon: TrendingUp,      label: 'Analyses Techniques' },
-  { href: '/client/fondamentales',icon: BarChart2,       label: 'Anal. Fondamentales' },
-  { href: '/client/cmf',          icon: FileText,        label: 'Communiqués CMF' },
-  { href: '/client/forum',        icon: MessageSquare,   label: 'Forum' },
-  { href: '/client/annonces',     icon: Bell,            label: 'Annonces' },
-  { href: '/client/watchlist',    icon: Star,            label: 'Ma Watchlist' },
+  { href: '/client',               icon: LayoutDashboard, label: 'Tableau de bord' },
+  { href: '/client/analyses',      icon: TrendingUp,      label: 'Analyses Techniques' },
+  { href: '/client/fondamentales', icon: BarChart2,       label: 'Analyses Fondamentales' },
+  { href: '/client/cmf',           icon: FileText,        label: 'Publications CMF' },
+  { href: '/client/forum',         icon: MessageSquare,   label: 'Forum' },
+  { href: '/client/annonces',      icon: Bell,            label: 'Annonces' },
+  { href: '/client/watchlist',     icon: Star,            label: 'Ma Watchlist' },
 ]
 
 export default function ClientSidebar({ profile }: { profile: Profile }) {
   const pathname = usePathname()
 
   return (
-    <aside className="w-60 flex flex-col flex-shrink-0 h-full"
+    <aside className="w-64 flex flex-col flex-shrink-0 h-full"
       style={{ background: 'var(--noir-surface)', borderRight: '1px solid var(--noir-border)' }}>
 
       {/* Logo */}
-      <div className="px-5 py-4 border-b flex items-center justify-center" style={{ borderColor: 'var(--noir-border)' }}>
+      <div className="px-4 py-4 border-b flex items-center justify-center" style={{ borderColor: 'var(--noir-border)' }}>
         <Image
           src="/logo.jpeg"
           alt="Elinoja Patrimoine"
-          width={140}
-          height={60}
+          width={150}
+          height={65}
           style={{ objectFit: 'contain' }}
         />
       </div>
 
       {/* Subscription badge */}
-      <div className="px-5 py-3 border-b" style={{ borderColor: 'var(--noir-border)' }}>
+      <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--noir-border)' }}>
         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
           profile.subscription_status === 'active' ? 'badge-buy' :
           profile.subscription_status === 'trial'  ? 'badge-watch' : 'badge-sell'
@@ -59,10 +59,22 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
             <Link key={item.href} href={item.href}>
               <motion.div
                 whileHover={{ x: 2 }}
-                className={`sidebar-link ${isActive ? 'active' : ''}`}>
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '9px 12px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: isActive ? 500 : 400,
+                  color: isActive ? '#D4AF37' : '#707070',
+                  background: isActive ? 'rgba(212,175,55,0.08)' : 'transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}>
                 <item.icon size={16} style={{ flexShrink: 0 }} />
-                <span className="truncate">{item.label}</span>
-                {isActive && <ChevronRight size={12} className="ml-auto" style={{ color: '#D4AF37' }} />}
+                <span>{item.label}</span>
+                {isActive && <ChevronRight size={12} style={{ marginLeft: 'auto', color: '#D4AF37' }} />}
               </motion.div>
             </Link>
           )
@@ -71,7 +83,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
 
       <div className="p-4 border-t" style={{ borderColor: 'var(--noir-border)' }}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
             style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
             {profile.full_name?.charAt(0) || 'C'}
           </div>
