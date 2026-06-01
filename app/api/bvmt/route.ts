@@ -122,11 +122,20 @@ async function fetchPdfBuffer(url: string): Promise<ArrayBuffer | null> {
     })
     if (!res.ok) {
       console.log('[BVMT] PDF fetch failed:', res.status, url)
+      console.log('[BVMT] Status text:', res.statusText)
       return null
     }
     return await res.arrayBuffer()
-  } catch (e) {
-    console.log('[BVMT] Fetch error:', e)
+  } catch (e: any) {
+    if (e?.name === 'AbortError' || e?.message?.includes('timeout')) {
+      console.log('[BVMT] PDF fetch timeout - server might be down or network unreachable')
+    } else if (e?.code === 'ECONNREFUSED' || e?.message?.includes('ECONNREFUSED')) {
+      console.log('[BVMT] Connection refused - BVMT server is likely offline')
+    } else if (e?.message?.includes('DNS') || e?.message?.includes('ENOTFOUND')) {
+      console.log('[BVMT] DNS resolution failed - cannot reach tunis-stockexchange.com')
+    } else {
+      console.log('[BVMT] Fetch error:', e?.message || e)
+    }
     return null
   }
 }
@@ -282,8 +291,20 @@ export async function GET(request: Request) {
   const force     = searchParams.get('force') === '1'
   const dateParam = searchParams.get('date')
   const debug     = searchParams.get('debug') === '1'
+  const testMode  = searchParams.get('test') === '1' || searchParams.get('mock') === '1'
 
   try {
+    // ── MODE TEST: Retourner directement les données de secours ──
+    if (testMode) {
+      console.log('[BVMT] TEST MODE: Returning mock data')
+      return NextResponse.json({
+        source: 'test_mock',
+        quotes: getDefaultQuotes(),
+        count: 10,
+        message: 'Mode test - données de démonstration'
+      })
+    }
+
     const supabase = createServiceClient()
 
     // ── 1. Cache Supabase valide 24h ──
@@ -318,13 +339,27 @@ export async function GET(request: Request) {
     }
 
     if (!pdfBuffer) {
-      console.log('[BVMT] No PDF available, using stale cache or fallback')
+      console.log('[BVMT] No PDF available')
+      console.log('[BVMT] BVMT Server appears to be offline or unreachable')
+      console.log('[BVMT] Using fallback cache or test data')
       const { data: stale } = await supabase
         .from('market_quotes').select('*').order('updated_at', { ascending: false }).limit(80)
       if (stale && stale.length > 0) {
-        return NextResponse.json({ source: 'stale_cache', quotes: stale, count: stale.length, warning: 'PDF indisponible' })
+        return NextResponse.json({
+          source: 'stale_cache',
+          quotes: stale,
+          count: stale.length,
+          warning: 'PDF indisponible - Serveur BVMT offline',
+          hint: 'Utilisez ?test=1 pour les données de test'
+        })
       }
-      return NextResponse.json({ source: 'fallback', quotes: getDefaultQuotes(), count: 10 })
+      return NextResponse.json({
+        source: 'fallback',
+        quotes: getDefaultQuotes(),
+        count: 10,
+        warning: 'PDF indisponible - Serveur BVMT offline',
+        hint: 'Utilisez ?test=1 pour les données de test'
+      })
     }
 
     // ── 3. Extraction via Claude (priorité) ──
@@ -370,10 +405,22 @@ export async function GET(request: Request) {
     const { data: stale } = await supabase
       .from('market_quotes').select('*').order('updated_at', { ascending: false }).limit(80)
     if (stale && stale.length > 0) {
-      return NextResponse.json({ source: 'stale_cache', quotes: stale, count: stale.length, warning: 'Extraction échouée' })
+      return NextResponse.json({
+        source: 'stale_cache',
+        quotes: stale,
+        count: stale.length,
+        warning: 'Extraction échouée - Serveur BVMT indisponible',
+        hint: 'Utilisez ?test=1 pour afficher les données de test'
+      })
     }
 
-    return NextResponse.json({ source: 'fallback', quotes: getDefaultQuotes(), count: 10 })
+    return NextResponse.json({
+      source: 'fallback',
+      quotes: getDefaultQuotes(),
+      count: 10,
+      warning: 'Serveur BVMT indisponible - Données de secours',
+      hint: 'Utilisez ?test=1 pour afficher les données de test'
+    })
 
   } catch (e) {
     console.error('[BVMT] Erreur:', e)

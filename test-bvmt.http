@@ -1,0 +1,24 @@
+@host = http://localhost:3000
+@api = /api/bvmt
+
+### 1️⃣ Test basique - Récupérer les données (cache ou PDF)
+GET {{host}}{{api}}
+
+### 2️⃣ Forcer l'extraction du PDF en ignorant le cache
+GET {{host}}{{api}}?force=1
+
+### 3️⃣ Mode debug - Affiche les détails d'extraction
+GET {{host}}{{api}}?debug=1
+
+### 4️⃣ Combinaison: Forcer + Debug
+GET {{host}}{{api}}?force=1&debug=1
+
+### 5️⃣ Spécifier une date (format YYYY-MM-DD)
+GET {{host}}{{api}}?date=2025-11-21
+
+### 6️⃣ Spécifier une date + Forcer
+GET {{host}}{{api}}?date=2025-11-21&force=1
+
+### 7️⃣ Vérifier le statut de l'API
+GET {{host}}/api/bvmt HTTP/1.1
+

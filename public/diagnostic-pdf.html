@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnostic PDF BVMT</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            margin: 30px 0;
+            border-left: 4px solid #3498db;
+            padding-left: 20px;
+        }
+        .date-section {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .url-box {
+            background: #f8f9fa;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px 5px 5px 0;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #2980b9;
+        }
+        .button.external {
+            background: #27ae60;
+        }
+        .button.external:hover {
+            background: #229954;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .status.loading {
+            display: block;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+        }
+        .status.success {
+            display: block;
+            background: #d4edda;
+            border: 1px solid #28a745;
+            color: #155724;
+        }
+        .status.error {
+            display: block;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .result {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 12px;
+            border-left: 4px solid #2196F3;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Diagnostic PDF BVMT</h1>
+        <p class="subtitle">Testez l'accès à l'URL du PDF de la bourse BVMT</p>
+
+        <div class="test-section">
+            <h2>📅 Test des URLs PDF</h2>
+            <p>Cliquez sur les boutons pour tester l'accès aux PDF BVMT</p>
+
+            <div id="testContainer"></div>
+
+            <div class="info">
+                ℹ️ Les PDFs ne sont disponibles que les jours de bourse (lun-ven, hors jours fériés)
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔧 Diagnostique détaillé</h2>
+            <button class="button" onclick="runFullDiagnostic()">Lancer le diagnostic complet</button>
+            <div id="diagnosticResults"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔍 Informations système</h2>
+            <table>
+                <tr>
+                    <th>Paramètre</th>
+                    <th>Valeur</th>
+                </tr>
+                <tr>
+                    <td>Date actuelle</td>
+                    <td id="currentDate"></td>
+                </tr>
+                <tr>
+                    <td>Jour de la semaine</td>
+                    <td id="dayOfWeek"></td>
+                </tr>
+                <tr>
+                    <td>Bourse ouverte?</td>
+                    <td id="bourseOpen"></td>
+                </tr>
+                <tr>
+                    <td>Dernier jour ouvrable</td>
+                    <td id="lastBusinessDay"></td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const FIXED_HOLIDAYS = new Set([
+            '01-01','01-14','03-20','04-09','05-01','07-25','08-13','10-15',
+        ])
+        const VARIABLE_HOLIDAYS = new Set([
+            '2025-03-30','2025-03-31','2025-04-01',
+            '2025-06-06','2025-06-07','2025-06-08',
+            '2025-06-26','2025-09-04',
+            '2026-03-19','2026-03-20','2026-03-21',
+            '2026-05-26','2026-05-27','2026-05-28',
+            '2026-06-16','2026-08-25',
+        ])
+
+        function isHoliday(date) {
+            const mm_dd = date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit' }).replace('/', '-')
+            const yyyy_mm_dd = date.toISOString().split('T')[0]
+            return FIXED_HOLIDAYS.has(mm_dd) || VARIABLE_HOLIDAYS.has(yyyy_mm_dd)
+        }
+
+        function isBourseOpen(date) {
+            const day = date.getDay()
+            return day !== 0 && day !== 6 && !isHoliday(date)
+        }
+
+        function getLastBusinessDay(date = new Date()) {
+            const d = new Date(date)
+            let max = 14
+            while (!isBourseOpen(d) && max-- > 0) d.setDate(d.getDate() - 1)
+            return d
+        }
+
+        function buildPdfUrl(date) {
+            const year = date.getFullYear()
+            const month = String(date.getMonth() + 1).padStart(2, '0')
+            const day = String(date.getDate()).padStart(2, '0')
+            return `https://tunis-stockexchange.com/sites/default/files/${year}-${month}/fr-physionomie-seance-${year}-${month}-${day}.pdf`
+        }
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0]
+        }
+
+        function getDayName(date) {
+            return date.toLocaleDateString('fr-FR', { weekday: 'long' })
+        }
+
+        // Initialiser l'affichage
+        function initDisplay() {
+            const now = new Date()
+            const lastBusiness = getLastBusinessDay()
+
+            document.getElementById('currentDate').textContent = formatDate(now)
+            document.getElementById('dayOfWeek').textContent = getDayName(now)
+            document.getElementById('bourseOpen').textContent = isBourseOpen(now) ? '✅ Oui' : '❌ Non'
+            document.getElementById('lastBusinessDay').textContent = formatDate(lastBusiness)
+
+            // Générer les tests
+            generateTests()
+        }
+
+        function generateTests() {
+            const testDates = [
+                getLastBusinessDay(),
+                new Date(new Date().getTime() - 86400000),
+                new Date(new Date().getTime() - 172800000),
+                new Date(new Date().getTime() - 259200000),
+            ]
+
+            const container = document.getElementById('testContainer')
+            container.innerHTML = ''
+
+            testDates.forEach((date, index) => {
+                const dateStr = formatDate(date)
+                const dayName = getDayName(date)
+                const url = buildPdfUrl(date)
+                const isBourseDay = isBourseOpen(date)
+
+                const section = document.createElement('div')
+                section.className = 'date-section'
+                section.innerHTML = `
+                    <strong>${dateStr} (${dayName}) ${!isBourseDay ? '❌ Non ouvrable' : ''}</strong>
+                    <div class="url-box">${url}</div>
+                    <button class="button" onclick="testUrl('${url}', this)">Tester</button>
+                    <button class="button external" onclick="window.open('${url}', '_blank')">Ouvrir</button>
+                    <div class="status" id="status-${index}"></div>
+                `
+                container.appendChild(section)
+            })
+        }
+
+        async function testUrl(url, button) {
+            const statusDiv = button.parentElement.querySelector('.status')
+            
+            statusDiv.className = 'status loading'
+            statusDiv.textContent = '⏳ Test en cours...'
+            button.disabled = true
+
+            try {
+                const controller = new AbortController()
+                const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0'
+                    },
+                    signal: controller.signal
+                })
+
+                clearTimeout(timeoutId)
+
+                if (response.ok) {
+                    statusDiv.className = 'status success'
+                    const contentLength = response.headers.get('content-length')
+                    const mb = contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) : '?'
+                    statusDiv.innerHTML = `✅ Accès OK (${response.status})<br>Taille: ${mb} MB`
+                } else if (response.status === 404) {
+                    statusDiv.className = 'status error'
+                    statusDiv.textContent = `❌ Erreur 404 - PDF non trouvé`
+                } else {
+                    statusDiv.className = 'status error'
+                    statusDiv.textContent = `⚠️ Erreur ${response.status} - ${response.statusText}`
+                }
+            } catch (error) {
+                statusDiv.className = 'status error'
+                statusDiv.textContent = `❌ Erreur: ${error.message}`
+            } finally {
+                button.disabled = false
+            }
+        }
+
+        async function runFullDiagnostic() {
+            const resultsDiv = document.getElementById('diagnosticResults')
+            resultsDiv.innerHTML = '<div class="status loading">⏳ Diagnostic en cours...</div>'
+
+            const results = []
+            const testDates = [
+                getLastBusinessDay(),
+                new Date(new Date().getTime() - 86400000),
+                new Date(new Date().getTime() - 172800000),
+            ]
+
+            for (const date of testDates) {
+                const url = buildPdfUrl(date)
+                const dateStr = formatDate(date)
+
+                try {
+                    const response = await fetch(url, { method: 'HEAD' })
+                    results.push(`${dateStr}: ${response.status} ${response.statusText}`)
+                } catch (e) {
+                    results.push(`${dateStr}: ERREUR - ${e.message}`)
+                }
+
+                await new Promise(r => setTimeout(r, 500))
+            }
+
+            resultsDiv.innerHTML = `
+                <div class="result">
+RÉSULTATS:
+${results.join('\n')}
+
+CONCLUSION:
+${results.some(r => r.includes('200')) ? '✅ Au moins un PDF est accessible' : '❌ Aucun PDF accessible - vérifiez la connexion internet ou le serveur BVMT'}
+                </div>
+            `
+        }
+
+        // Initialiser au chargement
+        document.addEventListener('DOMContentLoaded', initDisplay)
+    </script>
+</body>
+</html>
