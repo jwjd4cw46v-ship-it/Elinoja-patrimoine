@@ -34,14 +34,19 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
   const pathname = request.nextUrl.pathname
+
+  // ✅ Routes API internes — bypass total du middleware
+  if (pathname.startsWith('/api/')) {
+    return response
+  }
+
+  const { data: { session } } = await supabase.auth.getSession()
 
   // Routes publiques
   const publicRoutes = ['/auth/login', '/auth/forgot-password', '/']
   if (publicRoutes.includes(pathname)) {
     if (session) {
-      // Récupérer le rôle
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
