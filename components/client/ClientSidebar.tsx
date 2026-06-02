@@ -59,7 +59,6 @@ function WatchMiniCard({ item }: { item: any }) {
         transition:   'border-color 0.4s',
       }}
     >
-      {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
         <div>
           <div style={{ fontSize:'11px', fontWeight:600, color:'#C0C0C0', letterSpacing:'0.04em' }}>
@@ -88,7 +87,6 @@ function WatchMiniCard({ item }: { item: any }) {
         </div>
       </div>
 
-      {/* Barre progression */}
       {item.low > 0 && item.high > 0 && (
         <div style={{ background:'var(--noir-border)', borderRadius:'2px', height:'2px', marginBottom:'8px', overflow:'hidden' }}>
           <div style={{
@@ -104,7 +102,6 @@ function WatchMiniCard({ item }: { item: any }) {
         </div>
       )}
 
-      {/* Bas | Actuel | Haut */}
       {(item.low > 0 || item.high > 0) && (
         <div style={{
           display:'grid', gridTemplateColumns:'1fr 1fr 1fr',
@@ -137,7 +134,6 @@ function WatchMiniCard({ item }: { item: any }) {
         </div>
       )}
 
-      {/* Statut alerte */}
       {(isBelowLow || isAboveHigh) && (
         <div style={{
           marginTop:'6px', fontSize:'8px', fontWeight:600,
@@ -154,7 +150,7 @@ function WatchMiniCard({ item }: { item: any }) {
 export default function ClientSidebar({ profile }: { profile: Profile }) {
   const pathname  = usePathname()
   const supabase  = createClient()
-  const [userId, setUserId] = useState<string>('')
+  const [userId,    setUserId]    = useState<string>('')
   const [watchOpen, setWatchOpen] = useState(true)
   const [spinning,  setSpinning]  = useState(false)
 
@@ -197,16 +193,22 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         .wmc-glow-high  { animation: wmc-glow-high 2s ease-in-out infinite; }
       `}</style>
 
-      <aside className="w-64 flex flex-col flex-shrink-0 h-full"
-        style={{ background:'var(--noir-surface)', borderRight:'1px solid var(--noir-border)' }}>
-
+      <aside
+        className="w-64 flex flex-col flex-shrink-0 h-full"
+        style={{
+          background:                'var(--noir-surface)',
+          borderRight:               '1px solid var(--noir-border)',
+          overflowY:                 'auto',
+          WebkitOverflowScrolling:   'touch',
+        } as React.CSSProperties}
+      >
         {/* Logo */}
-        <div className="px-4 py-4 border-b flex items-center justify-center" style={{ borderColor:'var(--noir-border)' }}>
+        <div className="px-4 py-4 border-b flex items-center justify-center flex-shrink-0" style={{ borderColor:'var(--noir-border)' }}>
           <Image src="/logo.jpeg" alt="Elinoja Patrimoine" width={150} height={65} style={{ objectFit:'contain' }} />
         </div>
 
         {/* Badge abonnement */}
-        <div className="px-4 py-3 border-b" style={{ borderColor:'var(--noir-border)' }}>
+        <div className="px-4 py-3 border-b flex-shrink-0" style={{ borderColor:'var(--noir-border)' }}>
           <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
             profile.subscription_status === 'active' ? 'badge-buy' :
             profile.subscription_status === 'trial'  ? 'badge-watch' : 'badge-sell'
@@ -218,7 +220,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </div>
 
         {/* Navigation */}
-        <nav className="px-3 py-3 space-y-0.5">
+        <nav className="px-3 py-3 space-y-0.5 flex-shrink-0">
           {navItems.map((item) => {
             const isActive = pathname === item.href ||
               (item.href !== '/client' && pathname.startsWith(item.href))
@@ -237,8 +239,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                 }}>
                   <item.icon size={16} style={{ flexShrink:0 }} />
                   <span>{item.label}</span>
-
-                  {/* Badge alertes actives sur "Ma Watchlist" */}
                   {isWatch && activeAlerts > 0 && (
                     <span style={{
                       marginLeft:'auto',
@@ -253,7 +253,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                       {activeAlerts}
                     </span>
                   )}
-
                   {isActive && !(isWatch && activeAlerts > 0) && (
                     <ChevronRight size={12} style={{ marginLeft:'auto', color:'#D4AF37' }} />
                   )}
@@ -264,10 +263,10 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </nav>
 
         {/* Séparateur */}
-        <div style={{ height:'1px', background:'var(--noir-border)', margin:'0 16px' }} />
+        <div style={{ height:'1px', background:'var(--noir-border)', margin:'0 16px', flexShrink:0 }} />
 
         {/* Watchlist inline */}
-        <div style={{ flex:1, display:'flex', flexDirection:'column', minHeight:0 }}>
+        <div style={{ flexShrink:0 }}>
 
           {/* Header watchlist */}
           <div onClick={() => setWatchOpen(o => !o)} style={{
@@ -278,7 +277,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
             <span style={{ fontSize:'11px', fontWeight:600, color:'#707070', letterSpacing:'0.1em', textTransform:'uppercase', flex:1 }}>
               Watchlist
             </span>
-
             {activeAlerts > 0 && (
               <span style={{
                 fontSize:'8px', fontWeight:700,
@@ -289,12 +287,10 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                 {activeAlerts} alerte{activeAlerts > 1 ? 's' : ''}
               </span>
             )}
-
             <button onClick={e => { e.stopPropagation(); handleRefresh() }}
               style={{ background:'none', border:'none', cursor:'pointer', padding:'2px', color:'#3A3A3A', display:'flex' }}>
               <RefreshCw size={11} style={{ transition:'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
             </button>
-
             <ChevronDown size={12} style={{
               color:'#3A3A3A', transition:'transform 0.2s',
               transform: watchOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
@@ -311,7 +307,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                 transition={{ duration:0.22, ease:'easeInOut' }}
                 style={{ overflow:'hidden' }}
               >
-                <div style={{ padding:'0 10px 10px', display:'flex', flexDirection:'column', gap:'7px', overflowY:'auto', maxHeight:'340px' }}>
+                <div style={{ padding:'0 10px 10px', display:'flex', flexDirection:'column', gap:'7px' }}>
                   {watchLoading ? (
                     [1,2,3].map(i => (
                       <div key={i} className="skeleton" style={{ height:'80px', borderRadius:'10px' }} />
@@ -330,7 +326,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </div>
 
         {/* Footer utilisateur */}
-        <div className="p-4 border-t" style={{ borderColor:'var(--noir-border)' }}>
+        <div className="p-4 border-t flex-shrink-0" style={{ borderColor:'var(--noir-border)' }}>
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
               style={{ background:'rgba(212,175,55,0.15)', color:'#D4AF37' }}>
