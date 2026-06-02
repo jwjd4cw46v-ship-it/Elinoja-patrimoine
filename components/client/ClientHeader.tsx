@@ -7,6 +7,7 @@ import { Bell, LogOut, ChevronDown, TrendingUp, TrendingDown } from 'lucide-reac
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import type { Profile } from '@/types'
+import type { AlertLog } from '@/types/watchlist'
 import { NotifPanel } from '@/components/watchlist/NotifPanel'
 
 interface Market {
@@ -18,15 +19,6 @@ interface Market {
     stockName: string
     ticker:    string
   }
-}
-
-export interface AlertLog {
-  id:      string
-  type:    'low' | 'high'
-  current: number
-  low:     number
-  high:    number
-  time:    string
 }
 
 const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 'BT', 'PGH', 'STB']

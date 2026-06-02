@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import type { AlertLog } from '@/components/ClientHeader'
+import type { AlertLog } from '@/types/watchlist'
 
 interface Props {
   logs:     AlertLog[]
