@@ -6,12 +6,13 @@ import { usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, TrendingUp, BarChart2,
-  FileText, MessageSquare, Bell, Star, ChevronRight, Newspaper, Calendar
+  FileText, MessageSquare, Bell, Star, ChevronRight, Newspaper, Calendar, LineChart
 } from 'lucide-react'
 import type { Profile } from '@/types'
 
 const navItems = [
   { href: '/client',               icon: LayoutDashboard, label: 'Tableau de bord' },
+  { href: '/client/cotations',     icon: LineChart,       label: 'Cotations BVMT' },
   { href: '/client/analyses',      icon: TrendingUp,      label: 'Analyses Techniques' },
   { href: '/client/fondamentales', icon: BarChart2,       label: 'Analyses Fondamentales' },
   { href: '/client/cmf',           icon: FileText,        label: 'Publications CMF' },
