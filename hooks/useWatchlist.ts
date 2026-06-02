@@ -2,22 +2,24 @@
 
 /**
  * useWatchlist.ts
- * ─────────────────────────────────────────────────────────────────────────────
- * Hook qui :
- *  1. Récupère les cotations depuis /api/cotations (API BVMT)
- *  2. Récupère les seuils d'alerte de l'utilisateur depuis Supabase
- *     (table watchlist_alertes: user_id, ticker, prix_bas, prix_haut)
- *  3. Merge les deux et expose la liste enrichie
- *
- * Usage :
- *   const { items, loading, error, refresh } = useWatchlist(userId)
+ * Merge les cotations BVMT (/api/cotations) avec la table `watchlists` Supabase.
+ * Colonnes : ticker, company_name, alert_price_low, alert_price_high
  */
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { WatchItem } from '@/components/watchlist/WatchCard'
 
-const POLL_INTERVAL = 60_000 // 60 secondes
+export interface WatchItem {
+  id:      string
+  ticker:  string
+  name:    string
+  current: number
+  change:  number
+  low:     number   // alert_price_low
+  high:    number   // alert_price_high
+}
+
+const POLL_INTERVAL = 60_000
 
 export function useWatchlist(userId: string) {
   const [items,   setItems]   = useState<WatchItem[]>([])
@@ -28,40 +30,34 @@ export function useWatchlist(userId: string) {
 
   const fetchAll = useCallback(async () => {
     try {
-      // 1. Récupérer les seuils de l'utilisateur
-      const { data: alertes, error: dbErr } = await supabase
-        .from('watchlist_alertes')
-        .select('ticker, prix_bas, prix_haut')
+      const { data: rows, error: dbErr } = await supabase
+        .from('watchlists')
+        .select('id, ticker, company_name, alert_price_low, alert_price_high')
         .eq('user_id', userId)
 
       if (dbErr) throw dbErr
-      if (!alertes?.length) { setItems([]); setLoading(false); return }
+      if (!rows?.length) { setItems([]); setLoading(false); return }
 
-      // 2. Récupérer les cotations
       const res = await fetch('/api/cotations', { cache: 'no-store' })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-
-      // L'API BVMT retourne { markets: [...] }
-      // Chaque market : { isin, last, change, referentiel: { ticker, stockName } }
       const markets: any[] = data.markets ?? []
 
-      // 3. Merger
-      const merged: WatchItem[] = alertes
-        .map(alerte => {
-          const ticker = alerte.ticker?.toUpperCase()
-          const market = markets.find(m => m.referentiel?.ticker?.toUpperCase() === ticker)
-          if (!market) return null
-          return {
-            id:      ticker,
-            name:    market.referentiel?.stockName ?? ticker,
-            current: market.last   ?? 0,
-            change:  market.change ?? 0,
-            low:     alerte.prix_bas   ?? 0,
-            high:    alerte.prix_haut  ?? 0,
-          }
-        })
-        .filter(Boolean) as WatchItem[]
+      const merged: WatchItem[] = rows.map(row => {
+        const ticker = row.ticker?.toUpperCase()
+        const market = markets.find(
+          m => m.referentiel?.ticker?.toUpperCase() === ticker
+        )
+        return {
+          id:      row.id,
+          ticker,
+          name:    row.company_name ?? ticker,
+          current: market?.last   ?? 0,
+          change:  market?.change ?? 0,
+          low:     row.alert_price_low  ?? 0,
+          high:    row.alert_price_high ?? 0,
+        }
+      })
 
       setItems(merged)
       setError(null)
