@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-      || 'https://elinoja-patrimoine-app-v01.vercel.app'
+      || 'https://elinoja-patrimoine-app-v02.vercel.app'
 
     const res = await fetch(`${baseUrl}/api/bvmt?force=1`)
     const data = await res.json()
