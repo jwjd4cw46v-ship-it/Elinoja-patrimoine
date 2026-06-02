@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
-export async function GET(request) {
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
-  }
-
+export async function GET() {
   try {
     const response = await fetch('https://www.ilboursa.com/marches/aaz', {
       headers: {
