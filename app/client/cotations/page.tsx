@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Search, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react'
 
-const API_URL = 'https://www.bvmt.com.tn/rest_api/rest/market/groups/11,12,52,95,99'
+const API_URL = '/api/cotations'
 
 interface Market {
   isin: string
@@ -36,14 +36,14 @@ function formatVol(n: number) {
 }
 
 export default function CotationsPage() {
-  const [data, setData]           = useState<Market[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [search, setSearch]       = useState('')
-  const [filter, setFilter]       = useState<'all' | 'up' | 'down'>('all')
+  const [data, setData]             = useState<Market[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState('')
+  const [filter, setFilter]         = useState<'all' | 'up' | 'down'>('all')
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [sortKey, setSortKey]     = useState<string>('ticker')
-  const [sortDir, setSortDir]     = useState<1 | -1>(1)
+  const [sortKey, setSortKey]       = useState<string>('ticker')
+  const [sortDir, setSortDir]       = useState<1 | -1>(1)
 
   const fetchData = async (manual = false) => {
     if (manual) setRefreshing(true)
@@ -89,7 +89,7 @@ export default function CotationsPage() {
     })
     .sort((a, b) => {
       let va: any, vb: any
-      if (sortKey === 'ticker')  { va = a.referentiel?.ticker || ''; vb = b.referentiel?.ticker || '' }
+      if (sortKey === 'ticker')      { va = a.referentiel?.ticker || '';      vb = b.referentiel?.ticker || '' }
       else if (sortKey === 'last')   { va = a.last || 0;   vb = b.last || 0 }
       else if (sortKey === 'change') { va = a.change || 0; vb = b.change || 0 }
       else if (sortKey === 'volume') { va = a.volume || 0; vb = b.volume || 0 }
@@ -154,9 +154,9 @@ export default function CotationsPage() {
       {/* Stats cards */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'Hausses', val: hausse, color: '#00C853', bg: 'rgba(0,200,83,0.08)', border: 'rgba(0,200,83,0.15)', icon: TrendingUp },
-          { label: 'Baisses', val: baisse, color: '#FF1744', bg: 'rgba(255,23,68,0.08)', border: 'rgba(255,23,68,0.15)', icon: TrendingDown },
-          { label: 'Stables', val: stable, color: '#707070', bg: 'var(--noir-elevated)', border: 'var(--noir-border)', icon: Minus },
+          { label: 'Hausses', val: hausse, color: '#00C853', bg: 'rgba(0,200,83,0.08)',   border: 'rgba(0,200,83,0.15)',   icon: TrendingUp },
+          { label: 'Baisses', val: baisse, color: '#FF1744', bg: 'rgba(255,23,68,0.08)',  border: 'rgba(255,23,68,0.15)',  icon: TrendingDown },
+          { label: 'Stables', val: stable, color: '#707070', bg: 'var(--noir-elevated)',  border: 'var(--noir-border)',    icon: Minus },
         ].map(s => (
           <div key={s.label} className="card-premium p-4 flex items-center gap-3"
             style={{ background: s.bg, borderColor: s.border }}>
@@ -238,19 +238,19 @@ export default function CotationsPage() {
                 <tr>
                   <ThBtn col="ticker" label="TICKER" />
                   <ThBtn col="name"   label="SOCIÉTÉ" />
-                  <ThBtn col="last"   label="COURS" right />
-                  <ThBtn col="change" label="VARIATION" right />
-                  <ThBtn col="high"   label="HAUT" right />
-                  <ThBtn col="low"    label="BAS" right />
-                  <ThBtn col="volume" label="VOLUME" right />
+                  <ThBtn col="last"   label="COURS"     right />
+                  <ThBtn col="change" label="VARIATION"  right />
+                  <ThBtn col="high"   label="HAUT"       right />
+                  <ThBtn col="low"    label="BAS"        right />
+                  <ThBtn col="volume" label="VOLUME"     right />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((m, i) => {
-                  const isUp   = m.change > 0
-                  const isDn   = m.change < 0
-                  const color  = isUp ? '#00C853' : isDn ? '#FF1744' : '#707070'
-                  const chgBg  = isUp ? 'rgba(0,200,83,0.08)' : isDn ? 'rgba(255,23,68,0.08)' : 'rgba(112,112,112,0.08)'
+                  const isUp  = m.change > 0
+                  const isDn  = m.change < 0
+                  const color = isUp ? '#00C853' : isDn ? '#FF1744' : '#707070'
+                  const chgBg = isUp ? 'rgba(0,200,83,0.08)' : isDn ? 'rgba(255,23,68,0.08)' : 'rgba(112,112,112,0.08)'
                   const chgBorder = isUp ? 'rgba(0,200,83,0.2)' : isDn ? 'rgba(255,23,68,0.2)' : 'rgba(112,112,112,0.2)'
 
                   return (
@@ -259,7 +259,6 @@ export default function CotationsPage() {
                       animate={{ opacity: 1 }}
                       transition={{ delay: i * 0.02 }}
                       style={{ borderBottom: '1px solid var(--noir-border)' }}
-                      className="group transition-colors"
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
 
@@ -315,7 +314,7 @@ export default function CotationsPage() {
         )}
       </div>
 
-      {/* Footer note */}
+      {/* Footer */}
       <p className="text-xs text-center" style={{ color: '#3A3A3A' }}>
         Source : Bourse de Tunis (BVMT) — Flux retardé de 15 minutes
       </p>
