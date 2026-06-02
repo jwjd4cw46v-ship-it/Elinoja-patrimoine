@@ -3,51 +3,33 @@ import { createServiceClient } from '@/lib/supabase/server'
 
 export async function GET() {
   try {
-    const response = await fetch('https://www.ilboursa.com/marches/aaz', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      cache: 'no-store',
-    })
+    const response = await fetch(
+      'https://www.bvmt.com.tn/rest_api/rest/market/groups/11,12,52,95,99',
+      { cache: 'no-store' }
+    )
 
-    if (!response.ok) throw new Error(`Erreur ilboursa: ${response.status}`)
+    if (!response.ok) throw new Error(`Erreur BVMT: ${response.status}`)
 
-    const html = await response.text()
-    const rows = html.split('<tr>').slice(2)
-    const cotations = []
+    const data = await response.json()
+    const markets = data.markets
+
+    if (!markets || markets.length === 0) throw new Error('Aucune cotation reçue')
+
     const today = new Date().toISOString().split('T')[0]
 
-    for (const row of rows) {
-      if (!row.includes('cotation_')) break
-      const nom = row.match(/">(.+?)<\/a>/)?.[1]
-      const tds = row.split('<td>')
-      if (!nom || tds.length < 9) continue
+    const cotations = markets.map((m) => ({
+      nom:        m.referentiel?.ticker || m.referentiel?.stockName,
+      ouverture:  m.open   || null,
+      haut:       m.high   || null,
+      bas:        m.low    || null,
+      vol_titres: m.volume || null,
+      vol_dt:     m.caps   || null,
+      dernier:    m.last   || null,
+      variation:  m.change != null ? `${m.change > 0 ? '+' : ''}${m.change}%` : null,
+      date:       today,
+    })).filter(c => c.nom && c.dernier)
 
-      const parseNum = (str) => {
-        const clean = str.split('</td>')[0].replace(/[^\d.,-]/g, '').replace(',', '.')
-        const val = parseFloat(clean)
-        return isNaN(val) ? null : val
-      }
-      const parseEntier = (str) => {
-        const clean = str.split('</td>')[0].replace(/\D/g, '')
-        const val = parseInt(clean)
-        return isNaN(val) ? null : val
-      }
-
-      cotations.push({
-        nom:        nom.trim(),
-        ouverture:  parseNum(tds[2]),
-        haut:       parseNum(tds[3]),
-        bas:        parseNum(tds[4]),
-        vol_titres: parseEntier(tds[5]),
-        vol_dt:     parseEntier(tds[6]),
-        dernier:    parseNum(tds[7].replace(/<\/?b>/g, '')),
-        variation:  tds[8].match(/>(.+?)</)?.[1]?.trim() ?? null,
-        date:       today,
-      })
-    }
-
-    if (cotations.length === 0) throw new Error('Aucune cotation extraite')
+    if (cotations.length === 0) throw new Error('Aucune cotation valide')
 
     const supabase = createServiceClient()
     const { error } = await supabase
