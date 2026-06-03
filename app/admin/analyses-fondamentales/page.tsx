@@ -533,9 +533,9 @@ function MnemoCombobox({
             initial={{ opacity: 0, y: -6, scaleY: 0.96 }}
             animate={{ opacity: 1, y: 0, scaleY: 1 }}
             exit={{ opacity: 0, y: -4, scaleY: 0.97 }}
-            style={{ transformOrigin: 'top' }}
             className="absolute z-50 mt-1.5 w-full rounded-xl border shadow-2xl overflow-hidden"
             style={{
+              transformOrigin: 'top',
               background: '#111111',
               borderColor: 'rgba(212,175,55,0.25)',
               boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
