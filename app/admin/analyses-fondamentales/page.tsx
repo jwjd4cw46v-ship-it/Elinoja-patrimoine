@@ -202,7 +202,7 @@ export default function AdminFondamentalesPage() {
 
       {/* ── ANALYSES TAB ── */}
       {activeTab === 'analyses' && (
-        <div className="card-premium overflow-hidden">
+        <div className="card-premium overflow-x-auto">
           {loading ? (
             <div className="p-8 space-y-3">
               {[...Array(4)].map((_, i) => (
@@ -226,12 +226,12 @@ export default function AdminFondamentalesPage() {
                 <tr>
                   <th>Société</th>
                   <th>Recommandation</th>
-                  <th className="text-right">Cours</th>
-                  <th className="text-right">Objectif</th>
-                  <th className="text-right">Potentiel</th>
-                  <th>Statut</th>
-                  <th>Date</th>
-                  <th style={{ width: 110 }}>Actions</th>
+                  <th className="text-right hidden lg:table-cell">Cours</th>
+                  <th className="text-right hidden md:table-cell">Objectif</th>
+                  <th className="text-right hidden lg:table-cell">Potentiel</th>
+                  <th className="hidden md:table-cell">Statut</th>
+                  <th className="hidden xl:table-cell">Date</th>
+                  <th className="sticky right-0" style={{ width: 110, background: 'var(--noir-surface)', boxShadow: '-4px 0 12px rgba(0,0,0,0.4)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -260,17 +260,17 @@ export default function AdminFondamentalesPage() {
                       <td>
                         {reco && <span className={`${reco.cls} text-[10px] font-bold px-2 py-0.5 rounded`}>{reco.label}</span>}
                       </td>
-                      <td className="text-right">
+                      <td className="text-right hidden lg:table-cell">
                         <span className="font-mono text-xs" style={{ color: cours ? '#A0A0A0' : '#3A3A3A' }}>
                           {cours ? cours.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—'}
                         </span>
                       </td>
-                      <td className="text-right">
+                      <td className="text-right hidden md:table-cell">
                         <span className="font-mono text-xs font-bold" style={{ color: '#D4AF37' }}>
                           {a.target_price?.toLocaleString('fr-FR', { minimumFractionDigits: 3 })}
                         </span>
                       </td>
-                      <td className="text-right">
+                      <td className="text-right hidden lg:table-cell">
                         {upside != null ? (
                           <span className="font-mono text-xs font-bold"
                             style={{ color: upside >= 0 ? '#00C853' : '#FF1744' }}>
@@ -278,17 +278,17 @@ export default function AdminFondamentalesPage() {
                           </span>
                         ) : <span style={{ color: '#3A3A3A' }}>—</span>}
                       </td>
-                      <td>
+                      <td className="hidden md:table-cell">
                         <span className="text-xs" style={{ color: a.status === 'published' ? '#00C853' : '#707070' }}>
                           ● {a.status === 'published' ? 'Publié' : 'Brouillon'}
                         </span>
                       </td>
-                      <td>
+                      <td className="hidden xl:table-cell">
                         <span className="text-xs" style={{ color: '#707070' }}>
                           {format(new Date(a.created_at), 'dd MMM yy', { locale: fr })}
                         </span>
                       </td>
-                      <td>
+                      <td className="sticky right-0" style={{ background: 'var(--noir-surface)', boxShadow: '-4px 0 12px rgba(0,0,0,0.3)' }}>
                         <div className="flex items-center gap-0.5">
                           {/* Publier / Dépublier */}
                           <button onClick={() => toggleStatus(a)}
