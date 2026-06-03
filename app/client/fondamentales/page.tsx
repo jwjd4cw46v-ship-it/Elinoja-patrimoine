@@ -46,16 +46,8 @@ interface Entreprise {
   rendement_dividende: number | null
 }
 
-interface Cotation {
-  nom: string
-  dernier: number | null
-  variation: string | null
-  ouverture: number | null
-  haut: number | null
-  bas: number | null
-  vol_titres: number | null
-  date: string
-}
+// cotations = map MNEMO → cours (number), identique à la page admin
+// (pas besoin de l'objet complet Cotation pour la page client)
 
 /* ─────────────────────────────────────────────
    Config
@@ -196,7 +188,7 @@ function RatioBadge({
 export default function ClientFondamentalesPage() {
   const [analyses,    setAnalyses]    = useState<FundamentalAnalysis[]>([])
   const [entreprises, setEntreprises] = useState<Entreprise[]>([])
-  const [cotations,   setCotations]   = useState<Record<string, Cotation>>({})
+  const [cotations,   setCotations]   = useState<Record<string, number>>({})
   const [loading,     setLoading]     = useState(true)
   const [search,      setSearch]      = useState('')
   const [filter,      setFilter]      = useState('all')
@@ -223,26 +215,20 @@ export default function ClientFondamentalesPage() {
       const res = await fetch('/api/cotations')
       if (!res.ok) return
       const json = await res.json()
-      // The API returns { markets: [...] } or an array directly
+      // L'API retourne { markets: [...] } ou un tableau direct
       const markets: any[] = Array.isArray(json) ? json : (json.markets ?? [])
-      const map: Record<string, Cotation> = {}
+      const map: Record<string, number> = {}
       markets.forEach((m: any) => {
-        const nom = m.referentiel?.ticker || m.referentiel?.stockName || m.nom
-        if (nom) {
-          map[nom.toUpperCase()] = {
-            nom,
-            dernier:    m.last    ?? m.dernier    ?? null,
-            variation:  m.change  != null ? `${m.change > 0 ? '+' : ''}${m.change}%` : (m.variation ?? null),
-            ouverture:  m.open    ?? m.ouverture  ?? null,
-            haut:       m.high    ?? m.haut       ?? null,
-            bas:        m.low     ?? m.bas        ?? null,
-            vol_titres: m.volume  ?? m.vol_titres ?? null,
-            date:       new Date().toISOString().split('T')[0],
-          }
-        }
+        // Clé = ticker BVMT (identique au mnemo dans la table entreprises)
+        const nom = (m.referentiel?.ticker || m.referentiel?.stockName || m.nom || '').toUpperCase()
+        const last = m.last ?? m.dernier ?? null
+        if (nom && last != null) map[nom] = last
       })
       setCotations(map)
-    } catch (_) {}
+      console.log('[Cotations] chargées:', Object.keys(map).length, 'valeurs. Extrait:', Object.entries(map).slice(0, 5))
+    } catch (err) {
+      console.error('[Cotations] erreur fetch:', err)
+    }
   }
 
   useEffect(() => {
@@ -268,13 +254,16 @@ export default function ClientFondamentalesPage() {
 
   /* ── Helpers ── */
   function getCours(a: FundamentalAnalysis): number | null {
-    // Try to match via mnemo in entreprises table first
+    // 1. Cherche d'abord via mnemo dans la table entreprises
     const ent = entreprises.find(e =>
       e.mnemo?.toUpperCase() === a.ticker.toUpperCase() ||
       e.valeur?.toUpperCase().includes(a.ticker.toUpperCase())
     )
+    // 2. La clé dans cotations = mnemo BVMT en majuscules
     const key = (ent?.mnemo ?? a.ticker).toUpperCase()
-    return cotations[key]?.dernier ?? a.current_price ?? null
+    // 3. Cours live en priorité, sinon current_price de la table
+    const live = cotations[key] ?? null
+    return live ?? (a.current_price ?? null)
   }
 
   function getEntreprise(a: FundamentalAnalysis): Entreprise | null {
