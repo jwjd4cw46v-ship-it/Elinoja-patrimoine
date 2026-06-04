@@ -32,7 +32,7 @@ export interface TechnicalAnalysis {
   status: 'draft' | 'published' | 'archived'
   risk_level: 'low' | 'medium' | 'high'
   potential_gain?: number
-  chart_image_url?: string
+  chart_image_url?: string        // ← URL image stockée dans Supabase Storage
   views_count: number
   author_id: string
   author?: Profile
