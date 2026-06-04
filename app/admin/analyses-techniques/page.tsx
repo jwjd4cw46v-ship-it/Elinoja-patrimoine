@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, TrendingUp, Edit, Trash2, Eye, Archive } from 'lucide-react'
+import { Plus, Search, TrendingUp, Edit, Trash2, Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -12,11 +12,12 @@ import TechnicalAnalysisForm from '@/components/admin/TechnicalAnalysisForm'
 
 export default function AnalysesTechniquesPage() {
   const [analyses, setAnalyses] = useState<TechnicalAnalysis[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<string>('all')
+  const [loading,  setLoading]  = useState(true)
+  const [search,   setSearch]   = useState('')
+  const [filter,   setFilter]   = useState<string>('all')
   const [showForm, setShowForm] = useState(false)
-  const [editing, setEditing] = useState<TechnicalAnalysis | null>(null)
+  const [editing,  setEditing]  = useState<TechnicalAnalysis | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const supabase = createClient()
 
   async function fetchAnalyses() {
@@ -24,20 +25,17 @@ export default function AnalysesTechniquesPage() {
       .from('technical_analyses')
       .select('*, author:profiles(full_name, email)')
       .order('created_at', { ascending: false })
-
     if (!error && data) setAnalyses(data as any)
     setLoading(false)
   }
 
   useEffect(() => {
     fetchAnalyses()
-
     const channel = supabase
       .channel('analyses-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'technical_analyses' },
         () => fetchAnalyses())
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [])
 
@@ -49,19 +47,30 @@ export default function AnalysesTechniquesPage() {
   })
 
   async function deleteAnalysis(id: string) {
-    if (!confirm('Supprimer cette analyse ?')) return
-    const { error } = await supabase.from('technical_analyses').delete().eq('id', id)
-    if (error) toast.error('Erreur lors de la suppression')
-    else { toast.success('Analyse supprimée'); fetchAnalyses() }
+    if (!confirm('Supprimer cette analyse ? Cette action est irréversible.')) return
+    setDeleting(id)
+    const { error } = await supabase
+      .from('technical_analyses')
+      .delete()
+      .eq('id', id)
+    if (error) {
+      toast.error('Erreur : ' + error.message)
+    } else {
+      toast.success('Analyse supprimée')
+      fetchAnalyses()
+    }
+    setDeleting(null)
   }
 
   async function toggleStatus(a: TechnicalAnalysis) {
     const newStatus = a.status === 'published' ? 'draft' : 'published'
     const { error } = await supabase
       .from('technical_analyses')
-      .update({ status: newStatus, published_at: newStatus === 'published' ? new Date().toISOString() : null })
+      .update({
+        status:       newStatus,
+        published_at: newStatus === 'published' ? new Date().toISOString() : null,
+      })
       .eq('id', a.id)
-
     if (error) toast.error('Erreur')
     else {
       toast.success(newStatus === 'published' ? 'Analyse publiée ✓' : 'Mise en brouillon')
@@ -79,7 +88,7 @@ export default function AnalysesTechniquesPage() {
   const statusConfig = {
     published: { label: 'Publié',    color: '#00C853' },
     draft:     { label: 'Brouillon', color: '#707070' },
-    archived:  { label: 'Archivé',  color: '#5C5C5C' },
+    archived:  { label: 'Archivé',   color: '#5C5C5C' },
   }
 
   return (
@@ -117,10 +126,10 @@ export default function AnalysesTechniquesPage() {
               className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
               style={{
                 background: filter === f ? 'rgba(212,175,55,0.15)' : 'var(--noir-elevated)',
-                color: filter === f ? '#D4AF37' : '#707070',
-                border: `1px solid ${filter === f ? 'rgba(212,175,55,0.3)' : 'var(--noir-border)'}`,
+                color:      filter === f ? '#D4AF37' : '#707070',
+                border:     `1px solid ${filter === f ? 'rgba(212,175,55,0.3)' : 'var(--noir-border)'}`,
               }}>
-              {{all:'Tout', published:'Publiés', draft:'Brouillons', buy:'Achat', sell:'Vente', hold:'Neutre'}[f]}
+              {{ all:'Tout', published:'Publiés', draft:'Brouillons', buy:'Achat', sell:'Vente', hold:'Neutre' }[f]}
             </button>
           ))}
         </div>
@@ -168,10 +177,12 @@ export default function AnalysesTechniquesPage() {
                 const gain = a.target_price && a.entry_price
                   ? (((a.target_price - a.entry_price) / a.entry_price) * 100).toFixed(1)
                   : null
+                const isDeleting = deleting === a.id
+
                 return (
                   <motion.tr key={a.id}
                     initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
+                    animate={{ opacity: isDeleting ? 0.4 : 1 }}
                     transition={{ delay: i * 0.03 }}>
                     <td>
                       <div className="flex items-center gap-3">
@@ -180,7 +191,8 @@ export default function AnalysesTechniquesPage() {
                           {a.ticker.slice(0, 4)}
                         </div>
                         <div>
-                          <div className="font-medium text-sm line-clamp-1" style={{ color: '#F5F5F5', maxWidth: 200 }}>
+                          <div className="font-medium text-sm line-clamp-1"
+                            style={{ color: '#F5F5F5', maxWidth: 200 }}>
                             {a.title}
                           </div>
                           <div className="text-xs" style={{ color: '#5C5C5C' }}>
@@ -192,16 +204,28 @@ export default function AnalysesTechniquesPage() {
                     <td>
                       {sig && <span className={`${sig.cls} text-[10px] font-bold px-2 py-0.5 rounded`}>{sig.label}</span>}
                     </td>
-                    <td><span className="text-sm font-mono" style={{ color: '#F5F5F5' }}>{a.entry_price?.toLocaleString()}</span></td>
+                    <td>
+                      <span className="text-sm font-mono" style={{ color: '#F5F5F5' }}>
+                        {a.entry_price?.toLocaleString()}
+                      </span>
+                    </td>
                     <td>
                       <div>
-                        <span className="text-sm font-mono" style={{ color: '#00C853' }}>{a.target_price?.toLocaleString()}</span>
+                        <span className="text-sm font-mono" style={{ color: '#00C853' }}>
+                          {a.target_price?.toLocaleString()}
+                        </span>
                         {gain && <div className="text-[10px]" style={{ color: '#00C853' }}>+{gain}%</div>}
                       </div>
                     </td>
-                    <td><span className="text-sm font-mono" style={{ color: '#FF1744' }}>{a.stop_loss?.toLocaleString()}</span></td>
                     <td>
-                      <span className="text-xs" style={{ color: sta?.color || '#707070' }}>● {sta?.label}</span>
+                      <span className="text-sm font-mono" style={{ color: '#FF1744' }}>
+                        {a.stop_loss?.toLocaleString()}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="text-xs" style={{ color: sta?.color || '#707070' }}>
+                        ● {sta?.label}
+                      </span>
                     </td>
                     <td>
                       <span className="text-xs" style={{ color: '#707070' }}>
@@ -210,26 +234,41 @@ export default function AnalysesTechniquesPage() {
                     </td>
                     <td>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => toggleStatus(a)} title={a.status === 'published' ? 'Dépublier' : 'Publier'}
+
+                        {/* Publier / Dépublier */}
+                        <button
+                          onClick={() => toggleStatus(a)}
+                          title={a.status === 'published' ? 'Dépublier' : 'Publier'}
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: a.status === 'published' ? '#00C853' : '#5C5C5C' }}
                           onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                           onMouseOut={e => (e.currentTarget.style.background = 'transparent')}>
                           <Eye size={13} />
                         </button>
-                        <button onClick={() => { setEditing(a); setShowForm(true) }}
+
+                        {/* Modifier */}
+                        <button
+                          onClick={() => { setEditing(a); setShowForm(true) }}
+                          title="Modifier"
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#A0A0A0' }}
-                          onMouseOver={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                          onMouseOut={e => (e.currentTarget.style.background = 'transparent')}>
+                          onMouseOver={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.08)'; e.currentTarget.style.color = '#D4AF37' }}
+                          onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A0A0A0' }}>
                           <Edit size={13} />
                         </button>
-                        <button onClick={() => deleteAnalysis(a.id)}
+
+                        {/* Supprimer */}
+                        <button
+                          onClick={() => deleteAnalysis(a.id)}
+                          disabled={isDeleting}
+                          title="Supprimer"
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#5C5C5C' }}
                           onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,23,68,0.08)'; e.currentTarget.style.color = '#FF1744' }}
                           onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5C5C5C' }}>
-                          <Trash2 size={13} />
+                          {isDeleting
+                            ? <div className="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
+                            : <Trash2 size={13} />}
                         </button>
                       </div>
                     </td>
@@ -245,8 +284,8 @@ export default function AnalysesTechniquesPage() {
         {showForm && (
           <TechnicalAnalysisForm
             analysis={editing}
-            onClose={() => setShowForm(false)}
-            onSaved={fetchAnalyses}
+            onClose={() => { setShowForm(false); setEditing(null) }}
+            onSaved={() => { fetchAnalyses(); setShowForm(false); setEditing(null) }}
           />
         )}
       </AnimatePresence>
