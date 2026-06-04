@@ -27,12 +27,12 @@ export interface TechnicalAnalysis {
   current_price?: number
   timeframe: string
   description: string
-  chart_image_url?: string
   chart_data?: CandleData[]
   indicators?: IndicatorData[]
   status: 'draft' | 'published' | 'archived'
   risk_level: 'low' | 'medium' | 'high'
   potential_gain?: number
+  chart_image_url?: string
   views_count: number
   author_id: string
   author?: Profile
