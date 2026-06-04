@@ -42,6 +42,11 @@ interface Entreprise {
   dividende_2030: number | null
   benefice_par_action: number | null
   rendement_dividende: number | null
+  // Données bilan
+  bpa_previsionnel: number | null
+  capitaux_propres: number | null
+  total_actifs: number | null
+  total_dettes: number | null
 }
 
 // En 2026 : n-2 = 2024, n-1 = 2025, prévisions = 2026 → 2030
@@ -681,25 +686,49 @@ function FundamentalAnalysisForm({
     setLinkedEnt(ent)
     setSelectedMnemo(ent.mnemo || '')
 
-    // Computed BPA from table data
-    const rn = ent.resultat_net_2025 ?? ent.resultat_net_2024 ?? null
     const titres = ent.titres_admis
-    const bpa = (rn != null && titres && titres > 0)
-      ? (rn * 1_000_000) / titres : null
+
+    // BPA : prévisionnel saisi en priorité, sinon calculé depuis RN / titres
+    const rnN1   = ent.resultat_net_2025 ?? ent.resultat_net_2024 ?? null
+    const bpaCalc = (rnN1 != null && titres && titres > 0)
+      ? (rnN1 * 1_000_000) / titres : null
+    const bpa = ent.bpa_previsionnel ?? bpaCalc
+
+    // PER = cours / BPA prévisionnel
     const per = (cours && bpa && bpa !== 0) ? cours / bpa : null
+
+    // ROE = RN / capitaux propres × 100
+    const roe = (rnN1 != null && ent.capitaux_propres && ent.capitaux_propres !== 0)
+      ? ((rnN1 * 1_000_000) / (ent.capitaux_propres * 1_000_000)) * 100 : null
+
+    // ROA = RN / total actifs × 100
+    const roa = (rnN1 != null && ent.total_actifs && ent.total_actifs !== 0)
+      ? ((rnN1 * 1_000_000) / (ent.total_actifs * 1_000_000)) * 100 : null
+
+    // D/E = total dettes / capitaux propres
+    const de = (ent.total_dettes != null && ent.capitaux_propres && ent.capitaux_propres !== 0)
+      ? ent.total_dettes / ent.capitaux_propres : null
+
+    // Rendement dividende = div_n1 / cours × 100
     const divN1 = ent.dividende_2025 ?? ent.dividende_2024 ?? null
-    const rendement = (divN1 && cours && cours > 0) ? (divN1 / cours) * 100 : null
+    const rendement = (divN1 != null && cours && cours > 0)
+      ? (divN1 / cours) * 100 : null
+
+    // Capitalisation boursière = cours × titres / 1M
     const cap = (cours && titres) ? (cours * titres) / 1_000_000 : null
 
     setForm(p => ({
       ...p,
-      ticker:        ent.mnemo || p.ticker,
-      company_name:  ent.valeur || p.company_name,
-      sector:        ent.secteur || p.sector,
-      current_price: cours != null ? cours.toString() : p.current_price,
-      pe_ratio:      per != null ? per.toFixed(2) : p.pe_ratio,
-      dividend_yield:rendement != null ? rendement.toFixed(2) : p.dividend_yield,
-      market_cap:    cap != null ? cap.toFixed(2) : p.market_cap,
+      ticker:         ent.mnemo || p.ticker,
+      company_name:   ent.valeur || p.company_name,
+      sector:         ent.secteur || p.sector,
+      current_price:  cours != null ? cours.toString() : p.current_price,
+      pe_ratio:       per      != null ? per.toFixed(2)      : p.pe_ratio,
+      roe:            roe      != null ? roe.toFixed(2)      : p.roe,
+      roa:            roa      != null ? roa.toFixed(2)      : p.roa,
+      debt_to_equity: de       != null ? de.toFixed(3)       : p.debt_to_equity,
+      dividend_yield: rendement!= null ? rendement.toFixed(2): p.dividend_yield,
+      market_cap:     cap      != null ? cap.toFixed(2)      : p.market_cap,
     }))
 
     setTimeout(() => setLoadingCours(false), 400)
@@ -833,6 +862,10 @@ function FundamentalAnalysisForm({
                         : null, gold: true },
                     { l: 'RN 2025',       v: linkedEnt.resultat_net_2025 != null ? `${linkedEnt.resultat_net_2025} M` : null },
                     { l: 'Div. 2025',     v: linkedEnt.dividende_2025 != null ? `${linkedEnt.dividende_2025}` : null },
+                    { l: 'BPA prév.',     v: linkedEnt.bpa_previsionnel != null ? `${linkedEnt.bpa_previsionnel}` : null },
+                    { l: 'Cap. propres',  v: linkedEnt.capitaux_propres != null ? `${linkedEnt.capitaux_propres} M` : null },
+                    { l: 'Total actifs',  v: linkedEnt.total_actifs != null ? `${linkedEnt.total_actifs} M` : null },
+                    { l: 'Total dettes',  v: linkedEnt.total_dettes != null ? `${linkedEnt.total_dettes} M` : null },
                   ].map(({ l, v, gold }) => v ? (
                     <div key={l} className="text-xs">
                       <span style={{ color: '#5C5C5C' }}>{l} : </span>
@@ -1006,6 +1039,8 @@ type EntrepriseFormData = {
   dividende_2026: string; dividende_2027: string; dividende_2028: string
   dividende_2029: string; dividende_2030: string
   benefice_par_action: string; rendement_dividende: string
+  bpa_previsionnel: string; capitaux_propres: string
+  total_actifs: string; total_dettes: string
 }
 
 function blank(): EntrepriseFormData {
@@ -1013,6 +1048,7 @@ function blank(): EntrepriseFormData {
     secteur: '', valeur: '', code_isin: '', mnemo: '',
     compar_grp: '', mode_cc: 'Continu', titres_admis: '',
     benefice_par_action: '', rendement_dividende: '',
+    bpa_previsionnel: '', capitaux_propres: '', total_actifs: '', total_dettes: '',
   }
   ALL_RN_YEARS.forEach(y => d[`resultat_net_${y}`] = '')
   ALL_DIV_YEARS.forEach(y => d[`dividende_${y}`] = '')
@@ -1027,6 +1063,10 @@ function entToForm(e: Entreprise): EntrepriseFormData {
     titres_admis: e.titres_admis?.toString() || '',
     benefice_par_action: e.benefice_par_action?.toString() || '',
     rendement_dividende: e.rendement_dividende?.toString() || '',
+    bpa_previsionnel: e.bpa_previsionnel?.toString() || '',
+    capitaux_propres: e.capitaux_propres?.toString() || '',
+    total_actifs: e.total_actifs?.toString() || '',
+    total_dettes: e.total_dettes?.toString() || '',
   }
   ALL_RN_YEARS.forEach(y => d[`resultat_net_${y}`] = (e as any)[`resultat_net_${y}`]?.toString() || '')
   ALL_DIV_YEARS.forEach(y => d[`dividende_${y}`] = (e as any)[`dividende_${y}`]?.toString() || '')
@@ -1042,7 +1082,7 @@ function EntrepriseForm({
   onSaved: () => void
 }) {
   const [form, setForm]       = useState<EntrepriseFormData>(entreprise ? entToForm(entreprise) : blank())
-  const [section, setSection] = useState<'info' | 'rn' | 'div' | 'ratios'>('info')
+  const [section, setSection] = useState<'info' | 'rn' | 'div' | 'bilan' | 'ratios'>('info')
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
 
@@ -1063,6 +1103,10 @@ function EntrepriseForm({
       titres_admis: ni(form.titres_admis),
       benefice_par_action: n(form.benefice_par_action),
       rendement_dividende: n(form.rendement_dividende),
+      bpa_previsionnel: n(form.bpa_previsionnel),
+      capitaux_propres: n(form.capitaux_propres),
+      total_actifs: n(form.total_actifs),
+      total_dettes: n(form.total_dettes),
     }
     ALL_RN_YEARS.forEach(y => { payload[`resultat_net_${y}`] = n((form as any)[`resultat_net_${y}`]) })
     ALL_DIV_YEARS.forEach(y => { payload[`dividende_${y}`]   = n((form as any)[`dividende_${y}`]) })
@@ -1080,7 +1124,7 @@ function EntrepriseForm({
 
   const tabs = [
     { id: 'info', label: 'Infos' }, { id: 'rn', label: 'Résultat Net' },
-    { id: 'div',  label: 'Dividendes' }, { id: 'ratios', label: 'Ratios' },
+    { id: 'div',  label: 'Dividendes' }, { id: 'bilan', label: 'Bilan' }, { id: 'ratios', label: 'Ratios' },
   ] as const
 
   return (
@@ -1263,6 +1307,95 @@ function EntrepriseForm({
                   ))}
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* BILAN */}
+          {section === 'bilan' && (
+            <motion.div key="bilan" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+              <div className="flex items-center gap-2 p-3 rounded-lg"
+                style={{ background: 'rgba(212,175,55,0.06)', border: '1px solid rgba(212,175,55,0.15)' }}>
+                <AlertCircle size={13} style={{ color: '#D4AF37', flexShrink: 0 }} />
+                <p className="text-xs" style={{ color: '#A0A0A0' }}>
+                  Données <strong style={{ color: '#D4AF37' }}>en millions</strong> de la devise locale.
+                  Ces chiffres servent à calculer automatiquement ROE, ROA et D/E lors de la saisie d'une analyse fondamentale.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="field-label">BPA PRÉVISIONNEL</label>
+                  <input type="number" step="0.001" value={form.bpa_previsionnel}
+                    onChange={e => f('bpa_previsionnel', e.target.value)}
+                    placeholder="ex : 2.450" className="input-premium font-mono" />
+                  <p className="text-[10px] mt-1" style={{ color: '#4A4A4A' }}>
+                    Utilisé pour le PER · priorité sur le BPA calculé
+                  </p>
+                </div>
+                <div>
+                  <label className="field-label">CAPITAUX PROPRES (M)</label>
+                  <input type="number" step="0.01" value={form.capitaux_propres}
+                    onChange={e => f('capitaux_propres', e.target.value)}
+                    placeholder="ex : 450.00" className="input-premium font-mono" />
+                  <p className="text-[10px] mt-1" style={{ color: '#4A4A4A' }}>Utilisé pour ROE et D/E</p>
+                </div>
+                <div>
+                  <label className="field-label">TOTAL ACTIFS (M)</label>
+                  <input type="number" step="0.01" value={form.total_actifs}
+                    onChange={e => f('total_actifs', e.target.value)}
+                    placeholder="ex : 1 200.00" className="input-premium font-mono" />
+                  <p className="text-[10px] mt-1" style={{ color: '#4A4A4A' }}>Utilisé pour ROA</p>
+                </div>
+                <div>
+                  <label className="field-label">TOTAL DETTES (M)</label>
+                  <input type="number" step="0.01" value={form.total_dettes}
+                    onChange={e => f('total_dettes', e.target.value)}
+                    placeholder="ex : 320.00" className="input-premium font-mono" />
+                  <p className="text-[10px] mt-1" style={{ color: '#4A4A4A' }}>Utilisé pour D/E</p>
+                </div>
+              </div>
+              {/* Ratios calculés en live depuis les champs du formulaire */}
+              {(form.capitaux_propres || form.total_actifs || form.total_dettes || form.bpa_previsionnel) && (
+                <div className="p-3 rounded-xl space-y-2"
+                  style={{ background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.12)' }}>
+                  <div className="text-[10px] font-bold tracking-widest mb-2" style={{ color: '#00C853' }}>
+                    RATIOS CALCULÉS EN TEMPS RÉEL
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {(() => {
+                      const rnVal = n(form.bpa_previsionnel)
+                      const cp    = n(form.capitaux_propres)
+                      const ta    = n(form.total_actifs)
+                      const td    = n(form.total_dettes)
+                      const rn2025 = n((form as any).resultat_net_2025) ?? n((form as any).resultat_net_2024)
+                      const cl    = coursLive
+                      const bpa_prev = rnVal
+                      const per   = (cl && bpa_prev && bpa_prev !== 0) ? (cl / bpa_prev).toFixed(2) : null
+                      const roe   = (rn2025 != null && cp && cp !== 0) ? ((rn2025 / cp) * 100).toFixed(2) : null
+                      const roa   = (rn2025 != null && ta && ta !== 0) ? ((rn2025 / ta) * 100).toFixed(2) : null
+                      const de    = (td != null && cp && cp !== 0) ? (td / cp).toFixed(3) : null
+                      return [
+                        { l: 'PER',  v: per,  c: '#D4AF37' },
+                        { l: 'ROE',  v: roe ? `${roe}%` : null, c: '#00C853' },
+                        { l: 'ROA',  v: roa ? `${roa}%` : null, c: '#2196F3' },
+                        { l: 'D/E',  v: de,   c: '#A0A0A0' },
+                      ].map(({ l, v, c }) => (
+                        <div key={l} className="text-center p-2 rounded-lg"
+                          style={{ background: 'rgba(255,255,255,0.03)' }}>
+                          <div className="text-sm font-bold font-mono" style={{ color: v ? c : '#3A3A3A' }}>
+                            {v || '—'}
+                          </div>
+                          <div className="text-[10px] mt-0.5" style={{ color: '#5C5C5C' }}>{l}</div>
+                        </div>
+                      ))
+                    })()}
+                  </div>
+                  {!coursLive && (
+                    <p className="text-[10px]" style={{ color: '#5C5C5C' }}>
+                      ℹ️ Saisissez le mnemo pour voir le PER avec le cours live
+                    </p>
+                  )}
+                </div>
+              )}
             </motion.div>
           )}
 
