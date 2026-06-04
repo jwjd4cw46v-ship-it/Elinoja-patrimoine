@@ -192,10 +192,9 @@ export default function ClientFondamentalesPage() {
   const [loading,     setLoading]     = useState(true)
   const [search,      setSearch]      = useState('')
   const [filter,      setFilter]      = useState('all')
-  const [selected,    setSelected]    = useState<{
+  const [selected, setSelected] = useState<{
     analysis: FundamentalAnalysis
     entreprise: Entreprise | null
-    cours: number | null
   } | null>(null)
   const supabase = createClient()
 
@@ -253,23 +252,43 @@ export default function ClientFondamentalesPage() {
   }, [])
 
   /* ── Helpers ── */
-  function getCours(a: FundamentalAnalysis): number | null {
-    // 1. Cherche d'abord via mnemo dans la table entreprises
+  // Résolution du cours : priorité absolue au cours live BVMT
+  // Stratégie multi-clés pour couvrir les cas de mismatch ticker/mnemo
+  function getCours(a: FundamentalAnalysis, cots: Record<string, number> = cotations): number | null {
+    const ticker = a.ticker.toUpperCase()
+
+    // 1. Correspondance directe ticker → cotation (cas nominal : ticker = mnemo BVMT)
+    if (cots[ticker] != null) return cots[ticker]
+
+    // 2. Via la table entreprises : mnemo peut différer du ticker saisi
     const ent = entreprises.find(e =>
-      e.mnemo?.toUpperCase() === a.ticker.toUpperCase() ||
-      e.valeur?.toUpperCase().includes(a.ticker.toUpperCase())
+      e.mnemo?.toUpperCase() === ticker ||
+      e.valeur?.toUpperCase().includes(ticker)
     )
-    // 2. La clé dans cotations = mnemo BVMT en majuscules
-    const key = (ent?.mnemo ?? a.ticker).toUpperCase()
-    // 3. Cours live en priorité, sinon current_price de la table
-    const live = cotations[key] ?? null
-    return live ?? (a.current_price ?? null)
+    if (ent?.mnemo) {
+      const byMnemo = cots[ent.mnemo.toUpperCase()]
+      if (byMnemo != null) return byMnemo
+    }
+
+    // 3. Recherche partielle dans toutes les clés cotations
+    //    (ex: ticker="AMEN" matche la clé "AB" si valeur contient "AMEN")
+    const entByValeur = entreprises.find(e =>
+      e.valeur?.toUpperCase().includes(ticker) && e.mnemo
+    )
+    if (entByValeur?.mnemo) {
+      const byValeur = cots[entByValeur.mnemo.toUpperCase()]
+      if (byValeur != null) return byValeur
+    }
+
+    // 4. Dernier recours : current_price de la base (ne PAS utiliser si = 0 ou aberrant)
+    return (a.current_price && a.current_price > 0) ? a.current_price : null
   }
 
   function getEntreprise(a: FundamentalAnalysis): Entreprise | null {
+    const ticker = a.ticker.toUpperCase()
     return entreprises.find(e =>
-      e.mnemo?.toUpperCase() === a.ticker.toUpperCase() ||
-      e.valeur?.toUpperCase().includes(a.ticker.toUpperCase())
+      e.mnemo?.toUpperCase() === ticker ||
+      e.valeur?.toUpperCase().includes(ticker)
     ) ?? null
   }
 
@@ -363,7 +382,7 @@ export default function ClientFondamentalesPage() {
               <motion.div key={a.id}
                 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
-                onClick={() => setSelected({ analysis: a, entreprise: ent, cours })}
+                onClick={() => setSelected({ analysis: a, entreprise: ent })}
                 className="card-premium p-5 cursor-pointer group">
 
                 {/* Header */}
@@ -451,7 +470,7 @@ export default function ClientFondamentalesPage() {
           <FundamentalDetailModal
             analysis={selected.analysis}
             entreprise={selected.entreprise}
-            cours={selected.cours}
+            cotations={cotations}
             onClose={() => setSelected(null)}
           />
         )}
@@ -466,17 +485,30 @@ export default function ClientFondamentalesPage() {
 function FundamentalDetailModal({
   analysis: a,
   entreprise: ent,
-  cours,
+  cotations,
   onClose,
 }: {
   analysis: FundamentalAnalysis
   entreprise: Entreprise | null
-  cours: number | null
+  cotations: Record<string, number>
   onClose: () => void
 }) {
-  const reco    = recoCfg[a.recommendation as keyof typeof recoCfg]
-  const ratios  = ent ? computeRatios(ent, cours) : null
-  const upside  = a.target_price && cours
+  // Cours calculé en live depuis cotations (jamais figé au moment du clic)
+  function resolveCours(): number | null {
+    const ticker = a.ticker.toUpperCase()
+    // 1. Correspondance directe
+    if (cotations[ticker] != null) return cotations[ticker]
+    // 2. Via mnemo de la société liée
+    if (ent?.mnemo && cotations[ent.mnemo.toUpperCase()] != null)
+      return cotations[ent.mnemo.toUpperCase()]
+    // 3. current_price uniquement si non nul et cohérent (> 0)
+    return (a.current_price && a.current_price > 0) ? a.current_price : null
+  }
+
+  const cours    = resolveCours()
+  const reco     = recoCfg[a.recommendation as keyof typeof recoCfg]
+  const ratios   = ent ? computeRatios(ent, cours) : null
+  const upside   = a.target_price && cours
     ? (((a.target_price - cours) / cours) * 100).toFixed(2) : null
   const chartData = ent ? buildChartData(ent) : []
 
