@@ -119,7 +119,7 @@ export default function AnalysesTechniquesPage() {
             className="input-premium pl-9 w-56"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {['all', 'published', 'draft', 'buy', 'sell', 'hold'].map(f => (
             <button key={f}
               onClick={() => setFilter(f)}
@@ -136,7 +136,7 @@ export default function AnalysesTechniquesPage() {
       </div>
 
       {/* Table */}
-      <div className="card-premium overflow-hidden">
+      <div className="card-premium overflow-x-auto">
         {loading ? (
           <div className="p-8 space-y-3">
             {[...Array(4)].map((_, i) => (
@@ -162,12 +162,20 @@ export default function AnalysesTechniquesPage() {
               <tr>
                 <th>Analyse</th>
                 <th>Signal</th>
-                <th>Entrée</th>
-                <th>Objectif</th>
-                <th>Stop</th>
-                <th>Statut</th>
-                <th>Date</th>
-                <th style={{ width: 100 }}>Actions</th>
+                <th className="hidden md:table-cell">Entrée</th>
+                <th className="hidden md:table-cell">Objectif</th>
+                <th className="hidden lg:table-cell">Stop</th>
+                <th className="hidden lg:table-cell">Statut</th>
+                <th className="hidden xl:table-cell">Date</th>
+                <th
+                  className="sticky right-0"
+                  style={{
+                    width: 100,
+                    background: 'var(--noir-surface)',
+                    boxShadow: '-4px 0 12px rgba(0,0,0,0.4)',
+                  }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -184,6 +192,8 @@ export default function AnalysesTechniquesPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: isDeleting ? 0.4 : 1 }}
                     transition={{ delay: i * 0.03 }}>
+
+                    {/* Analyse */}
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
@@ -201,38 +211,63 @@ export default function AnalysesTechniquesPage() {
                         </div>
                       </div>
                     </td>
+
+                    {/* Signal */}
                     <td>
-                      {sig && <span className={`${sig.cls} text-[10px] font-bold px-2 py-0.5 rounded`}>{sig.label}</span>}
+                      {sig && (
+                        <span className={`${sig.cls} text-[10px] font-bold px-2 py-0.5 rounded`}>
+                          {sig.label}
+                        </span>
+                      )}
                     </td>
-                    <td>
+
+                    {/* Entrée */}
+                    <td className="hidden md:table-cell">
                       <span className="text-sm font-mono" style={{ color: '#F5F5F5' }}>
                         {a.entry_price?.toLocaleString()}
                       </span>
                     </td>
-                    <td>
+
+                    {/* Objectif */}
+                    <td className="hidden md:table-cell">
                       <div>
                         <span className="text-sm font-mono" style={{ color: '#00C853' }}>
                           {a.target_price?.toLocaleString()}
                         </span>
-                        {gain && <div className="text-[10px]" style={{ color: '#00C853' }}>+{gain}%</div>}
+                        {gain && (
+                          <div className="text-[10px]" style={{ color: '#00C853' }}>+{gain}%</div>
+                        )}
                       </div>
                     </td>
-                    <td>
+
+                    {/* Stop */}
+                    <td className="hidden lg:table-cell">
                       <span className="text-sm font-mono" style={{ color: '#FF1744' }}>
                         {a.stop_loss?.toLocaleString()}
                       </span>
                     </td>
-                    <td>
+
+                    {/* Statut */}
+                    <td className="hidden lg:table-cell">
                       <span className="text-xs" style={{ color: sta?.color || '#707070' }}>
                         ● {sta?.label}
                       </span>
                     </td>
-                    <td>
+
+                    {/* Date */}
+                    <td className="hidden xl:table-cell">
                       <span className="text-xs" style={{ color: '#707070' }}>
                         {format(new Date(a.created_at), 'dd MMM', { locale: fr })}
                       </span>
                     </td>
-                    <td>
+
+                    {/* ── Actions — sticky right ── */}
+                    <td
+                      className="sticky right-0"
+                      style={{
+                        background: 'var(--noir-surface)',
+                        boxShadow: '-4px 0 12px rgba(0,0,0,0.3)',
+                      }}>
                       <div className="flex items-center gap-1">
 
                         {/* Publier / Dépublier */}
@@ -252,8 +287,14 @@ export default function AnalysesTechniquesPage() {
                           title="Modifier"
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#A0A0A0' }}
-                          onMouseOver={e => { e.currentTarget.style.background = 'rgba(212,175,55,0.08)'; e.currentTarget.style.color = '#D4AF37' }}
-                          onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A0A0A0' }}>
+                          onMouseOver={e => {
+                            e.currentTarget.style.background = 'rgba(212,175,55,0.08)'
+                            e.currentTarget.style.color = '#D4AF37'
+                          }}
+                          onMouseOut={e => {
+                            e.currentTarget.style.background = 'transparent'
+                            e.currentTarget.style.color = '#A0A0A0'
+                          }}>
                           <Edit size={13} />
                         </button>
 
@@ -264,14 +305,22 @@ export default function AnalysesTechniquesPage() {
                           title="Supprimer"
                           className="p-1.5 rounded-lg transition-colors"
                           style={{ color: '#5C5C5C' }}
-                          onMouseOver={e => { e.currentTarget.style.background = 'rgba(255,23,68,0.08)'; e.currentTarget.style.color = '#FF1744' }}
-                          onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5C5C5C' }}>
+                          onMouseOver={e => {
+                            e.currentTarget.style.background = 'rgba(255,23,68,0.08)'
+                            e.currentTarget.style.color = '#FF1744'
+                          }}
+                          onMouseOut={e => {
+                            e.currentTarget.style.background = 'transparent'
+                            e.currentTarget.style.color = '#5C5C5C'
+                          }}>
                           {isDeleting
                             ? <div className="w-3 h-3 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin" />
                             : <Trash2 size={13} />}
                         </button>
+
                       </div>
                     </td>
+
                   </motion.tr>
                 )
               })}
