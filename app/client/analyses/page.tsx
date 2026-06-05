@@ -277,6 +277,19 @@ function AnalysisDetailModal({ analysis: a, onClose }: { analysis: TechnicalAnal
         <div className="p-6 space-y-5">
           <h2 className="text-lg font-semibold" style={{ color: '#F5F5F5' }}>{a.title}</h2>
 
+          {/* Graphique technique */}
+          {a.chart_image_url && (
+            <div className="rounded-xl overflow-hidden"
+              style={{ border: '1px solid var(--noir-border)' }}>
+              <img
+                src={a.chart_image_url}
+                alt={`Graphique ${a.ticker}`}
+                className="w-full object-contain"
+                style={{ maxHeight: 320, background: 'var(--noir-elevated)' }}
+              />
+            </div>
+          )}
+
           {/* Price grid */}
           <div className="grid grid-cols-3 gap-3">
             {[
