@@ -106,7 +106,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const [spinning,   setSpinning]   = useState(false)
   // ── Mobile state ──
   // Initialisé à false (SSR-safe) — mis à jour après montage côté client
-  const [isMobile,   setIsMobile]   = useState(false)
+  const [isMobile,   setIsMobile]   = useState<boolean | null>(null)
   const [menuOpen,   setMenuOpen]   = useState(false)
 
   useEffect(() => {
@@ -267,36 +267,25 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         .wmc-glow-high  { animation: wmc-glow-high 2s ease-in-out infinite; }
       `}</style>
 
-      {/* ── DESKTOP : rendu normal ── */}
-      {!isMobile && sidebar}
+      {/* ── DESKTOP : rendu normal (null = SSR, on attend hydratation) ── */}
+      {(isMobile === false || isMobile === null) && sidebar}
 
       {/* ── MOBILE : bouton + drawer ── */}
       {isMobile && (
         <>
-          {/* Bouton hamburger fixe en haut à gauche */}
-          <div style={{
-            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 14px',
-            background: 'var(--noir-surface)',
-            borderBottom: '1px solid var(--noir-border)',
-            height: 57,
-          }}>
-            <button
-              onClick={() => setMenuOpen(v => !v)}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                background: menuOpen ? 'rgba(212,175,55,0.15)' : 'rgba(212,175,55,0.08)',
-                border: '1px solid rgba(212,175,55,0.25)',
-                color: '#D4AF37', cursor: 'pointer',
-              }}>
-              {menuOpen ? <X size={16} /> : <Menu size={16} />}
-            </button>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#F5F5F5', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {getLabel(pathname)}
-            </span>
-          </div>
+          {/* Bouton hamburger flottant — positionné dans le header existant */}
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            style={{
+              position: 'fixed', top: 10, left: 14, zIndex: 100,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 36, height: 36, borderRadius: 8,
+              background: menuOpen ? 'rgba(212,175,55,0.15)' : 'rgba(212,175,55,0.08)',
+              border: '1px solid rgba(212,175,55,0.25)',
+              color: '#D4AF37', cursor: 'pointer',
+            }}>
+            {menuOpen ? <X size={16} /> : <Menu size={16} />}
+          </button>
 
           {/* Backdrop + drawer */}
           <AnimatePresence>
@@ -306,7 +295,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   key="bd"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   onClick={() => setMenuOpen(false)}
-                  style={{ position: 'fixed', inset: 0, top: 57, zIndex: 98, background: 'rgba(0,0,0,0.65)' }}
+                  style={{ position: 'fixed', inset: 0, top: 56, zIndex: 98, background: 'rgba(0,0,0,0.65)' }}
                 />
                 <motion.div
                   key="drawer"
@@ -314,7 +303,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   transition={{ type: 'tween', duration: 0.22 }}
                   onClick={e => { const a = (e.target as HTMLElement).closest('a'); if (a) setMenuOpen(false) }}
                   style={{
-                    position: 'fixed', left: 0, top: 57, bottom: 0, zIndex: 99,
+                    position: 'fixed', left: 0, top: 56, bottom: 0, zIndex: 99,
                     width: '85vw', maxWidth: 320,
                     overflowY: 'auto', WebkitOverflowScrolling: 'touch',
                   } as React.CSSProperties}>
