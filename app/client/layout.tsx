@@ -23,17 +23,10 @@ export default async function ClientLayout({
   return (
     <div
       className="flex"
-      style={{
-        height: '100dvh',
-        overflow: 'hidden',
-        background: 'var(--noir-primary)',
-      }}>
-      <div style={{
-        height: '100%',
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        flexShrink: 0,
-      } as React.CSSProperties}>
+      style={{ height: '100dvh', overflow: 'hidden', background: 'var(--noir-primary)' }}>
+      {/* Sidebar — sur mobile masqué via CSS dans ClientSidebar */}
+      <div style={{ height: '100%', overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch', flexShrink: 0 } as React.CSSProperties}>
         <ClientSidebar profile={profile} />
       </div>
       <div className="flex-1 flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
