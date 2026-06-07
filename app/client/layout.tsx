@@ -10,7 +10,6 @@ export default async function ClientLayout({
 }) {
   const supabase = createClient()
   const { data: { session } } = await supabase.auth.getSession()
-
   if (!session) redirect('/auth/login')
 
   const { data: profile } = await supabase
@@ -25,22 +24,21 @@ export default async function ClientLayout({
     <div
       className="flex"
       style={{
-        height:   '100dvh', // dynamic viewport height — corrige Safari/iOS
+        height: '100dvh',
         overflow: 'hidden',
         background: 'var(--noir-primary)',
-      }}
-    >
-      {/* Sidebar : scroll indépendant */}
-      <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 } as React.CSSProperties}>
+      }}>
+      <div style={{
+        height: '100%',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        flexShrink: 0,
+      } as React.CSSProperties}>
         <ClientSidebar profile={profile} />
       </div>
-
-      {/* Zone principale */}
       <div className="flex-1 flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
         <ClientHeader profile={profile} />
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   )
