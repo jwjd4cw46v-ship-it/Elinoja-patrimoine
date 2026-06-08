@@ -54,7 +54,6 @@ const TV_SYMBOLS: Record<string, string> = {
 // ExchangeRate-API (illimité, sans clé) → USD/TND, EUR/TND
 async function fetchFrankfurter(from: string, to: string): Promise<{ value: number; change: number } | null> {
   try {
-    // api.exchangerate-api.com supporte TND
     const res  = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`, { cache: 'no-store' })
     const data = res.ok ? await res.json() : null
     if (!data?.rates?.[to]) return null
@@ -76,26 +75,13 @@ async function fetchCoinGecko(): Promise<{ value: number; change: number } | nul
   } catch { return null }
 }
 
-// Alpha Vantage (25 req/jour) → GOLD, SILVER, BRENT uniquement
-async function fetchAlpha(assetId: string): Promise<{ value: number; change: number } | null> {
+// Frankfurter (ECB) → Brent via conversion indirecte non dispo,
+// On utilise Alpha Vantage pour BRENT uniquement (commodity endpoint)
+async function fetchBrent(): Promise<{ value: number; change: number } | null> {
   try {
-    let url = ''
-    // WTI/BRENT via commodity endpoint
-    if (assetId === 'BRENT') {
-      url = `https://www.alphavantage.co/query?function=BRENT&interval=daily&apikey=${ALPHA_KEY}`
-    } else if (assetId === 'GOLD') {
-      // Or via forex XAU
-      url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${ALPHA_KEY}`
-    } else if (assetId === 'SILVER') {
-      url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAG&to_currency=USD&apikey=${ALPHA_KEY}`
-    } else {
-      return null
-    }
-
+    const url = `https://www.alphavantage.co/query?function=BRENT&interval=daily&apikey=${ALPHA_KEY}`
     const res  = await fetch(url, { cache: 'no-store' })
     const data = await res.json()
-
-    // Réponse commodity (BRENT, WTI, NAT_GAS...)
     if (Array.isArray(data?.data) && data.data.length >= 2) {
       const latest = data.data[0]
       const prev   = data.data[1]
@@ -104,24 +90,116 @@ async function fetchAlpha(assetId: string): Promise<{ value: number; change: num
       const change = prev ? ((value - parseFloat(prev.value)) / parseFloat(prev.value)) * 100 : 0
       return { value, change: parseFloat(change.toFixed(2)) }
     }
-
-    // Réponse forex (XAU, XAG)
-    const rate = data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate']
-    if (rate) {
-      return { value: parseFloat(parseFloat(rate).toFixed(2)), change: 0 }
-    }
-
     return null
   } catch { return null }
+}
+
+// metals.live (gratuit, sans clé) → XAU, XAG en USD
+async function fetchMetalsLive(metal: 'gold' | 'silver'): Promise<{ value: number; change: number } | null> {
+  try {
+    const res  = await fetch('https://metals.live/api/spot', { cache: 'no-store' })
+    if (!res.ok) return null
+    const data: Array<Record<string, number>> = await res.json()
+    // Retourne un tableau [{gold: 1234, silver: 12, ...}, ...]
+    const entry = data?.[0]
+    if (!entry) return null
+    const value = entry[metal]
+    if (!value || isNaN(value)) return null
+    return { value: parseFloat(value.toFixed(2)), change: 0 }
+  } catch { return null }
+}
+
+// Alpha Vantage fallback → XAU / XAG (CURRENCY_EXCHANGE_RATE)
+async function fetchAlphaMetals(symbol: 'XAU' | 'XAG'): Promise<{ value: number; change: number } | null> {
+  try {
+    const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${symbol}&to_currency=USD&apikey=${ALPHA_KEY}`
+    const res  = await fetch(url, { cache: 'no-store' })
+    const data = await res.json()
+    const rate = data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate']
+    if (!rate) return null
+    return { value: parseFloat(parseFloat(rate).toFixed(2)), change: 0 }
+  } catch { return null }
+}
+
+// Open Exchange Rates (gratuit, sans clé requise pour XAU) → fallback
+// On utilise GoldAPI public endpoint (sans clé, limité)
+async function fetchGoldAPI(symbol: 'XAU' | 'XAG'): Promise<{ value: number; change: number } | null> {
+  try {
+    // gold-api.com propose un endpoint public
+    const res  = await fetch(`https://data-asg.goldprice.org/dbXRates/USD`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data = await res.json()
+    // { items: [{ xauPrice: 1234, xagPrice: 12 }] }
+    const item = data?.items?.[0]
+    if (!item) return null
+    const value = symbol === 'XAU' ? item.xauPrice : item.xagPrice
+    if (!value || isNaN(value)) return null
+    return { value: parseFloat(value.toFixed(2)), change: 0 }
+  } catch { return null }
+}
+
+// Aluminium & Plomb via Alpha Vantage commodity (metals industriels)
+// Fallback: LME via stooq.com (CSV public)
+async function fetchStooq(ticker: string): Promise<{ value: number; change: number } | null> {
+  try {
+    // stooq.com fournit CSV public pour de nombreux symboles
+    const res  = await fetch(`https://stooq.com/q/d/l/?s=${ticker}&i=d`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const text = await res.text()
+    const lines = text.trim().split('\n')
+    // Format: Date,Open,High,Low,Close,Volume
+    if (lines.length < 3) return null
+    const last  = lines[lines.length - 1].split(',')
+    const prev  = lines[lines.length - 2].split(',')
+    const value = parseFloat(last[4]) // Close
+    const pVal  = parseFloat(prev[4])
+    if (isNaN(value) || value <= 0) return null
+    const change = pVal ? ((value - pVal) / pVal) * 100 : 0
+    return { value: parseFloat(value.toFixed(2)), change: parseFloat(change.toFixed(2)) }
+  } catch { return null }
+}
+
+// Or: metals.live → goldprice.org → Alpha Vantage
+async function fetchGold(): Promise<{ value: number; change: number } | null> {
+  return (
+    (await fetchMetalsLive('gold')) ??
+    (await fetchGoldAPI('XAU')) ??
+    (await fetchAlphaMetals('XAU'))
+  )
+}
+
+// Argent: metals.live → goldprice.org → Alpha Vantage
+async function fetchSilver(): Promise<{ value: number; change: number } | null> {
+  return (
+    (await fetchMetalsLive('silver')) ??
+    (await fetchGoldAPI('XAG')) ??
+    (await fetchAlphaMetals('XAG'))
+  )
+}
+
+// Aluminium: stooq LMAHDS03 (LME Aluminium)
+async function fetchAluminium(): Promise<{ value: number; change: number } | null> {
+  // Stooq ticker pour Aluminium LME
+  return fetchStooq('lmahds03.lme')
+}
+
+// Plomb: stooq (LME Lead)
+async function fetchLead(): Promise<{ value: number; change: number } | null> {
+  return fetchStooq('lmpbds03.lme')
 }
 
 async function fetchFromAlpha(assetId: string): Promise<{ value: number; change: number } | null> {
   if (assetId === 'USD_TND') return fetchFrankfurter('USD', 'TND')
   if (assetId === 'EUR_TND') return fetchFrankfurter('EUR', 'TND')
   if (assetId === 'BTC_USD') return fetchCoinGecko()
-  if (['GOLD', 'SILVER', 'BRENT'].includes(assetId)) return fetchAlpha(assetId)
-  return null // ALUM, LEAD → pas d'API gratuite
+  if (assetId === 'BRENT')   return fetchBrent()
+  if (assetId === 'GOLD')    return fetchGold()
+  if (assetId === 'SILVER')  return fetchSilver()
+  if (assetId === 'ALUM')    return fetchAluminium()
+  if (assetId === 'LEAD')    return fetchLead()
+  return null
 }
+
 
 // Génère historique simulé
 function generateHistory(baseValue: number, days = 30): HistoryPoint[] {
