@@ -628,7 +628,13 @@ function FundamentalDetailModal({
               />
               <RatioBadge
                 label="BPA (Bén. / action)"
-                value={ratios?.bpa ? fmt(ratios.bpa, 3) : null}
+                value={
+                  ent?.benefice_par_action != null
+                    ? fmt(ent.benefice_par_action, 3)
+                    : (ent?.resultat_net_2025 != null && ent?.titres_admis
+                        ? fmt((ent.resultat_net_2025 * 1_000_000) / ent.titres_admis, 3)
+                        : null)
+                }
                 color="#A0A0A0"
                 sub="RN / titres admis"
               />
