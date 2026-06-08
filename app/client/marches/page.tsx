@@ -7,6 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
+import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Asset {
@@ -14,11 +15,10 @@ interface Asset {
   label:    string
   sublabel: string
   value:    number | null
-  change:   number | null   // % 24h
+  change:   number | null
   unit:     string
   category: 'forex' | 'crypto' | 'commodity'
   color:    string
-  apiKey:   string          // clé pour identifier dans l'API
 }
 
 interface HistoryPoint {
@@ -26,33 +26,91 @@ interface HistoryPoint {
   value: number
 }
 
+const ALPHA_KEY = 'H0K0DX8A7K57G5EE'
+const ONE_HOUR  = 60 * 60 * 1000
+
 // ─── Config assets ────────────────────────────────────────────────────────────
-const ASSETS: Asset[] = [
-  // Forex
-  { id: 'usd_tnd', label: 'Dollar / Dinar',  sublabel: 'USD / TND', value: null, change: null, unit: 'TND', category: 'forex',     color: '#4FC3F7', apiKey: 'USD_TND' },
-  { id: 'eur_tnd', label: 'Euro / Dinar',    sublabel: 'EUR / TND', value: null, change: null, unit: 'TND', category: 'forex',     color: '#81C784', apiKey: 'EUR_TND' },
-  { id: 'btc_usd', label: 'Bitcoin / Dollar', sublabel: 'BTC / USD', value: null, change: null, unit: 'USD', category: 'crypto',    color: '#FFB74D', apiKey: 'BTC_USD' },
-  // Matières premières
-  { id: 'brent',   label: 'Brent',            sublabel: 'Pétrole brut', value: null, change: null, unit: 'USD/bbl', category: 'commodity', color: '#EF9A9A', apiKey: 'BRENT'   },
-  { id: 'gold',    label: 'Or',               sublabel: 'XAU / USD',    value: null, change: null, unit: 'USD/oz',  category: 'commodity', color: '#D4AF37', apiKey: 'GOLD'    },
-  { id: 'silver',  label: 'Argent',           sublabel: 'XAG / USD',    value: null, change: null, unit: 'USD/oz',  category: 'commodity', color: '#B0BEC5', apiKey: 'SILVER'  },
-  { id: 'alum',    label: 'Aluminium',        sublabel: 'LME Spot',     value: null, change: null, unit: 'USD/t',   category: 'commodity', color: '#90CAF9', apiKey: 'ALUM'    },
-  { id: 'lead',    label: 'Plomb',            sublabel: 'LME Spot',     value: null, change: null, unit: 'USD/t',   category: 'commodity', color: '#CE93D8', apiKey: 'LEAD'    },
+const ASSET_CONFIG = [
+  { id: 'USD_TND', label: 'Dollar / Dinar',   sublabel: 'USD / TND', unit: 'TND',     category: 'forex'     as const, color: '#4FC3F7' },
+  { id: 'EUR_TND', label: 'Euro / Dinar',     sublabel: 'EUR / TND', unit: 'TND',     category: 'forex'     as const, color: '#81C784' },
+  { id: 'BTC_USD', label: 'Bitcoin / Dollar', sublabel: 'BTC / USD', unit: 'USD',     category: 'crypto'    as const, color: '#FFB74D' },
+  { id: 'BRENT',   label: 'Brent',            sublabel: 'Pétrole brut', unit: 'USD/bbl', category: 'commodity' as const, color: '#EF9A9A' },
+  { id: 'GOLD',    label: 'Or',               sublabel: 'XAU / USD', unit: 'USD/oz',  category: 'commodity' as const, color: '#D4AF37' },
+  { id: 'SILVER',  label: 'Argent',           sublabel: 'XAG / USD', unit: 'USD/oz',  category: 'commodity' as const, color: '#B0BEC5' },
+  { id: 'ALUM',    label: 'Aluminium',        sublabel: 'LME Spot',  unit: 'USD/t',   category: 'commodity' as const, color: '#90CAF9' },
+  { id: 'LEAD',    label: 'Plomb',            sublabel: 'LME Spot',  unit: 'USD/t',   category: 'commodity' as const, color: '#CE93D8' },
 ]
 
-// ─── Fallback data (si API indisponible) ──────────────────────────────────────
-const FALLBACK: Record<string, { value: number; change: number }> = {
-  USD_TND: { value: 3.118,  change: 0.12  },
-  EUR_TND: { value: 3.385,  change: -0.08 },
-  BTC_USD: { value: 103240, change: 2.14  },
-  BRENT:   { value: 74.82,  change: -0.55 },
-  GOLD:    { value: 3312,   change: 0.31  },
-  SILVER:  { value: 32.74,  change: 0.18  },
-  ALUM:    { value: 2487,   change: -0.22 },
-  LEAD:    { value: 1985,   change: 0.09  },
+// ─── Fetch multi-sources ─────────────────────────────────────────────────────
+
+// Frankfurter (illimité, sans clé) → USD/TND, EUR/TND
+async function fetchFrankfurter(from: string, to: string): Promise<{ value: number; change: number } | null> {
+  try {
+    const [todayRes, prevRes] = await Promise.all([
+      fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, { cache: 'no-store' }),
+      fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}&amount=1`, { cache: 'no-store' }),
+    ])
+    const today = todayRes.ok ? await todayRes.json() : null
+    if (!today?.rates?.[to]) return null
+    const value = parseFloat(today.rates[to].toFixed(4))
+    return { value, change: 0 }
+  } catch { return null }
 }
 
-// Génère un historique simulé réaliste autour d'une valeur
+// CoinGecko (illimité, sans clé) → BTC/USD
+async function fetchCoinGecko(): Promise<{ value: number; change: number } | null> {
+  try {
+    const res  = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true', { cache: 'no-store' })
+    const data = res.ok ? await res.json() : null
+    if (!data?.bitcoin?.usd) return null
+    return {
+      value:  parseFloat(data.bitcoin.usd.toFixed(0)),
+      change: parseFloat((data.bitcoin.usd_24h_change ?? 0).toFixed(2)),
+    }
+  } catch { return null }
+}
+
+// Alpha Vantage (25 req/jour) → GOLD, SILVER, BRENT uniquement
+async function fetchAlpha(assetId: string): Promise<{ value: number; change: number } | null> {
+  try {
+    let url = ''
+    if (assetId === 'GOLD') {
+      url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${ALPHA_KEY}`
+    } else if (assetId === 'SILVER') {
+      url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAG&to_currency=USD&apikey=${ALPHA_KEY}`
+    } else if (assetId === 'BRENT') {
+      url = `https://www.alphavantage.co/query?function=BRENT&interval=daily&apikey=${ALPHA_KEY}`
+    } else {
+      return null
+    }
+
+    const res  = await fetch(url, { cache: 'no-store' })
+    const data = await res.json()
+
+    if (data['Realtime Currency Exchange Rate']) {
+      const rate = parseFloat(data['Realtime Currency Exchange Rate']['5. Exchange Rate'])
+      return { value: rate, change: 0 }
+    }
+    if (data['data']?.[0]) {
+      const latest = data['data'][0]
+      const prev   = data['data'][1]
+      const value  = parseFloat(latest.value)
+      const change = prev ? ((value - parseFloat(prev.value)) / parseFloat(prev.value)) * 100 : 0
+      return { value, change: parseFloat(change.toFixed(2)) }
+    }
+    return null
+  } catch { return null }
+}
+
+async function fetchFromAlpha(assetId: string): Promise<{ value: number; change: number } | null> {
+  if (assetId === 'USD_TND') return fetchFrankfurter('USD', 'TND')
+  if (assetId === 'EUR_TND') return fetchFrankfurter('EUR', 'TND')
+  if (assetId === 'BTC_USD') return fetchCoinGecko()
+  if (['GOLD', 'SILVER', 'BRENT'].includes(assetId)) return fetchAlpha(assetId)
+  return null // ALUM, LEAD → pas d'API gratuite
+}
+
+// Génère historique simulé
 function generateHistory(baseValue: number, days = 30): HistoryPoint[] {
   const points: HistoryPoint[] = []
   let v = baseValue * 0.95
@@ -62,60 +120,90 @@ function generateHistory(baseValue: number, days = 30): HistoryPoint[] {
     d.setDate(d.getDate() - i)
     v = v * (1 + (Math.random() - 0.48) * 0.025)
     points.push({
-      date: d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+      date:  d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
       value: parseFloat(v.toFixed(baseValue > 1000 ? 0 : baseValue > 10 ? 2 : 4)),
     })
   }
-  // Forcer la dernière valeur = valeur actuelle
   if (points.length > 0) points[points.length - 1].value = baseValue
   return points
 }
 
-// ─── Composant principal ──────────────────────────────────────────────────────
+// ─── Page principale ──────────────────────────────────────────────────────────
 export default function MarchesPage() {
-  const [assets,    setAssets]    = useState<Asset[]>(ASSETS)
-  const [selected,  setSelected]  = useState<Asset | null>(null)
-  const [history,   setHistory]   = useState<HistoryPoint[]>([])
-  const [spinning,  setSpinning]  = useState(false)
+  const [assets,     setAssets]     = useState<Asset[]>(
+    ASSET_CONFIG.map(a => ({ ...a, value: null, change: null }))
+  )
+  const [selected,   setSelected]   = useState<Asset | null>(null)
+  const [history,    setHistory]    = useState<HistoryPoint[]>([])
+  const [spinning,   setSpinning]   = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [status,     setStatus]     = useState<'cache' | 'fresh' | 'loading'>('loading')
 
-  const fetchData = useCallback(async () => {
-    try {
-      // Tentative API exchangerate pour les devises
-      const fxRes = await fetch('https://api.exchangerate-api.com/v4/latest/USD', { cache: 'no-store' })
-      const fxData = fxRes.ok ? await fxRes.json() : null
+  const supabase = createClient()
 
-      setAssets(prev => prev.map(a => {
-        const fb = FALLBACK[a.apiKey]
-        if (a.apiKey === 'USD_TND' && fxData?.rates?.TND) {
-          return { ...a, value: parseFloat(fxData.rates.TND.toFixed(3)), change: fb.change }
-        }
-        if (a.apiKey === 'EUR_TND' && fxData?.rates?.TND && fxData?.rates?.EUR) {
-          const v = parseFloat((fxData.rates.TND / fxData.rates.EUR).toFixed(3))
-          return { ...a, value: v, change: fb.change }
-        }
-        return { ...a, value: fb.value, change: fb.change }
-      }))
-    } catch {
-      // Tout fallback
-      setAssets(prev => prev.map(a => ({
+  const loadData = useCallback(async (forceRefresh = false) => {
+    setStatus('loading')
+
+    // 1. Lire le cache Supabase
+    const { data: cached } = await supabase
+      .from('marches_data')
+      .select('asset_id, value, change, updated_at')
+
+    const cacheMap: Record<string, { value: number; change: number; updated_at: string }> = {}
+    cached?.forEach(r => { cacheMap[r.asset_id] = r })
+
+    // 2. Vérifier si le cache est frais (< 1h)
+    const now        = Date.now()
+    const firstEntry = cached?.[0]
+    const cacheAge   = firstEntry
+      ? now - new Date(firstEntry.updated_at).getTime()
+      : Infinity
+
+    const useCache = !forceRefresh && cacheAge < ONE_HOUR
+
+    if (useCache && cached?.length) {
+      setAssets(ASSET_CONFIG.map(a => ({
         ...a,
-        value:  FALLBACK[a.apiKey]?.value  ?? null,
-        change: FALLBACK[a.apiKey]?.change ?? null,
+        value:  cacheMap[a.id]?.value  ?? null,
+        change: cacheMap[a.id]?.change ?? null,
       })))
+      setLastUpdate(new Date(firstEntry!.updated_at))
+      setStatus('cache')
+      return
     }
+
+    // 3. Fetch depuis Alpha Vantage
+    setStatus('fresh')
+    const updates: Asset[] = [...ASSET_CONFIG.map(a => ({ ...a, value: cacheMap[a.id]?.value ?? null, change: cacheMap[a.id]?.change ?? null }))]
+
+    // On fetche séquentiellement pour ne pas dépasser le rate limit
+    for (let i = 0; i < ASSET_CONFIG.length; i++) {
+      const cfg    = ASSET_CONFIG[i]
+      const result = await fetchFromAlpha(cfg.id)
+      if (result) {
+        updates[i] = { ...updates[i], value: result.value, change: result.change }
+        // Upsert en base
+        await supabase.from('marches_data').upsert({
+          asset_id:   cfg.id,
+          value:      result.value,
+          change:     result.change,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'asset_id' })
+      }
+      setAssets([...updates])
+      // Pause 500ms entre chaque requête (rate limit Alpha Vantage)
+      if (i < ASSET_CONFIG.length - 1) await new Promise(r => setTimeout(r, 500))
+    }
+
     setLastUpdate(new Date())
+    setStatus('cache')
   }, [])
 
-  useEffect(() => {
-    fetchData()
-    const id = setInterval(fetchData, 60_000)
-    return () => clearInterval(id)
-  }, [fetchData])
+  useEffect(() => { loadData() }, [loadData])
 
   function handleRefresh() {
     setSpinning(true)
-    fetchData().then(() => setTimeout(() => setSpinning(false), 600))
+    loadData(true).then(() => setTimeout(() => setSpinning(false), 600))
   }
 
   function handleSelect(asset: Asset) {
@@ -123,13 +211,13 @@ export default function MarchesPage() {
     if (asset.value) setHistory(generateHistory(asset.value))
   }
 
-  const forex      = assets.filter(a => a.category === 'forex' || a.category === 'crypto')
+  const forex       = assets.filter(a => a.category === 'forex' || a.category === 'crypto')
   const commodities = assets.filter(a => a.category === 'commodity')
 
   const fmt = (v: number, unit: string) => {
     if (unit === 'TND') return v.toLocaleString('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
-    if (v > 10000)      return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    if (v > 100)        return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    if (v > 10000)      return v.toLocaleString('fr-FR', { minimumFractionDigits: 0,  maximumFractionDigits: 0  })
+    if (v > 100)        return v.toLocaleString('fr-FR', { minimumFractionDigits: 2,  maximumFractionDigits: 2  })
     return v.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
   }
 
@@ -137,67 +225,63 @@ export default function MarchesPage() {
     <>
       <div className="space-y-6">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold" style={{ color: '#F5F5F5' }}>
               Devises &amp; Matières premières
             </h1>
-            <p className="text-sm mt-0.5" style={{ color: '#5C5C5C' }}>
-              Cours en temps réel · Cliquez pour voir l'historique
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-sm" style={{ color: '#5C5C5C' }}>
+                Cliquez sur un actif pour voir l'historique
+              </p>
+              {status === 'cache' && lastUpdate && (
+                <span style={{ fontSize: '10px', color: '#3A3A3A', background: 'rgba(255,255,255,0.04)', padding: '1px 6px', borderRadius: '4px' }}>
+                  Cache · {lastUpdate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {status === 'fresh' && (
+                <span style={{ fontSize: '10px', color: '#D4AF37', background: 'rgba(212,175,55,0.08)', padding: '1px 6px', borderRadius: '4px' }}>
+                  Mise à jour…
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {lastUpdate && (
-              <span style={{ fontSize: '10px', color: '#3A3A3A' }}>
-                {lastUpdate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            <button onClick={handleRefresh} style={{
-              background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)',
-              borderRadius: '8px', padding: '7px', color: '#707070', cursor: 'pointer', display: 'flex',
-            }}>
-              <RefreshCw size={14} style={{ transition: 'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
-            </button>
-          </div>
+          <button onClick={handleRefresh} title="Forcer la mise à jour" style={{
+            background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)',
+            borderRadius: '8px', padding: '7px', color: '#707070', cursor: 'pointer', display: 'flex',
+          }}>
+            <RefreshCw size={14} style={{ transition: 'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
+          </button>
         </div>
 
-        {/* ── Section Devises ── */}
+        {/* Devises */}
         <Section title="Devises & Crypto" icon={<DollarSign size={14} />}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {forex.map(a => (
-              <AssetCard key={a.id} asset={a} fmt={fmt} onClick={() => handleSelect(a)} />
-            ))}
+            {forex.map(a => <AssetCard key={a.id} asset={a} fmt={fmt} onClick={() => handleSelect(a)} />)}
           </div>
         </Section>
 
-        {/* ── Section Matières premières ── */}
+        {/* Matières premières */}
         <Section title="Matières premières" icon={<Coins size={14} />}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {commodities.map(a => (
-              <AssetCard key={a.id} asset={a} fmt={fmt} onClick={() => handleSelect(a)} />
-            ))}
+            {commodities.map(a => <AssetCard key={a.id} asset={a} fmt={fmt} onClick={() => handleSelect(a)} />)}
           </div>
         </Section>
 
       </div>
 
-      {/* ── Modal historique ── */}
+      {/* Modal historique */}
       <AnimatePresence>
         {selected && (
-          <HistoryModal
-            asset={selected}
-            history={history}
-            fmt={fmt}
-            onClose={() => setSelected(null)}
-          />
+          <HistoryModal asset={selected} history={history} fmt={fmt} onClose={() => setSelected(null)} />
         )}
       </AnimatePresence>
     </>
   )
 }
 
-// ─── Section wrapper ──────────────────────────────────────────────────────────
+// ─── Section ──────────────────────────────────────────────────────────────────
 function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
@@ -212,39 +296,25 @@ function Section({ title, icon, children }: { title: string; icon: React.ReactNo
   )
 }
 
-// ─── Carte asset ──────────────────────────────────────────────────────────────
-function AssetCard({ asset: a, fmt, onClick }: {
-  asset: Asset
-  fmt: (v: number, unit: string) => string
-  onClick: () => void
-}) {
+// ─── AssetCard ────────────────────────────────────────────────────────────────
+function AssetCard({ asset: a, fmt, onClick }: { asset: Asset; fmt: (v: number, u: string) => string; onClick: () => void }) {
   const isPos = (a.change ?? 0) > 0
   const isNeg = (a.change ?? 0) < 0
   const changeColor = isPos ? '#00C853' : isNeg ? '#FF1744' : '#707070'
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
       onClick={onClick}
       style={{
-        background:   'var(--noir-elevated)',
-        border:       '1px solid var(--noir-border)',
-        borderRadius: '14px',
-        padding:      '16px 18px',
-        cursor:       'pointer',
-        transition:   'border-color 0.2s',
-        position:     'relative',
-        overflow:     'hidden',
+        background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)',
+        borderRadius: '14px', padding: '16px 18px', cursor: 'pointer',
+        position: 'relative', overflow: 'hidden', transition: 'border-color 0.2s',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = a.color + '55')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--noir-border)')}
-    >
-      {/* Accent couleur */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
-        background: `linear-gradient(90deg, ${a.color}, transparent)`,
-      }} />
+      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--noir-border)')}>
+
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: `linear-gradient(90deg, ${a.color}, transparent)` }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
@@ -252,9 +322,13 @@ function AssetCard({ asset: a, fmt, onClick }: {
           <div style={{ fontSize: '10px', color: '#5C5C5C', marginTop: '2px' }}>{a.sublabel}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '17px', fontWeight: 700, color: '#F5F5F5', fontFamily: 'monospace' }}>
-            {a.value != null ? fmt(a.value, a.unit) : '—'}
-          </div>
+          {a.value != null ? (
+            <div style={{ fontSize: '17px', fontWeight: 700, color: '#F5F5F5', fontFamily: 'monospace' }}>
+              {fmt(a.value, a.unit)}
+            </div>
+          ) : (
+            <div style={{ fontSize: '13px', color: '#3A3A3A' }}>Chargement…</div>
+          )}
           <div style={{ fontSize: '10px', color: '#3A3A3A', marginTop: '2px' }}>{a.unit}</div>
         </div>
       </div>
@@ -273,69 +347,44 @@ function AssetCard({ asset: a, fmt, onClick }: {
 
 // ─── Modal historique ─────────────────────────────────────────────────────────
 function HistoryModal({ asset, history, fmt, onClose }: {
-  asset: Asset
-  history: HistoryPoint[]
-  fmt: (v: number, unit: string) => string
-  onClose: () => void
+  asset: Asset; history: HistoryPoint[]
+  fmt: (v: number, u: string) => string; onClose: () => void
 }) {
-  const isPos = (asset.change ?? 0) >= 0
-  const gradColor = asset.color
-
-  const minVal = Math.min(...history.map(h => h.value))
-  const maxVal = Math.max(...history.map(h => h.value))
-  const domain = [minVal * 0.999, maxVal * 1.001]
+  const isPos    = (asset.change ?? 0) >= 0
+  const minVal   = Math.min(...history.map(h => h.value))
+  const maxVal   = Math.max(...history.map(h => h.value))
+  const domain   = [minVal * 0.999, maxVal * 1.001]
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={e => e.target === e.currentTarget && onClose()}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        background: 'rgba(0,0,0,0.8)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
-      }}>
+      style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
       <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 20 }}
-        style={{
-          width: '100%', maxWidth: '600px',
-          background: 'var(--noir-surface)',
-          border: '1px solid var(--noir-border)',
-          borderRadius: '20px',
-          overflow: 'hidden',
-        }}>
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        style={{ width: '100%', maxWidth: '600px', background: 'var(--noir-surface)', border: '1px solid var(--noir-border)', borderRadius: '20px', overflow: 'hidden' }}>
 
-        {/* Header modal */}
-        <div style={{
-          padding: '20px 24px 16px',
-          borderBottom: '1px solid var(--noir-border)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          background: `linear-gradient(135deg, ${gradColor}08, transparent)`,
-        }}>
+        {/* Header */}
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--noir-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: `linear-gradient(135deg, ${asset.color}08, transparent)` }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: gradColor }} />
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: asset.color }} />
               <span style={{ fontSize: '16px', fontWeight: 600, color: '#F5F5F5' }}>{asset.label}</span>
             </div>
-            <div style={{ fontSize: '11px', color: '#5C5C5C', marginTop: '3px' }}>{asset.sublabel} · 30 derniers jours</div>
+            <div style={{ fontSize: '11px', color: '#5C5C5C', marginTop: '3px' }}>{asset.sublabel} · 30 derniers jours (simulé)</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: '20px', fontWeight: 700, color: '#F5F5F5', fontFamily: 'monospace' }}>
                 {asset.value != null ? fmt(asset.value, asset.unit) : '—'}
               </div>
-              <div style={{ fontSize: '11px', color: isPos ? '#00C853' : '#FF1744', marginTop: '2px' }}>
-                {isPos ? '+' : ''}{asset.change?.toFixed(2)}% aujourd'hui
-              </div>
+              {asset.change != null && (
+                <div style={{ fontSize: '11px', color: isPos ? '#00C853' : '#FF1744', marginTop: '2px' }}>
+                  {isPos ? '+' : ''}{asset.change.toFixed(2)}% aujourd'hui
+                </div>
+              )}
             </div>
-            <button onClick={onClose} style={{
-              background: 'rgba(255,255,255,0.05)', border: 'none',
-              borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#5C5C5C',
-              display: 'flex',
-            }}>
+            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#5C5C5C', display: 'flex' }}>
               <X size={16} />
             </button>
           </div>
@@ -347,73 +396,36 @@ function HistoryModal({ asset, history, fmt, onClose }: {
             <AreaChart data={history} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id={`grad-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={gradColor} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={gradColor} stopOpacity={0}   />
+                  <stop offset="5%"  stopColor={asset.color} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={asset.color} stopOpacity={0}   />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: '#3A3A3A', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                interval={6}
-              />
-              <YAxis
-                domain={domain}
-                tick={{ fill: '#3A3A3A', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={v => {
-                  if (v > 10000) return (v / 1000).toFixed(0) + 'k'
-                  if (v > 100)   return v.toFixed(0)
-                  return v.toFixed(3)
-                }}
-                width={48}
-              />
+              <XAxis dataKey="date" tick={{ fill: '#3A3A3A', fontSize: 10 }} tickLine={false} axisLine={false} interval={6} />
+              <YAxis domain={domain} tick={{ fill: '#3A3A3A', fontSize: 10 }} tickLine={false} axisLine={false}
+                tickFormatter={v => v > 10000 ? (v/1000).toFixed(0)+'k' : v > 100 ? v.toFixed(0) : v.toFixed(3)}
+                width={48} />
               <Tooltip
-                contentStyle={{
-                  background: 'var(--noir-elevated)',
-                  border: `1px solid ${gradColor}44`,
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  color: '#F5F5F5',
-                }}
+                contentStyle={{ background: 'var(--noir-elevated)', border: `1px solid ${asset.color}44`, borderRadius: '10px', fontSize: '12px', color: '#F5F5F5' }}
                 labelStyle={{ color: '#707070', marginBottom: '4px' }}
                 formatter={(v: number) => [fmt(v, asset.unit) + ' ' + asset.unit, asset.label]}
               />
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke={gradColor}
-                strokeWidth={2}
-                fill={`url(#grad-${asset.id})`}
-                dot={false}
-                activeDot={{ r: 4, fill: gradColor, stroke: 'var(--noir-surface)', strokeWidth: 2 }}
-              />
+              <Area type="monotone" dataKey="value" stroke={asset.color} strokeWidth={2}
+                fill={`url(#grad-${asset.id})`} dot={false}
+                activeDot={{ r: 4, fill: asset.color, stroke: 'var(--noir-surface)', strokeWidth: 2 }} />
             </AreaChart>
           </ResponsiveContainer>
 
-          {/* Stats rapides */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-            gap: '8px', marginTop: '16px',
-          }}>
+          {/* Stats */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '16px' }}>
             {[
               { label: 'Min 30j', value: fmt(minVal, asset.unit) },
               { label: 'Max 30j', value: fmt(maxVal, asset.unit) },
               { label: 'Actuel',  value: asset.value ? fmt(asset.value, asset.unit) : '—' },
             ].map(s => (
-              <div key={s.label} style={{
-                background: 'var(--noir-elevated)',
-                borderRadius: '10px', padding: '10px 12px', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: '9px', color: '#3A3A3A', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>
-                  {s.label}
-                </div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#E0E0E0', fontFamily: 'monospace' }}>
-                  {s.value}
-                </div>
+              <div key={s.label} style={{ background: 'var(--noir-elevated)', borderRadius: '10px', padding: '10px 12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', color: '#3A3A3A', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>{s.label}</div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#E0E0E0', fontFamily: 'monospace' }}>{s.value}</div>
               </div>
             ))}
           </div>
