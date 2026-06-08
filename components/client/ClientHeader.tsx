@@ -115,7 +115,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   ] as Market[]
 
   const tickerItems  = sorted.length > 0 ? [...sorted, ...sorted, ...sorted, ...sorted] : []
-  const animDuration = Math.max(40, sorted.length * 3)
+  const animDuration = Math.max(60, sorted.length * 8)
   const totalAlerts  = countLow + countHigh
 
   return (
@@ -123,7 +123,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
       <style>{`
         @keyframes ticker-scroll {
           0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          100% { transform: translateX(-25%); }
         }
         .ticker-track {
           display: flex;
