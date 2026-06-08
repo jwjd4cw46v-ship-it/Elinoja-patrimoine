@@ -43,16 +43,14 @@ const ASSET_CONFIG = [
 
 // ─── Fetch multi-sources ─────────────────────────────────────────────────────
 
-// Frankfurter (illimité, sans clé) → USD/TND, EUR/TND
+// ExchangeRate-API (illimité, sans clé) → USD/TND, EUR/TND
 async function fetchFrankfurter(from: string, to: string): Promise<{ value: number; change: number } | null> {
   try {
-    const [todayRes, prevRes] = await Promise.all([
-      fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, { cache: 'no-store' }),
-      fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}&amount=1`, { cache: 'no-store' }),
-    ])
-    const today = todayRes.ok ? await todayRes.json() : null
-    if (!today?.rates?.[to]) return null
-    const value = parseFloat(today.rates[to].toFixed(4))
+    // api.exchangerate-api.com supporte TND
+    const res  = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`, { cache: 'no-store' })
+    const data = res.ok ? await res.json() : null
+    if (!data?.rates?.[to]) return null
+    const value = parseFloat(data.rates[to].toFixed(4))
     return { value, change: 0 }
   } catch { return null }
 }
@@ -74,12 +72,14 @@ async function fetchCoinGecko(): Promise<{ value: number; change: number } | nul
 async function fetchAlpha(assetId: string): Promise<{ value: number; change: number } | null> {
   try {
     let url = ''
-    if (assetId === 'GOLD') {
+    // WTI/BRENT via commodity endpoint
+    if (assetId === 'BRENT') {
+      url = `https://www.alphavantage.co/query?function=BRENT&interval=daily&apikey=${ALPHA_KEY}`
+    } else if (assetId === 'GOLD') {
+      // Or via forex XAU
       url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${ALPHA_KEY}`
     } else if (assetId === 'SILVER') {
       url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAG&to_currency=USD&apikey=${ALPHA_KEY}`
-    } else if (assetId === 'BRENT') {
-      url = `https://www.alphavantage.co/query?function=BRENT&interval=daily&apikey=${ALPHA_KEY}`
     } else {
       return null
     }
@@ -87,17 +87,22 @@ async function fetchAlpha(assetId: string): Promise<{ value: number; change: num
     const res  = await fetch(url, { cache: 'no-store' })
     const data = await res.json()
 
-    if (data['Realtime Currency Exchange Rate']) {
-      const rate = parseFloat(data['Realtime Currency Exchange Rate']['5. Exchange Rate'])
-      return { value: rate, change: 0 }
-    }
-    if (data['data']?.[0]) {
-      const latest = data['data'][0]
-      const prev   = data['data'][1]
+    // Réponse commodity (BRENT, WTI, NAT_GAS...)
+    if (Array.isArray(data?.data) && data.data.length >= 2) {
+      const latest = data.data[0]
+      const prev   = data.data[1]
       const value  = parseFloat(latest.value)
+      if (isNaN(value)) return null
       const change = prev ? ((value - parseFloat(prev.value)) / parseFloat(prev.value)) * 100 : 0
       return { value, change: parseFloat(change.toFixed(2)) }
     }
+
+    // Réponse forex (XAU, XAG)
+    const rate = data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate']
+    if (rate) {
+      return { value: parseFloat(parseFloat(rate).toFixed(2)), change: 0 }
+    }
+
     return null
   } catch { return null }
 }
