@@ -528,12 +528,12 @@ function FundamentalDetailModal({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.85)' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div
         initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95 }}
-        className="w-full max-w-3xl rounded-none sm:rounded-2xl border-0 sm:border sm:my-8 overflow-hidden"
+        className="w-full max-w-3xl rounded-2xl border my-2 sm:my-8 overflow-hidden"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
         {/* ── Modal header ── */}
@@ -558,7 +558,7 @@ function FundamentalDetailModal({
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 space-y-6 overflow-y-auto max-h-[90vh] sm:max-h-[80vh]">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 120px)' }}>
 
           {/* ── 1. Cours / Objectif / Potentiel ── */}
           <div className="grid grid-cols-3 gap-3">
