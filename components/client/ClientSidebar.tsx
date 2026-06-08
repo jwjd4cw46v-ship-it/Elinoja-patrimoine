@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, BarChart2,
   FileText, MessageSquare, Bell, Star, ChevronRight,
   Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
-  Menu, X,
+  Menu, X, Globe,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +25,7 @@ const navItems = [
   { href: '/client/forum',         icon: MessageSquare,   label: 'Forum' },
   { href: '/client/annonces',      icon: Bell,            label: 'Annonces' },
   { href: '/client/watchlist',     icon: Star,            label: 'Ma Watchlist' },
+  { href: '/client/marches',       icon: Globe,           label: 'Devises & Matières' },
   { href: '/client/calendrier',    icon: Calendar,        label: 'Calendrier AGO' },
 ]
 
@@ -38,6 +39,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/forum':         'Forum',
   '/client/annonces':      'Annonces',
   '/client/watchlist':     'Ma Watchlist',
+  '/client/marches':       'Devises & Matières premières',
   '/client/calendrier':    'Calendrier AGO',
 }
 
