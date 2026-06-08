@@ -434,8 +434,8 @@ export default function ClientFondamentalesPage() {
                   <div className="text-center p-2 rounded"
                     style={{ background: 'rgba(255,255,255,0.02)' }}>
                     <div className="text-xs font-mono"
-                      style={{ color: ratios?.rendement && ratios.rendement > 3 ? '#00C853' : '#A0A0A0' }}>
-                      {ratios?.rendement ? `${ratios.rendement.toFixed(2)}%` : '—'}
+                      style={{ color: a.dividend_yield && Number(a.dividend_yield) > 3 ? '#00C853' : '#A0A0A0' }}>
+                      {a.dividend_yield != null ? `${Number(a.dividend_yield).toFixed(2)}%` : '—'}
                     </div>
                     <div className="text-[10px]" style={{ color: '#4A4A4A' }}>Rend. div.</div>
                   </div>
