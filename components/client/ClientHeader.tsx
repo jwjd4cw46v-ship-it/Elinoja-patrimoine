@@ -92,7 +92,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     fetchMarkets()
-    const interval = setInterval(fetchMarkets, 60 * 1000)
+    const interval = setInterval(fetchMarkets, 15 * 1000)
     return () => clearInterval(interval)
   }, [])
 
