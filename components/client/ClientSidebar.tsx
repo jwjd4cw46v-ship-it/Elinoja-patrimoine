@@ -279,7 +279,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
           <button
             onClick={() => setMenuOpen(v => !v)}
             style={{
-              position: 'fixed', top: 10, left: 14, zIndex: 100,
+              position: 'fixed', top: 10, left: 14, zIndex: 202,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 36, height: 36, borderRadius: 8,
               background: menuOpen ? 'rgba(212,175,55,0.15)' : 'rgba(212,175,55,0.08)',
@@ -297,7 +297,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   key="bd"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   onClick={() => setMenuOpen(false)}
-                  style={{ position: 'fixed', inset: 0, top: 56, zIndex: 98, background: 'rgba(0,0,0,0.65)' }}
+                  style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.65)' }}
                 />
                 <motion.div
                   key="drawer"
@@ -305,7 +305,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   transition={{ type: 'tween', duration: 0.22 }}
                   onClick={e => { const a = (e.target as HTMLElement).closest('a'); if (a) setMenuOpen(false) }}
                   style={{
-                    position: 'fixed', left: 0, top: 56, bottom: 0, zIndex: 99,
+                    position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 201,
                     width: '85vw', maxWidth: 320,
                     overflowY: 'auto', WebkitOverflowScrolling: 'touch',
                   } as React.CSSProperties}>

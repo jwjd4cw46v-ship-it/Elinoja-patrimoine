@@ -262,28 +262,33 @@ export default function MarchesPage() {
       return
     }
 
-    // 3. Fetch depuis Alpha Vantage
+    // 3. Fetch via route API serveur (un seul appel, pas de CORS, parallel)
     setStatus('fresh')
     const updates: Asset[] = [...ASSET_CONFIG.map(a => ({ ...a, value: cacheMap[a.id]?.value ?? null, change: cacheMap[a.id]?.change ?? null }))]
 
-    // On fetche séquentiellement pour ne pas dépasser le rate limit
-    for (let i = 0; i < ASSET_CONFIG.length; i++) {
-      const cfg    = ASSET_CONFIG[i]
-      const result = await fetchFromAlpha(cfg.id)
-      if (result) {
-        updates[i] = { ...updates[i], value: result.value, change: result.change }
-        // Upsert en base
-        await supabase.from('marches_data').upsert({
-          asset_id:   cfg.id,
-          value:      result.value,
-          change:     result.change,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'asset_id' })
+    try {
+      const res    = await fetch('/api/market-prices', { cache: 'no-store' })
+      const prices = res.ok ? await res.json() : {}
+
+      for (let i = 0; i < ASSET_CONFIG.length; i++) {
+        const cfg    = ASSET_CONFIG[i]
+        const result = prices[cfg.id]
+        if (result?.value != null) {
+          updates[i] = { ...updates[i], value: result.value, change: result.change ?? 0 }
+          // Upsert en base
+          await supabase.from('marches_data').upsert({
+            asset_id:   cfg.id,
+            value:      result.value,
+            change:     result.change ?? 0,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'asset_id' })
+        }
       }
-      setAssets([...updates])
-      // Pause 500ms entre chaque requête (rate limit Alpha Vantage)
-      if (i < ASSET_CONFIG.length - 1) await new Promise(r => setTimeout(r, 500))
+    } catch (e) {
+      console.error('market-prices fetch error', e)
     }
+
+    setAssets([...updates])
 
     setLastUpdate(new Date())
     setStatus('cache')
