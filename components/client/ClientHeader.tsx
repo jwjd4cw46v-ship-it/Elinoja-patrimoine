@@ -115,7 +115,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   ] as Market[]
 
   const tickerItems  = sorted.length > 0 ? [...sorted, ...sorted, ...sorted, ...sorted] : []
-  const animDuration = Math.max(60, sorted.length * 8)
+  const animDuration = Math.max(30, sorted.length * 5)
   const totalAlerts  = countLow + countHigh
 
   return (
@@ -123,10 +123,14 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
       <style>{`
         @keyframes ticker-scroll {
           0%   { transform: translateX(0); }
-          100% { transform: translateX(-25%); }
+          100% { transform: translateX(-50%); }
+        }
+        .ticker-wrap {
+          overflow: hidden;
+          flex: 1;
         }
         .ticker-track {
-          display: flex;
+          display: inline-flex;
           white-space: nowrap;
           animation: ticker-scroll linear infinite;
           will-change: transform;
@@ -172,21 +176,21 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
               {[1, 2, 3, 4].map(i => <div key={i} className="skeleton h-3 w-20 rounded" />)}
             </div>
           ) : (
-            <div className="overflow-hidden flex-1">
-              <div className="ticker-track" style={{ animationDuration: `${animDuration}s`, gap: '20px' }}>
-                {tickerItems.map((m, i) => {
+            <div className="ticker-wrap">
+              <div className="ticker-track" style={{ animationDuration: `${animDuration}s` }}>
+                {[...sorted, ...sorted].map((m, i) => {
                   const color = m.change > 0 ? '#00C853' : m.change < 0 ? '#FF1744' : '#707070'
                   return (
-                    <span key={`${m.isin}-${i}`} className="inline-flex items-center flex-shrink-0" style={{ gap: '6px' }}>
-                      <span className="text-xs font-semibold" style={{ color: '#C0C0C0' }}>{m.referentiel?.ticker}</span>
-                      <span className="text-xs font-mono font-bold" style={{ color: '#F5F5F5' }}>
+                    <span key={`${m.isin}-${i}`} className="inline-flex items-center flex-shrink-0" style={{ paddingRight: '28px' }}>
+                      <span className="text-xs font-semibold" style={{ color: '#C0C0C0', marginRight: '5px' }}>{m.referentiel?.ticker}</span>
+                      <span className="text-xs font-mono font-bold" style={{ color: '#F5F5F5', marginRight: '4px' }}>
                         {m.last.toLocaleString('fr-TN', { minimumFractionDigits: m.last > 100 ? 2 : 3, maximumFractionDigits: m.last > 100 ? 2 : 3 })}
                       </span>
-                      <span className="text-xs flex items-center font-medium" style={{ color, gap: '2px' }}>
+                      <span className="text-xs flex items-center font-medium" style={{ color }}>
                         {m.change > 0 ? <TrendingUp size={10} /> : m.change < 0 ? <TrendingDown size={10} /> : null}
-                        {m.change > 0 ? '+' : ''}{m.change.toFixed(2)}%
+                        <span style={{ marginLeft: '2px' }}>{m.change > 0 ? '+' : ''}{m.change.toFixed(2)}%</span>
                       </span>
-                      <span style={{ color: '#2A2A2A', marginLeft: '4px' }}>·</span>
+                      <span style={{ color: '#333', marginLeft: '8px' }}>·</span>
                     </span>
                   )
                 })}
