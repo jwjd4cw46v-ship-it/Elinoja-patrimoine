@@ -274,10 +274,7 @@ export default function ClientFondamentalesPage() {
 
   function getEntreprise(a: FundamentalAnalysis): Entreprise | null {
     const ticker = a.ticker.toUpperCase()
-    return entreprises.find(e =>
-      e.mnemo?.toUpperCase() === ticker ||
-      e.valeur?.toUpperCase().includes(ticker)
-    ) ?? null
+    return entreprises.find(e => e.mnemo?.toUpperCase() === ticker) ?? null
   }
 
   /* ── Filter ── */
