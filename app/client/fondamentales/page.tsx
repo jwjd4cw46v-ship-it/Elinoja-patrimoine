@@ -44,6 +44,11 @@ interface Entreprise {
   dividende_2030: number | null
   benefice_par_action: number | null
   rendement_dividende: number | null
+  // Données bilan (ajoutées via migration SQL)
+  bpa_previsionnel: number | null
+  capitaux_propres: number | null
+  total_actifs: number | null
+  total_dettes: number | null
 }
 
 // cotations = map MNEMO → cours (number), identique à la page admin
@@ -94,39 +99,48 @@ function computeRatios(e: Entreprise, cours: number | null) {
   const titres = e.titres_admis
   const capitalisation = cours && titres ? cours * titres : null
 
-  // BPA : utilise RN n-1 (2025) en priorité, sinon n-2 (2024)
-  // RN est en millions → on ramène en unités pour diviser par titres
+  // RN courant en millions
   const currentRN = e.resultat_net_2025 ?? e.resultat_net_2024 ?? null
-  const bpaCalc = (currentRN != null && titres && titres > 0)
-    ? (currentRN * 1_000_000) / titres
-    : null
-  const bpa = e.benefice_par_action ?? bpaCalc
 
-  // PER = cours / BPA
+  // BPA : prévisionnel saisi en priorité, sinon calculé depuis RN / titres
+  const bpaCalc = (currentRN != null && titres && titres > 0)
+    ? (currentRN * 1_000_000) / titres : null
+  const bpa = e.bpa_previsionnel ?? e.benefice_par_action ?? bpaCalc
+
+  // PER = cours / BPA prévisionnel
   const per = (cours && bpa && bpa !== 0) ? cours / bpa : null
+
+  // ROE = RN / capitaux propres × 100 (RN en M, CP en M)
+  const roe = (currentRN != null && e.capitaux_propres && e.capitaux_propres !== 0)
+    ? (currentRN / e.capitaux_propres) * 100 : null
+
+  // ROA = RN / total actifs × 100
+  const roa = (currentRN != null && e.total_actifs && e.total_actifs !== 0)
+    ? (currentRN / e.total_actifs) * 100 : null
+
+  // D/E = total dettes / capitaux propres
+  const de = (e.total_dettes != null && e.capitaux_propres && e.capitaux_propres !== 0)
+    ? e.total_dettes / e.capitaux_propres : null
 
   // Dividende courant : n-1 (2025) en priorité
   const currentDiv = e.dividende_2025 ?? e.dividende_2024 ?? null
 
   // Rendement dividende = div / cours × 100
   const rendCalc = (currentDiv != null && cours && cours > 0)
-    ? (currentDiv / cours) * 100
-    : null
+    ? (currentDiv / cours) * 100 : null
   const rendement = e.rendement_dividende ?? rendCalc
 
   // Pay-out = div / BPA × 100
   const payOut = (currentDiv != null && bpa && bpa !== 0)
-    ? (currentDiv / bpa) * 100
-    : null
+    ? (currentDiv / bpa) * 100 : null
 
   // Croissance RN : (RN_2025 - RN_2024) / |RN_2024| × 100
-  const rn_nm1 = e.resultat_net_2025  // n-1
-  const rn_nm2 = e.resultat_net_2024  // n-2
+  const rn_nm1 = e.resultat_net_2025
+  const rn_nm2 = e.resultat_net_2024
   const rnGrowth = (rn_nm1 != null && rn_nm2 != null && rn_nm2 !== 0)
-    ? ((rn_nm1 - rn_nm2) / Math.abs(rn_nm2)) * 100
-    : null
+    ? ((rn_nm1 - rn_nm2) / Math.abs(rn_nm2)) * 100 : null
 
-  return { capitalisation, bpa, per, rendement, payOut, rnGrowth }
+  return { capitalisation, bpa, per, roe, roa, de, rendement, payOut, rnGrowth }
 }
 
 /* ─────────────────────────────────────────────
@@ -632,9 +646,9 @@ function FundamentalDetailModal({
                 color={ratios?.payOut && ratios.payOut > 100 ? '#FF1744' : '#A0A0A0'}
                 sub="div. / BPA × 100"
               />
-              <RatioBadge label="ROE" value={a.roe?.toFixed(1) || null} suffix="%" color={a.roe && a.roe > 15 ? '#00C853' : '#A0A0A0'} />
-              <RatioBadge label="ROA" value={a.roa?.toFixed(1) || null} suffix="%" color={a.roa && a.roa > 8 ? '#00C853' : '#A0A0A0'} />
-              <RatioBadge label="D/E ratio" value={a.debt_to_equity?.toFixed(2) || null} color={a.debt_to_equity && a.debt_to_equity > 1 ? '#FF1744' : '#A0A0A0'} />
+              <RatioBadge label="ROE" value={ratios?.roe ? ratios.roe.toFixed(1) : (a.roe?.toFixed(1) || null)} suffix="%" color={(ratios?.roe ?? a.roe ?? 0) > 15 ? '#00C853' : '#A0A0A0'} sub="RN / cap. propres × 100" />
+              <RatioBadge label="ROA" value={ratios?.roa ? ratios.roa.toFixed(1) : (a.roa?.toFixed(1) || null)} suffix="%" color={(ratios?.roa ?? a.roa ?? 0) > 8 ? '#00C853' : '#A0A0A0'} sub="RN / total actifs × 100" />
+              <RatioBadge label="D/E ratio" value={ratios?.de ? ratios.de.toFixed(2) : (a.debt_to_equity?.toFixed(2) || null)} color={(ratios?.de ?? a.debt_to_equity ?? 0) > 1 ? '#FF1744' : '#A0A0A0'} sub="dettes / cap. propres" />
               <RatioBadge label="PER Forward" value={a.forward_pe?.toFixed(1) || null} color="#A0A0A0" />
             </div>
           </div>
