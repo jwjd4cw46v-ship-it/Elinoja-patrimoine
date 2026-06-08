@@ -49,8 +49,8 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
       setLoading(false)
 
       const { data: alertes } = await supabase
-        .from('watchlist_alertes')
-        .select('ticker, prix_bas, prix_haut')
+        .from('watchlists')
+        .select('ticker, alert_price_low, alert_price_high')
         .eq('user_id', profile.id)
 
       if (!alertes?.length) return
@@ -63,8 +63,8 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         const alerte = alertes.find(a => a.ticker?.toUpperCase() === ticker)
         if (!alerte) return
         const current = m.last
-        const low     = alerte.prix_bas
-        const high    = alerte.prix_haut
+        const low     = alerte.alert_price_low
+        const high    = alerte.alert_price_high
         const mem     = triggered.current[ticker] ?? { low: false, high: false }
 
         if (low > 0 && current < low && !mem.low) {
