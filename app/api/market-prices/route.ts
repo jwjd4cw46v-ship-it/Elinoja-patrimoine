@@ -122,8 +122,6 @@ async function resolveAsset(id: string): Promise<PriceResult | null> {
     case 'ALUM':
       return (await fetchYahoo('ALI=F'))
           ?? (await fetchStooq('lmahds03.lme'))
-    case 'LEAD':
-      return fetchStooq('lmpbds03.lme')
     default: return null
   }
 }
@@ -131,7 +129,7 @@ async function resolveAsset(id: string): Promise<PriceResult | null> {
 // ─── Handler GET ─────────────────────────────────────────────────────────────
 
 export async function GET() {
-  const ASSET_IDS = ['USD_TND', 'EUR_TND', 'BTC_USD', 'BRENT', 'GOLD', 'SILVER', 'ALUM', 'LEAD']
+  const ASSET_IDS = ['USD_TND', 'EUR_TND', 'BTC_USD', 'BRENT', 'GOLD', 'SILVER', 'ALUM']
 
   // Fetch tous les actifs en parallèle côté serveur
   const results = await Promise.allSettled(

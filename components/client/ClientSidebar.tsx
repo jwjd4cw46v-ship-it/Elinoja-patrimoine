@@ -307,6 +307,8 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   style={{
                     position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 201,
                     width: '85vw', maxWidth: 320,
+                    background: 'var(--noir-surface)',
+                    boxShadow: '4px 0 24px rgba(0,0,0,0.6)',
                     overflowY: 'auto', WebkitOverflowScrolling: 'touch',
                   } as React.CSSProperties}>
                   {sidebar}

@@ -34,7 +34,6 @@ const ASSET_CONFIG = [
   { id: 'GOLD',    label: 'Or',               sublabel: 'XAU / USD', unit: 'USD/oz',  category: 'commodity' as const, color: '#D4AF37' },
   { id: 'SILVER',  label: 'Argent',           sublabel: 'XAG / USD', unit: 'USD/oz',  category: 'commodity' as const, color: '#B0BEC5' },
   { id: 'ALUM',    label: 'Aluminium',        sublabel: 'LME Spot',  unit: 'USD/t',   category: 'commodity' as const, color: '#90CAF9' },
-  { id: 'LEAD',    label: 'Plomb',            sublabel: 'LME Spot',  unit: 'USD/t',   category: 'commodity' as const, color: '#CE93D8' },
 ]
 
 // ─── TradingView symbol map ───────────────────────────────────────────────────
@@ -46,7 +45,6 @@ const TV_SYMBOLS: Record<string, string> = {
   GOLD:    'OANDA:XAUUSD',
   SILVER:  'OANDA:XAGUSD',
   ALUM:    'COMEX:ALI1!',
-  LEAD:    'COMEX:LE1!',
 }
 
 // ─── Fetch multi-sources ─────────────────────────────────────────────────────
