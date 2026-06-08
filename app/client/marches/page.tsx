@@ -1,12 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { TrendingUp, TrendingDown, X, RefreshCw, DollarSign, Coins } from 'lucide-react'
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
-} from 'recharts'
 import { createClient } from '@/lib/supabase/client'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,6 +36,18 @@ const ASSET_CONFIG = [
   { id: 'ALUM',    label: 'Aluminium',        sublabel: 'LME Spot',  unit: 'USD/t',   category: 'commodity' as const, color: '#90CAF9' },
   { id: 'LEAD',    label: 'Plomb',            sublabel: 'LME Spot',  unit: 'USD/t',   category: 'commodity' as const, color: '#CE93D8' },
 ]
+
+// ─── TradingView symbol map ───────────────────────────────────────────────────
+const TV_SYMBOLS: Record<string, string> = {
+  USD_TND: 'FX_IDC:USDTND',
+  EUR_TND: 'FX_IDC:EURTND',
+  BTC_USD: 'BITSTAMP:BTCUSD',
+  BRENT:   'OANDA:BCOUSD',
+  GOLD:    'OANDA:XAUUSD',
+  SILVER:  'OANDA:XAGUSD',
+  ALUM:    'COMEX:ALI1!',
+  LEAD:    'COMEX:LE1!',
+}
 
 // ─── Fetch multi-sources ─────────────────────────────────────────────────────
 
@@ -139,7 +147,6 @@ export default function MarchesPage() {
     ASSET_CONFIG.map(a => ({ ...a, value: null, change: null }))
   )
   const [selected,   setSelected]   = useState<Asset | null>(null)
-  const [history,    setHistory]    = useState<HistoryPoint[]>([])
   const [spinning,   setSpinning]   = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [status,     setStatus]     = useState<'cache' | 'fresh' | 'loading'>('loading')
@@ -213,7 +220,6 @@ export default function MarchesPage() {
 
   function handleSelect(asset: Asset) {
     setSelected(asset)
-    if (asset.value) setHistory(generateHistory(asset.value))
   }
 
   const forex       = assets.filter(a => a.category === 'forex' || a.category === 'crypto')
@@ -279,7 +285,7 @@ export default function MarchesPage() {
       {/* Modal historique */}
       <AnimatePresence>
         {selected && (
-          <HistoryModal asset={selected} history={history} fmt={fmt} onClose={() => setSelected(null)} />
+          <HistoryModal asset={selected} fmt={fmt} onClose={() => setSelected(null)} />
         )}
       </AnimatePresence>
     </>
@@ -350,15 +356,53 @@ function AssetCard({ asset: a, fmt, onClick }: { asset: Asset; fmt: (v: number, 
   )
 }
 
-// ─── Modal historique ─────────────────────────────────────────────────────────
-function HistoryModal({ asset, history, fmt, onClose }: {
-  asset: Asset; history: HistoryPoint[]
-  fmt: (v: number, u: string) => string; onClose: () => void
+// ─── Modal historique (TradingView) ──────────────────────────────────────────
+function HistoryModal({ asset, fmt, onClose }: {
+  asset: Asset
+  fmt: (v: number, u: string) => string
+  onClose: () => void
 }) {
-  const isPos    = (asset.change ?? 0) >= 0
-  const minVal   = Math.min(...history.map(h => h.value))
-  const maxVal   = Math.max(...history.map(h => h.value))
-  const domain   = [minVal * 0.999, maxVal * 1.001]
+  const isPos      = (asset.change ?? 0) >= 0
+  const containerRef = useRef<HTMLDivElement>(null)
+  const symbol     = TV_SYMBOLS[asset.id] ?? 'OANDA:XAUUSD'
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    // Inject TradingView script once
+    const scriptId = 'tradingview-widget-script'
+    const load = () => {
+      if (!containerRef.current) return
+      // @ts-ignore
+      new (window as any).TradingView.widget({
+        container_id:   'tv-chart-container',
+        symbol,
+        interval:       'D',
+        theme:          'dark',
+        style:          '1',
+        locale:         'fr',
+        toolbar_bg:     '#1A1A1A',
+        hide_top_toolbar: false,
+        hide_legend:    false,
+        save_image:     false,
+        width:          '100%',
+        height:         280,
+        backgroundColor: '#111111',
+        gridColor:      'rgba(255,255,255,0.04)',
+      })
+    }
+
+    if (document.getElementById(scriptId)) {
+      load()
+    } else {
+      const script    = document.createElement('script')
+      script.id       = scriptId
+      script.src      = 'https://s3.tradingview.com/tv.js'
+      script.async    = true
+      script.onload   = load
+      document.head.appendChild(script)
+    }
+  }, [symbol])
 
   return (
     <motion.div
@@ -367,7 +411,7 @@ function HistoryModal({ asset, history, fmt, onClose }: {
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
       <motion.div
         initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-        style={{ width: '100%', maxWidth: '600px', background: 'var(--noir-surface)', border: '1px solid var(--noir-border)', borderRadius: '20px', overflow: 'hidden' }}>
+        style={{ width: '100%', maxWidth: '640px', background: 'var(--noir-surface)', border: '1px solid var(--noir-border)', borderRadius: '20px', overflow: 'hidden' }}>
 
         {/* Header */}
         <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--noir-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: `linear-gradient(135deg, ${asset.color}08, transparent)` }}>
@@ -376,7 +420,7 @@ function HistoryModal({ asset, history, fmt, onClose }: {
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: asset.color }} />
               <span style={{ fontSize: '16px', fontWeight: 600, color: '#F5F5F5' }}>{asset.label}</span>
             </div>
-            <div style={{ fontSize: '11px', color: '#5C5C5C', marginTop: '3px' }}>{asset.sublabel} · 30 derniers jours (simulé)</div>
+            <div style={{ fontSize: '11px', color: '#5C5C5C', marginTop: '3px' }}>{asset.sublabel} · Données temps réel TradingView</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ textAlign: 'right' }}>
@@ -395,45 +439,19 @@ function HistoryModal({ asset, history, fmt, onClose }: {
           </div>
         </div>
 
-        {/* Graphique */}
-        <div style={{ padding: '20px 16px 24px' }}>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={history} margin={{ top: 5, right: 8, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id={`grad-${asset.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={asset.color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={asset.color} stopOpacity={0}   />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="date" tick={{ fill: '#3A3A3A', fontSize: 10 }} tickLine={false} axisLine={false} interval={6} />
-              <YAxis domain={domain} tick={{ fill: '#3A3A3A', fontSize: 10 }} tickLine={false} axisLine={false}
-                tickFormatter={v => v > 10000 ? (v/1000).toFixed(0)+'k' : v > 100 ? v.toFixed(0) : v.toFixed(3)}
-                width={48} />
-              <Tooltip
-                contentStyle={{ background: 'var(--noir-elevated)', border: `1px solid ${asset.color}44`, borderRadius: '10px', fontSize: '12px', color: '#F5F5F5' }}
-                labelStyle={{ color: '#707070', marginBottom: '4px' }}
-                formatter={(v: number) => [fmt(v, asset.unit) + ' ' + asset.unit, asset.label]}
-              />
-              <Area type="monotone" dataKey="value" stroke={asset.color} strokeWidth={2}
-                fill={`url(#grad-${asset.id})`} dot={false}
-                activeDot={{ r: 4, fill: asset.color, stroke: 'var(--noir-surface)', strokeWidth: 2 }} />
-            </AreaChart>
-          </ResponsiveContainer>
+        {/* Graphique TradingView */}
+        <div ref={containerRef} style={{ padding: '16px 16px 0' }}>
+          <div id="tv-chart-container" />
+        </div>
 
-          {/* Stats */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '16px' }}>
-            {[
-              { label: 'Min 30j', value: fmt(minVal, asset.unit) },
-              { label: 'Max 30j', value: fmt(maxVal, asset.unit) },
-              { label: 'Actuel',  value: asset.value ? fmt(asset.value, asset.unit) : '—' },
-            ].map(s => (
-              <div key={s.label} style={{ background: 'var(--noir-elevated)', borderRadius: '10px', padding: '10px 12px', textAlign: 'center' }}>
-                <div style={{ fontSize: '9px', color: '#3A3A3A', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '4px' }}>{s.label}</div>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: '#E0E0E0', fontFamily: 'monospace' }}>{s.value}</div>
-              </div>
-            ))}
-          </div>
+        {/* Infos bas */}
+        <div style={{ padding: '12px 24px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '10px', color: '#3A3A3A' }}>
+            Symbole : <span style={{ color: '#5C5C5C', fontFamily: 'monospace' }}>{symbol}</span>
+          </span>
+          <span style={{ fontSize: '10px', color: '#3A3A3A' }}>
+            Powered by TradingView
+          </span>
         </div>
       </motion.div>
     </motion.div>
