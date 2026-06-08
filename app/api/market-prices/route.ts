@@ -52,7 +52,7 @@ async function fetchBrent(): Promise<PriceResult | null> {
   } catch { return null }
 }
 
-// metals.live — gratuit, sans clé, données spot LME/COMEX
+// metals.live — fallback gratuit pour or & argent
 async function fetchMetalsLive(metal: 'gold' | 'silver'): Promise<PriceResult | null> {
   try {
     const res  = await fetch('https://metals.live/api/spot', { next: { revalidate: 1800 } })
@@ -64,35 +64,30 @@ async function fetchMetalsLive(metal: 'gold' | 'silver'): Promise<PriceResult | 
   } catch { return null }
 }
 
-// goldprice.org — fallback pour or & argent
-async function fetchGoldPrice(symbol: 'XAU' | 'XAG'): Promise<PriceResult | null> {
+// Yahoo Finance — Or, Argent, Aluminium (avec change % du jour)
+// Appel côté serveur uniquement (CORS bloqué navigateur)
+async function fetchYahoo(ticker: string): Promise<PriceResult | null> {
   try {
-    const res  = await fetch('https://data-asg.goldprice.org/dbXRates/USD', { next: { revalidate: 1800 } })
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=2d`
+    const res  = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      next: { revalidate: 1800 },
+    })
     if (!res.ok) return null
-    const data = await res.json()
-    const item  = data?.items?.[0]
-    if (!item) return null
-    const value = symbol === 'XAU' ? item.xauPrice : item.xagPrice
-    if (!value || isNaN(value)) return null
-    return { value: parseFloat(value.toFixed(2)), change: 0 }
+    const data   = await res.json()
+    const meta   = data?.chart?.result?.[0]?.meta
+    if (!meta?.regularMarketPrice) return null
+    const value  = meta.regularMarketPrice
+    const prev   = meta.chartPreviousClose ?? meta.previousClose ?? value
+    const change = prev ? ((value - prev) / prev) * 100 : 0
+    return {
+      value:  parseFloat(value.toFixed(2)),
+      change: parseFloat(change.toFixed(2)),
+    }
   } catch { return null }
 }
 
-// Alpha Vantage fallback pour XAU / XAG
-async function fetchAlphaMetals(symbol: 'XAU' | 'XAG'): Promise<PriceResult | null> {
-  try {
-    const res  = await fetch(
-      `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=${symbol}&to_currency=USD&apikey=${ALPHA_KEY}`,
-      { next: { revalidate: 3600 } }
-    )
-    const data = await res.json()
-    const rate  = data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate']
-    if (!rate) return null
-    return { value: parseFloat(parseFloat(rate).toFixed(2)), change: 0 }
-  } catch { return null }
-}
-
-// stooq.com — CSV public pour métaux industriels LME
+// stooq.com — CSV public LME (fallback aluminium + plomb)
 async function fetchStooq(ticker: string): Promise<PriceResult | null> {
   try {
     const res  = await fetch(`https://stooq.com/q/d/l/?s=${ticker}&i=d`, { next: { revalidate: 3600 } })
@@ -119,16 +114,17 @@ async function resolveAsset(id: string): Promise<PriceResult | null> {
     case 'BTC_USD': return fetchBitcoin()
     case 'BRENT':   return fetchBrent()
     case 'GOLD':
-      return (await fetchMetalsLive('gold'))
-          ?? (await fetchGoldPrice('XAU'))
-          ?? (await fetchAlphaMetals('XAU'))
+      return (await fetchYahoo('GC=F'))
+          ?? (await fetchMetalsLive('gold'))
     case 'SILVER':
-      return (await fetchMetalsLive('silver'))
-          ?? (await fetchGoldPrice('XAG'))
-          ?? (await fetchAlphaMetals('XAG'))
-    case 'ALUM':    return fetchStooq('lmahds03.lme')
-    case 'LEAD':    return fetchStooq('lmpbds03.lme')
-    default:        return null
+      return (await fetchYahoo('SI=F'))
+          ?? (await fetchMetalsLive('silver'))
+    case 'ALUM':
+      return (await fetchYahoo('ALI=F'))
+          ?? (await fetchStooq('lmahds03.lme'))
+    case 'LEAD':
+      return fetchStooq('lmpbds03.lme')
+    default: return null
   }
 }
 
