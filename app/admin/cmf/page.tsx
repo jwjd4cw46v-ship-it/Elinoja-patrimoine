@@ -163,7 +163,7 @@ function CmfForm({ item, onClose, onSaved }: { item: CmfAnnouncement | null; onC
           toast.loading('Extraction du texte PDF...', { id: 'pdf-extract' })
           const extractedText = await extractTextFromPDF(pdfFile)
           if (extractedText) {
-            form = { ...form, content: extractedText }
+            setForm(prev => ({ ...prev, content: extractedText }))
             toast.success('Texte extrait automatiquement', { id: 'pdf-extract' })
           } else {
             toast.dismiss('pdf-extract')
