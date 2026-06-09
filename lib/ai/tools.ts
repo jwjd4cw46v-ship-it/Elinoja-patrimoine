@@ -10,12 +10,12 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getStockData': {
       const { symbol } = args
       try {
-        // Cotation live depuis l'API BVMT
-        const res  = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cotations`, { cache: 'no-store' })
-        const data = res.ok ? await res.json() : null
-        const market = data?.markets?.find((m: any) =>
-          m.referentiel?.ticker?.toUpperCase() === symbol.toUpperCase()
-        )
+        // Cotation directement depuis Supabase (table cotations)
+        const { data: cotation } = await supabase
+          .from('cotations')
+          .select('*')
+          .ilike('ticker', symbol)
+          .single()
 
         // Données entreprise depuis Supabase
         const { data: entreprise } = await supabase
@@ -24,21 +24,21 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
           .ilike('mnemo', symbol)
           .single()
 
-        if (!market && !entreprise) {
+        if (!cotation && !entreprise) {
           return { error: `Action "${symbol}" non trouvée sur la BVMT` }
         }
 
-        const cours = market?.last ?? null
+        const cours = cotation?.last ?? cotation?.cours ?? null
         const titres = entreprise?.titres_admis ?? null
         const capitalisation = cours && titres ? (cours * titres / 1_000_000).toFixed(1) + ' M TND' : null
 
         return {
           symbol:         symbol.toUpperCase(),
-          nom:            market?.referentiel?.stockName ?? entreprise?.valeur ?? symbol,
+          nom:            cotation?.stock_name ?? cotation?.name ?? entreprise?.valeur ?? symbol,
           secteur:        entreprise?.secteur ?? 'N/A',
-          cours:          cours,
-          variation:      market?.change ?? null,
-          seance:         market?.seance ?? null,
+          cours,
+          variation:      cotation?.change ?? cotation?.variation ?? null,
+          seance:         cotation?.seance ?? null,
           capitalisation,
           titres_admis:   titres,
           dividende_2025: entreprise?.dividende_2025 ?? null,
@@ -69,17 +69,17 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         : data.potential_gain ? data.potential_gain + '%' : null
 
       return {
-        symbol:        data.ticker,
-        titre:         data.title,
-        signal:        data.signal,
-        entrée:        data.entry_price,
-        objectif:      data.target_price,
-        stop:          data.stop_loss,
+        symbol:      data.ticker,
+        titre:       data.title,
+        signal:      data.signal,
+        entrée:      data.entry_price,
+        objectif:    data.target_price,
+        stop:        data.stop_loss,
         potentiel,
-        risque:        data.risk_level,
-        description:   data.description,
-        publiée_le:    new Date(data.created_at).toLocaleDateString('fr-FR'),
-        source:        'Elinoja Patrimoine — Analyses Techniques',
+        risque:      data.risk_level,
+        description: data.description,
+        publiée_le:  new Date(data.created_at).toLocaleDateString('fr-FR'),
+        source:      'Elinoja Patrimoine — Analyses Techniques',
       }
     }
 
@@ -135,43 +135,45 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { userId } = args
       const { data: watchlist } = await supabase
         .from('watchlists')
-        .select('ticker, alert_price_low, alert_price_high')
+        .select('ticker, alert_price_low, alert_price_high, company_name')
         .eq('user_id', userId)
 
       if (!watchlist?.length) return { message: 'Aucun titre dans la watchlist', alertes: [] }
 
-      // Cotations live
-      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cotations`, { cache: 'no-store' })
-      const cotData = res.ok ? await res.json() : null
-      const markets = cotData?.markets ?? []
+      // Récupère les cotations directement depuis Supabase
+      const tickers = watchlist.map(w => w.ticker)
+      const { data: cotations } = await supabase
+        .from('cotations')
+        .select('ticker, last, cours, change, variation')
+        .in('ticker', tickers)
 
-      const alertes = watchlist
-        .map(w => {
-          const market = markets.find((m: any) =>
-            m.referentiel?.ticker?.toUpperCase() === w.ticker?.toUpperCase()
-          )
-          const cours = market?.last ?? null
-          const status =
-            cours && w.alert_price_low  && cours < w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
-            cours && w.alert_price_high && cours > w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
-            'Dans la zone'
+      const alertes = watchlist.map(w => {
+        const cot   = cotations?.find((c: any) =>
+          c.ticker?.toUpperCase() === w.ticker?.toUpperCase()
+        )
+        const cours = cot?.last ?? cot?.cours ?? null
+        const status =
+          cours && w.alert_price_low  && cours < w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
+          cours && w.alert_price_high && cours > w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
+          'Dans la zone'
 
-          return {
-            ticker:    w.ticker,
-            cours,
-            seuil_bas:  w.alert_price_low,
-            seuil_haut: w.alert_price_high,
-            statut:    status,
-            alerte:    status !== 'Dans la zone',
-          }
-        })
+        return {
+          ticker:     w.ticker,
+          société:    w.company_name ?? w.ticker,
+          cours,
+          seuil_bas:  w.alert_price_low,
+          seuil_haut: w.alert_price_high,
+          statut:     status,
+          alerte:     status !== 'Dans la zone',
+        }
+      })
 
       const actives = alertes.filter(a => a.alerte)
       return {
-        total_titres:   watchlist.length,
+        total_titres:    watchlist.length,
         alertes_actives: actives.length,
         détails:         alertes,
-        source:         'Watchlist personnelle Elinoja',
+        source:          'Watchlist personnelle Elinoja',
       }
     }
 
@@ -181,15 +183,16 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { data } = await supabase
         .from('announcements')
         .select('title, content, created_at, type')
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(limit)
 
       return {
         articles: data?.map(a => ({
-          titre:    a.title,
-          résumé:   a.content?.slice(0, 200) + (a.content?.length > 200 ? '…' : ''),
-          type:     a.type,
-          date:     new Date(a.created_at).toLocaleDateString('fr-FR'),
+          titre:  a.title,
+          résumé: a.content?.slice(0, 200) + (a.content?.length > 200 ? '…' : ''),
+          type:   a.type,
+          date:   new Date(a.created_at).toLocaleDateString('fr-FR'),
         })) ?? [],
         source: 'Elinoja Patrimoine — Publications',
       }
@@ -202,6 +205,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         .from('announcements')
         .select('title, content, created_at')
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(5)
 
@@ -209,9 +213,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         query,
         résultats: data?.length ?? 0,
         articles: data?.map(a => ({
-          titre:   a.title,
-          résumé:  a.content?.slice(0, 150) + '…',
-          date:    new Date(a.created_at).toLocaleDateString('fr-FR'),
+          titre:  a.title,
+          résumé: a.content?.slice(0, 150) + '…',
+          date:   new Date(a.created_at).toLocaleDateString('fr-FR'),
         })) ?? [],
       }
     }
@@ -275,10 +279,10 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         calendrier:    '/client/calendrier',
       }
       return {
-        action:    'navigate',
-        page:      args.page,
-        url:       routes[args.page] ?? '/client',
-        message:   `Navigation vers ${args.page}`,
+        action:  'navigate',
+        page:    args.page,
+        url:     routes[args.page] ?? '/client',
+        message: `Navigation vers ${args.page}`,
       }
     }
 
