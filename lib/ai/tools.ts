@@ -55,7 +55,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { symbol } = args
       const { data, error } = await supabase
         .from('technical_analyses')
-        .select('ticker, company_name, recommendation, entry_price, target_price, stop_loss, description, created_at, status')
+        .select('ticker, title, signal, entry_price, target_price, stop_loss, description, created_at, status, potential_gain, risk_level')
         .ilike('ticker', symbol)
         .eq('status', 'published')
         .order('created_at', { ascending: false })
@@ -66,19 +66,20 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
 
       const potentiel = data.target_price && data.entry_price
         ? (((data.target_price - data.entry_price) / data.entry_price) * 100).toFixed(1) + '%'
-        : null
+        : data.potential_gain ? data.potential_gain + '%' : null
 
       return {
-        symbol:      data.ticker,
-        société:     data.company_name,
-        signal:      data.recommendation,
-        entrée:      data.entry_price,
-        objectif:    data.target_price,
-        stop:        data.stop_loss,
+        symbol:        data.ticker,
+        titre:         data.title,
+        signal:        data.signal,
+        entrée:        data.entry_price,
+        objectif:      data.target_price,
+        stop:          data.stop_loss,
         potentiel,
-        description: data.description,
-        publiée_le:  new Date(data.created_at).toLocaleDateString('fr-FR'),
-        source:      'Elinoja Patrimoine — Analyses Techniques',
+        risque:        data.risk_level,
+        description:   data.description,
+        publiée_le:    new Date(data.created_at).toLocaleDateString('fr-FR'),
+        source:        'Elinoja Patrimoine — Analyses Techniques',
       }
     }
 
