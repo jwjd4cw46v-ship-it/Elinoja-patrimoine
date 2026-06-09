@@ -78,13 +78,12 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getWatchlistAlerts',
-      description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté.',
+      // userId est injecté automatiquement côté serveur depuis la session — ne pas le demander à l'utilisateur
+      description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté. Ne pas demander l\'ID utilisateur, il est récupéré automatiquement.',
       parameters: {
         type: 'object',
-        properties: {
-          userId: { type: 'string', description: 'L\'ID de l\'utilisateur' },
-        },
-        required: ['userId'],
+        properties: {},
+        required: [],
       },
     },
   },
@@ -178,6 +177,7 @@ Règles absolues :
 4. Sois précis, professionnel et pédagogique
 5. Réponds en français sauf si l'utilisateur écrit en anglais
 6. Pour les analyses, structure ta réponse clairement avec des sections
+7. Pour getWatchlistAlerts, appelle le tool DIRECTEMENT sans demander l'ID utilisateur — il est injecté automatiquement
 
 Quand tu utilises les données :
 - Cite toujours la source (ex: "Selon l'analyse technique publiée sur Elinoja...")
