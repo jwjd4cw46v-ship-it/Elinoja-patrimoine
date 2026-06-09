@@ -1,6 +1,5 @@
 // ─── Elinoja AI — Tool Executor ───────────────────────────────────────────────
 import { createClient } from '@/lib/supabase/server'
-import { fetchBvmtCotations, findCotationLive, parseVariation } from '@/lib/bvmt/fetchCotations'
 
 export async function executeTool(name: string, args: Record<string, any>): Promise<any> {
   const supabase = createClient()
@@ -11,36 +10,35 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getStockData': {
       const { symbol } = args
       try {
-        const [cotation, { data: entreprise }] = await Promise.all([
-          findCotationLive(symbol),
-          supabase
-            .from('entreprises')
-            .select('valeur, secteur, titres_admis, resultat_net_2025, dividende_2025')
-            .ilike('mnemo', symbol)
-            .single(),
-        ])
+        // Cotation live depuis l'API BVMT
+        const res  = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cotations`, { cache: 'no-store' })
+        const data = res.ok ? await res.json() : null
+        const market = data?.markets?.find((m: any) =>
+          m.referentiel?.ticker?.toUpperCase() === symbol.toUpperCase()
+        )
 
-        if (!cotation && !entreprise) {
+        // Données entreprise depuis Supabase
+        const { data: entreprise } = await supabase
+          .from('entreprises')
+          .select('valeur, secteur, titres_admis, resultat_net_2025, dividende_2025')
+          .ilike('mnemo', symbol)
+          .single()
+
+        if (!market && !entreprise) {
           return { error: `Action "${symbol}" non trouvée sur la BVMT` }
         }
 
-        const cours  = cotation?.dernier ?? null
+        const cours = market?.last ?? null
         const titres = entreprise?.titres_admis ?? null
-        const capitalisation = cours && titres
-          ? (cours * titres / 1_000_000).toFixed(1) + ' M TND'
-          : null
+        const capitalisation = cours && titres ? (cours * titres / 1_000_000).toFixed(1) + ' M TND' : null
 
         return {
           symbol:         symbol.toUpperCase(),
-          nom:            cotation?.nom ?? entreprise?.valeur ?? symbol,
+          nom:            market?.referentiel?.stockName ?? entreprise?.valeur ?? symbol,
           secteur:        entreprise?.secteur ?? 'N/A',
-          cours,
-          variation:      parseVariation(cotation?.variation ?? null),
-          variation_str:  cotation?.variation ?? null,
-          seance:         cotation?.date ?? null,
-          haut:           cotation?.haut ?? null,
-          bas:            cotation?.bas ?? null,
-          volume:         cotation?.vol_titres ?? null,
+          cours:          cours,
+          variation:      market?.change ?? null,
+          seance:         market?.seance ?? null,
           capitalisation,
           titres_admis:   titres,
           dividende_2025: entreprise?.dividende_2025 ?? null,
@@ -71,17 +69,17 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         : data.potential_gain ? data.potential_gain + '%' : null
 
       return {
-        symbol:      data.ticker,
-        titre:       data.title,
-        signal:      data.signal,
-        entrée:      data.entry_price,
-        objectif:    data.target_price,
-        stop:        data.stop_loss,
+        symbol:        data.ticker,
+        titre:         data.title,
+        signal:        data.signal,
+        entrée:        data.entry_price,
+        objectif:      data.target_price,
+        stop:          data.stop_loss,
         potentiel,
-        risque:      data.risk_level,
-        description: data.description,
-        publiée_le:  new Date(data.created_at).toLocaleDateString('fr-FR'),
-        source:      'Elinoja Patrimoine — Analyses Techniques',
+        risque:        data.risk_level,
+        description:   data.description,
+        publiée_le:    new Date(data.created_at).toLocaleDateString('fr-FR'),
+        source:        'Elinoja Patrimoine — Analyses Techniques',
       }
     }
 
@@ -89,21 +87,20 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getFundamentalAnalysis': {
       const { symbol } = args
 
-      const [{ data: fa }, { data: ent }] = await Promise.all([
-        supabase
-          .from('fundamental_analyses')
-          .select('ticker, company_name, recommendation, target_price, pe_ratio, forward_pe, roe, roa, debt_to_equity, dividend_yield, earnings_growth, description, created_at')
-          .ilike('ticker', symbol)
-          .eq('status', 'published')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single(),
-        supabase
-          .from('entreprises')
-          .select('resultat_net_2025, titres_admis, benefice_par_action')
-          .ilike('mnemo', symbol)
-          .single(),
-      ])
+      const { data: fa } = await supabase
+        .from('fundamental_analyses')
+        .select('ticker, company_name, recommendation, target_price, pe_ratio, forward_pe, roe, roa, debt_to_equity, dividend_yield, earnings_growth, description, created_at')
+        .ilike('ticker', symbol)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      const { data: ent } = await supabase
+        .from('entreprises')
+        .select('resultat_net_2025, titres_admis, benefice_par_action')
+        .ilike('mnemo', symbol)
+        .single()
 
       if (!fa) return { error: `Aucune analyse fondamentale publiée pour "${symbol}"` }
 
@@ -138,100 +135,43 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { userId } = args
       const { data: watchlist } = await supabase
         .from('watchlists')
-        .select('ticker, alert_price_low, alert_price_high, company_name')
+        .select('ticker, alert_price_low, alert_price_high')
         .eq('user_id', userId)
 
       if (!watchlist?.length) return { message: 'Aucun titre dans la watchlist', alertes: [] }
 
-      // Fetch toutes les cotations une seule fois
-      const { cotations } = await fetchBvmtCotations()
+      // Cotations live
+      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cotations`, { cache: 'no-store' })
+      const cotData = res.ok ? await res.json() : null
+      const markets = cotData?.markets ?? []
 
-      const alertes = watchlist.map(w => {
-        const upper = w.ticker?.toUpperCase()
-        const cot   = cotations.find(c =>
-          c.nom?.toUpperCase() === upper ||
-          c.nom?.toUpperCase().startsWith(upper + ' ') ||
-          c.nom?.toUpperCase().includes(upper)
-        )
+      const alertes = watchlist
+        .map(w => {
+          const market = markets.find((m: any) =>
+            m.referentiel?.ticker?.toUpperCase() === w.ticker?.toUpperCase()
+          )
+          const cours = market?.last ?? null
+          const status =
+            cours && w.alert_price_low  && cours < w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
+            cours && w.alert_price_high && cours > w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
+            'Dans la zone'
 
-        const cours = cot?.dernier ?? null
-        const status =
-          cours && w.alert_price_low  && cours < w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
-          cours && w.alert_price_high && cours > w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
-          'Dans la zone'
-
-        return {
-          ticker:     w.ticker,
-          société:    w.company_name ?? cot?.nom ?? w.ticker,
-          cours,
-          variation:  cot?.variation ?? null,
-          seuil_bas:  w.alert_price_low,
-          seuil_haut: w.alert_price_high,
-          statut:     status,
-          alerte:     status !== 'Dans la zone',
-        }
-      })
+          return {
+            ticker:    w.ticker,
+            cours,
+            seuil_bas:  w.alert_price_low,
+            seuil_haut: w.alert_price_high,
+            statut:    status,
+            alerte:    status !== 'Dans la zone',
+          }
+        })
 
       const actives = alertes.filter(a => a.alerte)
       return {
-        total_titres:    watchlist.length,
+        total_titres:   watchlist.length,
         alertes_actives: actives.length,
         détails:         alertes,
-        source:          'Watchlist personnelle Elinoja',
-      }
-    }
-
-    // ── Toutes les analyses fondamentales ──────────────────────────────────
-    case 'getAllFundamentalAnalyses': {
-      const limit = args.limit ?? 10
-      const { data } = await supabase
-        .from('fundamental_analyses')
-        .select('ticker, company_name, recommendation, target_price, description, created_at')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(limit)
-
-      if (!data?.length) return { message: 'Aucune analyse fondamentale publiée', analyses: [] }
-
-      return {
-        total:   data.length,
-        analyses: data.map(fa => ({
-          ticker:         fa.ticker,
-          société:        fa.company_name,
-          recommandation: fa.recommendation,
-          objectif:       fa.target_price,
-          résumé:         fa.description?.slice(0, 150) + '…',
-          publiée_le:     new Date(fa.created_at).toLocaleDateString('fr-FR'),
-        })),
-        source: 'Elinoja Patrimoine — Analyses Fondamentales',
-      }
-    }
-
-    // ── Toutes les analyses techniques ─────────────────────────────────────
-    case 'getAllTechnicalAnalyses': {
-      const limit = args.limit ?? 10
-      const { data } = await supabase
-        .from('technical_analyses')
-        .select('ticker, title, signal, entry_price, target_price, risk_level, potential_gain, created_at')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(limit)
-
-      if (!data?.length) return { message: 'Aucune analyse technique publiée', analyses: [] }
-
-      return {
-        total:   data.length,
-        analyses: data.map(ta => ({
-          ticker:    ta.ticker,
-          titre:     ta.title,
-          signal:    ta.signal,
-          entrée:    ta.entry_price,
-          objectif:  ta.target_price,
-          risque:    ta.risk_level,
-          potentiel: ta.potential_gain ? ta.potential_gain + '%' : null,
-          publiée_le: new Date(ta.created_at).toLocaleDateString('fr-FR'),
-        })),
-        source: 'Elinoja Patrimoine — Analyses Techniques',
+        source:         'Watchlist personnelle Elinoja',
       }
     }
 
@@ -241,16 +181,15 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { data } = await supabase
         .from('announcements')
         .select('title, content, created_at, type')
-        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(limit)
 
       return {
         articles: data?.map(a => ({
-          titre:  a.title,
-          résumé: a.content?.slice(0, 200) + (a.content?.length > 200 ? '…' : ''),
-          type:   a.type,
-          date:   new Date(a.created_at).toLocaleDateString('fr-FR'),
+          titre:    a.title,
+          résumé:   a.content?.slice(0, 200) + (a.content?.length > 200 ? '…' : ''),
+          type:     a.type,
+          date:     new Date(a.created_at).toLocaleDateString('fr-FR'),
         })) ?? [],
         source: 'Elinoja Patrimoine — Publications',
       }
@@ -263,7 +202,6 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         .from('announcements')
         .select('title, content, created_at')
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
-        .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(5)
 
@@ -271,9 +209,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         query,
         résultats: data?.length ?? 0,
         articles: data?.map(a => ({
-          titre:  a.title,
-          résumé: a.content?.slice(0, 150) + '…',
-          date:   new Date(a.created_at).toLocaleDateString('fr-FR'),
+          titre:   a.title,
+          résumé:  a.content?.slice(0, 150) + '…',
+          date:    new Date(a.created_at).toLocaleDateString('fr-FR'),
         })) ?? [],
       }
     }
@@ -322,6 +260,36 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       }
     }
 
+    // ── Publications CMF ────────────────────────────────────────────────────
+    case 'getCMFAnnouncements': {
+      const { ticker, limit = 5 } = args
+      let query = supabase
+        .from('cmf_announcements')
+        .select('title, company, ticker, category, content, pdf_url, pdf_filename')
+        .order('id', { ascending: false })
+        .limit(limit)
+
+      if (ticker) query = query.ilike('ticker', ticker)
+
+      const { data } = await query
+
+      if (!data?.length) return { message: ticker ? `Aucune publication CMF pour "${ticker}"` : 'Aucune publication CMF disponible', publications: [] }
+
+      return {
+        total:        data.length,
+        publications: data.map(p => ({
+          titre:    p.title,
+          société:  p.company,
+          ticker:   p.ticker,
+          catégorie: p.category,
+          résumé:   p.content?.slice(0, 200) + (p.content?.length > 200 ? '…' : ''),
+          pdf:      p.pdf_url ?? null,
+        })),
+        source: 'CMF — Conseil du Marché Financier Tunisien',
+      }
+    }
+
+
     // ── Navigation ──────────────────────────────────────────────────────────
     case 'navigateTo': {
       const routes: Record<string, string> = {
@@ -337,10 +305,10 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         calendrier:    '/client/calendrier',
       }
       return {
-        action:  'navigate',
-        page:    args.page,
-        url:     routes[args.page] ?? '/client',
-        message: `Navigation vers ${args.page}`,
+        action:    'navigate',
+        page:      args.page,
+        url:       routes[args.page] ?? '/client',
+        message:   `Navigation vers ${args.page}`,
       }
     }
 

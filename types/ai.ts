@@ -78,38 +78,13 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getWatchlistAlerts',
-      // userId est injecté automatiquement côté serveur depuis la session — ne pas le demander à l'utilisateur
-      description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté. Ne pas demander l\'ID utilisateur, il est récupéré automatiquement.',
-      parameters: {
-        type: 'object',
-        properties: {},
-        required: [],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'getAllFundamentalAnalyses',
-      description: 'Liste toutes les analyses fondamentales disponibles sur la plateforme. À appeler quand l\'utilisateur demande "les analyses fondamentales disponibles" ou "toutes les analyses" sans préciser de ticker.',
+      description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté.',
       parameters: {
         type: 'object',
         properties: {
-          limit: { type: 'number', description: 'Nombre max à retourner (défaut: 10)' },
+          userId: { type: 'string', description: 'L\'ID de l\'utilisateur' },
         },
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'getAllTechnicalAnalyses',
-      description: 'Liste toutes les analyses techniques disponibles sur la plateforme. À appeler quand l\'utilisateur demande "les analyses techniques disponibles" ou "toutes les analyses" sans préciser de ticker.',
-      parameters: {
-        type: 'object',
-        properties: {
-          limit: { type: 'number', description: 'Nombre max à retourner (défaut: 10)' },
-        },
+        required: ['userId'],
       },
     },
   },
@@ -170,6 +145,20 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getCMFAnnouncements',
+      description: 'Récupère les publications officielles du CMF (Conseil du Marché Financier) : rapports annuels, prospectus, communiqués. Peut filtrer par ticker/société.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticker: { type: 'string', description: 'Ticker de la société (optionnel, ex: TPR, BIAT)' },
+          limit:  { type: 'number', description: 'Nombre de publications (défaut: 5)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'navigateTo',
       description: 'Navigue vers une page de l\'application.',
       parameters: {
@@ -203,7 +192,6 @@ Règles absolues :
 4. Sois précis, professionnel et pédagogique
 5. Réponds en français sauf si l'utilisateur écrit en anglais
 6. Pour les analyses, structure ta réponse clairement avec des sections
-7. Pour getWatchlistAlerts, appelle le tool DIRECTEMENT sans demander l'ID utilisateur — il est injecté automatiquement
 
 Quand tu utilises les données :
 - Cite toujours la source (ex: "Selon l'analyse technique publiée sur Elinoja...")
