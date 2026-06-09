@@ -1,5 +1,6 @@
 // ─── Elinoja AI — Tool Executor ───────────────────────────────────────────────
 import { createClient } from '@/lib/supabase/server'
+import { fetchBvmtCotations, findCotationLive, parseVariation } from '@/lib/bvmt/fetchCotations'
 
 export async function executeTool(name: string, args: Record<string, any>): Promise<any> {
   const supabase = createClient()
@@ -10,35 +11,36 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getStockData': {
       const { symbol } = args
       try {
-        // Cotation directement depuis Supabase (table cotations)
-        const { data: cotation } = await supabase
-          .from('cotations')
-          .select('*')
-          .ilike('ticker', symbol)
-          .single()
-
-        // Données entreprise depuis Supabase
-        const { data: entreprise } = await supabase
-          .from('entreprises')
-          .select('valeur, secteur, titres_admis, resultat_net_2025, dividende_2025')
-          .ilike('mnemo', symbol)
-          .single()
+        const [cotation, { data: entreprise }] = await Promise.all([
+          findCotationLive(symbol),
+          supabase
+            .from('entreprises')
+            .select('valeur, secteur, titres_admis, resultat_net_2025, dividende_2025')
+            .ilike('mnemo', symbol)
+            .single(),
+        ])
 
         if (!cotation && !entreprise) {
           return { error: `Action "${symbol}" non trouvée sur la BVMT` }
         }
 
-        const cours = cotation?.last ?? cotation?.cours ?? null
+        const cours  = cotation?.dernier ?? null
         const titres = entreprise?.titres_admis ?? null
-        const capitalisation = cours && titres ? (cours * titres / 1_000_000).toFixed(1) + ' M TND' : null
+        const capitalisation = cours && titres
+          ? (cours * titres / 1_000_000).toFixed(1) + ' M TND'
+          : null
 
         return {
           symbol:         symbol.toUpperCase(),
-          nom:            cotation?.stock_name ?? cotation?.name ?? entreprise?.valeur ?? symbol,
+          nom:            cotation?.nom ?? entreprise?.valeur ?? symbol,
           secteur:        entreprise?.secteur ?? 'N/A',
           cours,
-          variation:      cotation?.change ?? cotation?.variation ?? null,
-          seance:         cotation?.seance ?? null,
+          variation:      parseVariation(cotation?.variation ?? null),
+          variation_str:  cotation?.variation ?? null,
+          seance:         cotation?.date ?? null,
+          haut:           cotation?.haut ?? null,
+          bas:            cotation?.bas ?? null,
+          volume:         cotation?.vol_titres ?? null,
           capitalisation,
           titres_admis:   titres,
           dividende_2025: entreprise?.dividende_2025 ?? null,
@@ -87,20 +89,21 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getFundamentalAnalysis': {
       const { symbol } = args
 
-      const { data: fa } = await supabase
-        .from('fundamental_analyses')
-        .select('ticker, company_name, recommendation, target_price, pe_ratio, forward_pe, roe, roa, debt_to_equity, dividend_yield, earnings_growth, description, created_at')
-        .ilike('ticker', symbol)
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      const { data: ent } = await supabase
-        .from('entreprises')
-        .select('resultat_net_2025, titres_admis, benefice_par_action')
-        .ilike('mnemo', symbol)
-        .single()
+      const [{ data: fa }, { data: ent }] = await Promise.all([
+        supabase
+          .from('fundamental_analyses')
+          .select('ticker, company_name, recommendation, target_price, pe_ratio, forward_pe, roe, roa, debt_to_equity, dividend_yield, earnings_growth, description, created_at')
+          .ilike('ticker', symbol)
+          .eq('status', 'published')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        supabase
+          .from('entreprises')
+          .select('resultat_net_2025, titres_admis, benefice_par_action')
+          .ilike('mnemo', symbol)
+          .single(),
+      ])
 
       if (!fa) return { error: `Aucune analyse fondamentale publiée pour "${symbol}"` }
 
@@ -140,18 +143,18 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
 
       if (!watchlist?.length) return { message: 'Aucun titre dans la watchlist', alertes: [] }
 
-      // Récupère les cotations directement depuis Supabase
-      const tickers = watchlist.map(w => w.ticker)
-      const { data: cotations } = await supabase
-        .from('cotations')
-        .select('ticker, last, cours, change, variation')
-        .in('ticker', tickers)
+      // Fetch toutes les cotations une seule fois
+      const { cotations } = await fetchBvmtCotations()
 
       const alertes = watchlist.map(w => {
-        const cot   = cotations?.find((c: any) =>
-          c.ticker?.toUpperCase() === w.ticker?.toUpperCase()
+        const upper = w.ticker?.toUpperCase()
+        const cot   = cotations.find(c =>
+          c.nom?.toUpperCase() === upper ||
+          c.nom?.toUpperCase().startsWith(upper + ' ') ||
+          c.nom?.toUpperCase().includes(upper)
         )
-        const cours = cot?.last ?? cot?.cours ?? null
+
+        const cours = cot?.dernier ?? null
         const status =
           cours && w.alert_price_low  && cours < w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
           cours && w.alert_price_high && cours > w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
@@ -159,8 +162,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
 
         return {
           ticker:     w.ticker,
-          société:    w.company_name ?? w.ticker,
+          société:    w.company_name ?? cot?.nom ?? w.ticker,
           cours,
+          variation:  cot?.variation ?? null,
           seuil_bas:  w.alert_price_low,
           seuil_haut: w.alert_price_high,
           statut:     status,
