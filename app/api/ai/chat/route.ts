@@ -4,13 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { executeTool } from '@/lib/ai/tools'
 import { AI_TOOLS, SYSTEM_PROMPT } from '@/types/ai'
 
-export const runtime = 'edge'
+// ⚠️ PAS de `runtime = 'edge'` — le server Supabase client nécessite Node.js
+// Edge runtime n'a pas accès aux cookies, donc createClient() échoue silencieusement
 export const maxDuration = 60
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
 const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY!
 
-// Convertir les tools OpenAI → format Mistral (identique)
 export async function POST(req: NextRequest) {
   try {
     const supabase = createClient()
@@ -97,8 +97,8 @@ export async function POST(req: NextRequest) {
                   if (!toolCalls[tc.index]) {
                     toolCalls[tc.index] = { id: '', type: 'function', function: { name: '', arguments: '' } }
                   }
-                  if (tc.id)                 toolCalls[tc.index].id                    = tc.id
-                  if (tc.function?.name)     toolCalls[tc.index].function.name         = tc.function.name
+                  if (tc.id)                  toolCalls[tc.index].id                   = tc.id
+                  if (tc.function?.name)      toolCalls[tc.index].function.name        = tc.function.name
                   if (tc.function?.arguments) toolCalls[tc.index].function.arguments  += tc.function.arguments
                 }
               }
