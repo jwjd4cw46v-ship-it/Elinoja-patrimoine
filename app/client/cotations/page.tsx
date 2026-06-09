@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Search, TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Search, TrendingUp, TrendingDown, Minus, RefreshCw, X, BarChart2 } from 'lucide-react'
 
 const API_URL = '/api/cotations'
 
@@ -35,6 +35,148 @@ function formatVol(n: number) {
   return n.toLocaleString()
 }
 
+// ─── TradingView Chart Modal ──────────────────────────────────────────────────
+function ChartModal({ market, onClose }: { market: Market; onClose: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isUp = market.change > 0
+  const isDn = market.change < 0
+  const color = isUp ? '#00C853' : isDn ? '#FF1744' : '#707070'
+
+  // On utilise le ticker pour chercher sur TradingView
+  // La BVMT n'étant pas listée nativement, on ouvre le search TradingView
+  // avec le nom complet pour trouver le meilleur match disponible
+  const tvSymbol = `BVMT:${market.referentiel?.ticker || market.isin}`
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    const containerId = `tv-chart-${market.isin}`
+    containerRef.current.id = containerId
+
+    const load = () => {
+      if (!containerRef.current) return
+      try {
+        // @ts-ignore
+        new (window as any).TradingView.widget({
+          container_id:     containerId,
+          symbol:           tvSymbol,
+          interval:         'D',
+          theme:            'dark',
+          style:            '1',
+          locale:           'fr',
+          toolbar_bg:       '#111111',
+          hide_top_toolbar: false,
+          hide_legend:      false,
+          save_image:       false,
+          allow_symbol_change: true, // permet de chercher manuellement si BVMT non dispo
+          width:            '100%',
+          height:           320,
+          backgroundColor:  '#111111',
+          gridColor:        'rgba(255,255,255,0.04)',
+        })
+      } catch (e) {
+        console.error('TradingView widget error', e)
+      }
+    }
+
+    const scriptId = 'tradingview-widget-script'
+    if (document.getElementById(scriptId)) {
+      // @ts-ignore
+      if ((window as any).TradingView) load()
+      else document.getElementById(scriptId)!.addEventListener('load', load)
+    } else {
+      const script    = document.createElement('script')
+      script.id       = scriptId
+      script.src      = 'https://s3.tradingview.com/tv.js'
+      script.async    = true
+      script.onload   = load
+      document.head.appendChild(script)
+    }
+  }, [market.isin])
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(0,0,0,0.85)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px',
+      }}>
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        style={{
+          width: '100%', maxWidth: '680px',
+          background: '#111111',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '20px', overflow: 'hidden',
+        }}>
+
+        {/* Header */}
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          background: `linear-gradient(135deg, ${color}08, transparent)`,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.2)',
+              borderRadius: '8px', padding: '4px 10px',
+              fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: '#D4AF37',
+            }}>
+              {market.referentiel?.ticker}
+            </div>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#F5F5F5' }}>
+                {market.referentiel?.stockName}
+              </div>
+              <div style={{ fontSize: '11px', color: '#5C5C5C', marginTop: '2px' }}>
+                ISIN : {market.isin}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#F5F5F5', fontFamily: 'monospace' }}>
+                {formatNum(market.last)}
+              </div>
+              <div style={{ fontSize: '11px', color, marginTop: '2px', fontWeight: 600 }}>
+                {isUp ? '▲ +' : isDn ? '▼ ' : ''}{market.change?.toFixed(2)}%
+              </div>
+            </div>
+            <button onClick={onClose} style={{
+              background: 'rgba(255,255,255,0.05)', border: 'none',
+              borderRadius: '8px', padding: '6px', cursor: 'pointer',
+              color: '#5C5C5C', display: 'flex',
+            }}>
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Widget TradingView */}
+        <div style={{ padding: '12px 12px 0' }}>
+          <div ref={containerRef} />
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '10px 20px 14px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span style={{ fontSize: '10px', color: '#3A3A3A' }}>
+            Symbole recherché : <span style={{ fontFamily: 'monospace', color: '#5C5C5C' }}>{tvSymbol}</span>
+            <span style={{ color: '#2A2A2A' }}> · Si non trouvé, utilisez la barre de recherche du graphique</span>
+          </span>
+          <span style={{ fontSize: '10px', color: '#2A2A2A' }}>Powered by TradingView</span>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
 export default function CotationsPage() {
   const [data, setData]             = useState<Market[]>([])
   const [loading, setLoading]       = useState(true)
@@ -44,6 +186,7 @@ export default function CotationsPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [sortKey, setSortKey]       = useState<string>('ticker')
   const [sortDir, setSortDir]       = useState<1 | -1>(1)
+  const [chartMarket, setChartMarket] = useState<Market | null>(null)
 
   const fetchData = async (manual = false) => {
     if (manual) setRefreshing(true)
@@ -217,11 +360,10 @@ export default function CotationsPage() {
           <div className="p-6 space-y-3">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="flex gap-4 items-center">
+                <div className="skeleton w-8 h-8 rounded" />
                 <div className="skeleton w-12 h-8 rounded" />
                 <div className="skeleton flex-1 h-8 rounded" />
                 <div className="skeleton w-20 h-8 rounded" />
-                <div className="skeleton w-16 h-8 rounded" />
-                <div className="skeleton w-16 h-8 rounded" />
                 <div className="skeleton w-16 h-8 rounded" />
               </div>
             ))}
@@ -236,13 +378,15 @@ export default function CotationsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <thead style={{ background: 'var(--noir-elevated)' }}>
                 <tr>
+                  {/* Colonne icône graphique — non triable */}
+                  <th style={{ width: 40, padding: '10px 8px 10px 14px', borderBottom: '1px solid var(--noir-border)' }} />
                   <ThBtn col="ticker" label="TICKER" />
                   <ThBtn col="name"   label="SOCIÉTÉ" />
-                  <ThBtn col="last"   label="COURS"     right />
-                  <ThBtn col="change" label="VARIATION"  right />
-                  <ThBtn col="high"   label="HAUT"       right />
-                  <ThBtn col="low"    label="BAS"        right />
-                  <ThBtn col="volume" label="VOLUME"     right />
+                  <ThBtn col="last"   label="COURS"    right />
+                  <ThBtn col="change" label="VARIATION" right />
+                  <ThBtn col="high"   label="HAUT"      right />
+                  <ThBtn col="low"    label="BAS"       right />
+                  <ThBtn col="volume" label="VOLUME"    right />
                 </tr>
               </thead>
               <tbody>
@@ -262,8 +406,37 @@ export default function CotationsPage() {
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(212,175,55,0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
 
+                      {/* Icône graphique */}
+                      <td style={{ padding: '12px 4px 12px 14px' }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); setChartMarket(m) }}
+                          title="Voir le graphique"
+                          style={{
+                            background: 'rgba(212,175,55,0.06)',
+                            border: '1px solid rgba(212,175,55,0.12)',
+                            borderRadius: '6px',
+                            width: 28, height: 28,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', color: '#5C5C5C',
+                            transition: 'all 0.15s',
+                            flexShrink: 0,
+                          }}
+                          onMouseEnter={e => {
+                            e.currentTarget.style.background = 'rgba(212,175,55,0.15)'
+                            e.currentTarget.style.color = '#D4AF37'
+                            e.currentTarget.style.borderColor = 'rgba(212,175,55,0.3)'
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.background = 'rgba(212,175,55,0.06)'
+                            e.currentTarget.style.color = '#5C5C5C'
+                            e.currentTarget.style.borderColor = 'rgba(212,175,55,0.12)'
+                          }}>
+                          <BarChart2 size={12} />
+                        </button>
+                      </td>
+
                       {/* Ticker */}
-                      <td style={{ padding: '12px 14px' }}>
+                      <td style={{ padding: '12px 14px 12px 6px' }}>
                         <div className="w-14 h-8 rounded-lg flex items-center justify-center font-bold text-xs font-mono"
                           style={{ background: 'rgba(212,175,55,0.1)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.15)' }}>
                           {(m.referentiel?.ticker || '').slice(0, 6)}
@@ -318,6 +491,13 @@ export default function CotationsPage() {
       <p className="text-xs text-center" style={{ color: '#3A3A3A' }}>
         Source : Bourse de Tunis (BVMT) — Flux retardé de 15 minutes
       </p>
+
+      {/* Modal graphique TradingView */}
+      <AnimatePresence>
+        {chartMarket && (
+          <ChartModal market={chartMarket} onClose={() => setChartMarket(null)} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
