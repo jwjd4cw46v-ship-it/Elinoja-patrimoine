@@ -125,7 +125,7 @@ export function ElinojaAI({ profile }: Props) {
               right:        '16px',
               zIndex:       99,
               width:        'min(420px, calc(100vw - 32px))',
-              height:       'min(600px, calc(100vh - 120px))',
+              height:       'min(520px, calc(100vh - 160px))',
               background:   '#0A0A0A',
               border:       '1px solid rgba(212,175,55,0.2)',
               borderRadius: '20px',
