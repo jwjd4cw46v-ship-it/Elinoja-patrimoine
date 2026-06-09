@@ -181,6 +181,60 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       }
     }
 
+    // ── Toutes les analyses fondamentales ──────────────────────────────────
+    case 'getAllFundamentalAnalyses': {
+      const limit = args.limit ?? 10
+      const { data } = await supabase
+        .from('fundamental_analyses')
+        .select('ticker, company_name, recommendation, target_price, description, created_at')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (!data?.length) return { message: 'Aucune analyse fondamentale publiée', analyses: [] }
+
+      return {
+        total:   data.length,
+        analyses: data.map(fa => ({
+          ticker:         fa.ticker,
+          société:        fa.company_name,
+          recommandation: fa.recommendation,
+          objectif:       fa.target_price,
+          résumé:         fa.description?.slice(0, 150) + '…',
+          publiée_le:     new Date(fa.created_at).toLocaleDateString('fr-FR'),
+        })),
+        source: 'Elinoja Patrimoine — Analyses Fondamentales',
+      }
+    }
+
+    // ── Toutes les analyses techniques ─────────────────────────────────────
+    case 'getAllTechnicalAnalyses': {
+      const limit = args.limit ?? 10
+      const { data } = await supabase
+        .from('technical_analyses')
+        .select('ticker, title, signal, entry_price, target_price, risk_level, potential_gain, created_at')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (!data?.length) return { message: 'Aucune analyse technique publiée', analyses: [] }
+
+      return {
+        total:   data.length,
+        analyses: data.map(ta => ({
+          ticker:    ta.ticker,
+          titre:     ta.title,
+          signal:    ta.signal,
+          entrée:    ta.entry_price,
+          objectif:  ta.target_price,
+          risque:    ta.risk_level,
+          potentiel: ta.potential_gain ? ta.potential_gain + '%' : null,
+          publiée_le: new Date(ta.created_at).toLocaleDateString('fr-FR'),
+        })),
+        source: 'Elinoja Patrimoine — Analyses Techniques',
+      }
+    }
+
     // ── Articles ────────────────────────────────────────────────────────────
     case 'getArticles': {
       const limit = args.limit ?? 5

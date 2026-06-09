@@ -90,6 +90,32 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getAllFundamentalAnalyses',
+      description: 'Liste toutes les analyses fondamentales disponibles sur la plateforme. À appeler quand l\'utilisateur demande "les analyses fondamentales disponibles" ou "toutes les analyses" sans préciser de ticker.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Nombre max à retourner (défaut: 10)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getAllTechnicalAnalyses',
+      description: 'Liste toutes les analyses techniques disponibles sur la plateforme. À appeler quand l\'utilisateur demande "les analyses techniques disponibles" ou "toutes les analyses" sans préciser de ticker.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Nombre max à retourner (défaut: 10)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'getArticles',
       description: 'Récupère les derniers articles et publications financières de la plateforme.',
       parameters: {
