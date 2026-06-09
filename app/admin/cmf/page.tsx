@@ -5,14 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Trash2, Edit, FileText, Upload, X, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
-import * as pdfjsLib from 'pdfjs-dist'
-
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
-}
-
 async function extractTextFromPDF(file: File): Promise<string> {
   try {
+    // Import dynamique pour éviter le SSR
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
     const arrayBuffer = await file.arrayBuffer()
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
     let fullText = ''
