@@ -2,8 +2,85 @@
 // components/ai/MessageBubble.tsx
 
 import { motion } from 'framer-motion'
-import ReactMarkdown from 'react-markdown'
 import type { Message } from '@/types/ai'
+
+// Parser markdown simple sans dépendance externe
+function renderMarkdown(text: string) {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Titre h3
+    if (line.startsWith('### ')) {
+      elements.push(
+        <div key={i} style={{ fontSize: '13px', fontWeight: 600, color: '#D4AF37', margin: '10px 0 4px' }}>
+          {renderInline(line.slice(4))}
+        </div>
+      )
+    }
+    // Titre h4
+    else if (line.startsWith('#### ')) {
+      elements.push(
+        <div key={i} style={{ fontSize: '11px', fontWeight: 600, color: '#A0A0A0', margin: '8px 0 4px', textTransform: 'uppercase' as const, letterSpacing: '0.08em' }}>
+          {renderInline(line.slice(5))}
+        </div>
+      )
+    }
+    // Séparateur
+    else if (line.match(/^---+$/)) {
+      elements.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)', margin: '8px 0' }} />)
+    }
+    // Liste
+    else if (line.startsWith('- ') || line.startsWith('* ')) {
+      const items: string[] = []
+      while (i < lines.length && (lines[i].startsWith('- ') || lines[i].startsWith('* '))) {
+        items.push(lines[i].slice(2))
+        i++
+      }
+      elements.push(
+        <ul key={i} style={{ paddingLeft: '16px', margin: '4px 0' }}>
+          {items.map((item, j) => (
+            <li key={j} style={{ marginBottom: '2px' }}>{renderInline(item)}</li>
+          ))}
+        </ul>
+      )
+      continue
+    }
+    // Ligne vide
+    else if (line.trim() === '') {
+      elements.push(<div key={i} style={{ height: '4px' }} />)
+    }
+    // Paragraphe normal
+    else {
+      elements.push(
+        <p key={i} style={{ margin: '0 0 6px' }}>{renderInline(line)}</p>
+      )
+    }
+    i++
+  }
+
+  return elements
+}
+
+function renderInline(text: string): React.ReactNode {
+  // Gras **texte**
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} style={{ color: '#F5F5F5', fontWeight: 600 }}>{part.slice(2, -2)}</strong>
+    }
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <em key={i} style={{ color: '#D4AF37' }}>{part.slice(1, -1)}</em>
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} style={{ background: 'rgba(212,175,55,0.1)', padding: '1px 5px', borderRadius: '4px', fontSize: '11px', color: '#D4AF37' }}>{part.slice(1, -1)}</code>
+    }
+    return part
+  })
+}
 
 export function MessageBubble({ message: m }: { message: Message }) {
   const isUser = m.role === 'user'
@@ -35,37 +112,20 @@ export function MessageBubble({ message: m }: { message: Message }) {
         padding:      isUser ? '9px 13px' : '10px 14px',
         borderRadius: isUser ? '16px 16px 4px 16px' : '4px 16px 16px 16px',
         background:   isUser
-          ? 'linear-gradient(135deg, rgba(212,175,55,0.18), rgba(212,175,55,0.1))'
+          ? 'linear-gradient(135deg, #B8942A, #D4AF37)'
           : 'rgba(255,255,255,0.04)',
         border:       isUser
-          ? '1px solid rgba(212,175,55,0.25)'
+          ? 'none'
           : '1px solid rgba(255,255,255,0.06)',
         fontSize:     '13px',
-        color:        '#E0E0E0',
+        color:        isUser ? '#000' : '#E0E0E0',
         lineHeight:   '1.6',
+        fontWeight:   isUser ? 500 : 400,
       }}>
         {isUser ? (
           <span>{m.content}</span>
         ) : m.content ? (
-          <div className="ai-markdown">
-            <ReactMarkdown
-              components={{
-                p:      ({ children }) => <p style={{ margin: '0 0 8px', lastChild: { margin: 0 } } as any}>{children}</p>,
-                strong: ({ children }) => <strong style={{ color: '#F5F5F5', fontWeight: 600 }}>{children}</strong>,
-                em:     ({ children }) => <em style={{ color: '#D4AF37' }}>{children}</em>,
-                ul:     ({ children }) => <ul style={{ paddingLeft: '16px', margin: '4px 0' }}>{children}</ul>,
-                ol:     ({ children }) => <ol style={{ paddingLeft: '16px', margin: '4px 0' }}>{children}</ol>,
-                li:     ({ children }) => <li style={{ marginBottom: '2px' }}>{children}</li>,
-                h3:     ({ children }) => <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#D4AF37', margin: '10px 0 4px' }}>{children}</h3>,
-                h4:     ({ children }) => <h4 style={{ fontSize: '12px', fontWeight: 600, color: '#A0A0A0', margin: '8px 0 4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{children}</h4>,
-                code:   ({ children, className }) => className
-                  ? <pre style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: '8px', fontSize: '11px', overflow: 'auto', margin: '6px 0' }}><code>{children}</code></pre>
-                  : <code style={{ background: 'rgba(212,175,55,0.1)', padding: '1px 5px', borderRadius: '4px', fontSize: '11px', color: '#D4AF37' }}>{children}</code>,
-                hr: () => <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.06)', margin: '8px 0' }} />,
-              }}>
-              {m.content}
-            </ReactMarkdown>
-          </div>
+          <div>{renderMarkdown(m.content)}</div>
         ) : (
           // Typing indicator
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center', height: '16px' }}>
