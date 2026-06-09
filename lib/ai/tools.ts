@@ -54,7 +54,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getTechnicalAnalysis': {
       const { symbol } = args
       const { data, error } = await supabase
-        .from('analyses')
+        .from('technical_analyses')
         .select('ticker, company_name, recommendation, entry_price, target_price, stop_loss, description, created_at, status')
         .ilike('ticker', symbol)
         .eq('status', 'published')
@@ -178,15 +178,15 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'getArticles': {
       const limit = args.limit ?? 5
       const { data } = await supabase
-        .from('annonces')
-        .select('titre, contenu, created_at, type')
+        .from('announcements')
+        .select('title, content, created_at, type')
         .order('created_at', { ascending: false })
         .limit(limit)
 
       return {
         articles: data?.map(a => ({
-          titre:    a.titre,
-          résumé:   a.contenu?.slice(0, 200) + (a.contenu?.length > 200 ? '…' : ''),
+          titre:    a.title,
+          résumé:   a.content?.slice(0, 200) + (a.content?.length > 200 ? '…' : ''),
           type:     a.type,
           date:     new Date(a.created_at).toLocaleDateString('fr-FR'),
         })) ?? [],
@@ -198,9 +198,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     case 'searchArticles': {
       const { query } = args
       const { data } = await supabase
-        .from('annonces')
-        .select('titre, contenu, created_at')
-        .or(`titre.ilike.%${query}%,contenu.ilike.%${query}%`)
+        .from('announcements')
+        .select('title, content, created_at')
+        .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
         .order('created_at', { ascending: false })
         .limit(5)
 
@@ -208,8 +208,8 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         query,
         résultats: data?.length ?? 0,
         articles: data?.map(a => ({
-          titre:   a.titre,
-          résumé:  a.contenu?.slice(0, 150) + '…',
+          titre:   a.title,
+          résumé:  a.content?.slice(0, 150) + '…',
           date:    new Date(a.created_at).toLocaleDateString('fr-FR'),
         })) ?? [],
       }
