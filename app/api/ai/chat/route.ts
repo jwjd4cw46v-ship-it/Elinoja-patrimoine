@@ -7,8 +7,10 @@ import { AI_TOOLS, SYSTEM_PROMPT } from '@/types/ai'
 export const runtime = 'edge'
 export const maxDuration = 60
 
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
+const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY!
 
+// Convertir les tools OpenAI → format Mistral (identique)
 export async function POST(req: NextRequest) {
   try {
     const supabase = createClient()
@@ -17,7 +19,6 @@ export async function POST(req: NextRequest) {
 
     const { messages, conversationId } = await req.json()
 
-    // Construire les messages OpenAI
     const openaiMessages = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...messages.map((m: any) => ({
@@ -28,15 +29,14 @@ export async function POST(req: NextRequest) {
       })),
     ]
 
-    // ── Appel OpenAI avec streaming ────────────────────────────────────────
-    const response = await fetch(OPENAI_API_URL, {
+    const response = await fetch(MISTRAL_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
       },
       body: JSON.stringify({
-        model:       'gpt-4o',
+        model:       'mistral-large-latest',
         messages:    openaiMessages,
         tools:       AI_TOOLS,
         tool_choice: 'auto',
@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: err }), { status: 500 })
     }
 
-    // ── Streaming avec gestion du function calling ─────────────────────────
     const encoder = new TextEncoder()
 
     const stream = new ReadableStream({
@@ -59,10 +58,10 @@ export async function POST(req: NextRequest) {
         const reader  = response.body!.getReader()
         const decoder = new TextDecoder()
 
-        let buffer         = ''
-        let toolCalls:     any[] = []
-        let finishReason:  string | null = null
-        let assistantText  = ''
+        let buffer        = ''
+        let toolCalls:    any[] = []
+        let finishReason: string | null = null
+        let assistantText = ''
 
         const send = (data: object) => {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
@@ -88,47 +87,40 @@ export async function POST(req: NextRequest) {
               const delta = chunk.choices?.[0]?.delta
               finishReason = chunk.choices?.[0]?.finish_reason ?? finishReason
 
-              // Texte normal → stream au client
               if (delta?.content) {
                 assistantText += delta.content
                 send({ type: 'text', text: delta.content })
               }
 
-              // Tool calls → accumuler
               if (delta?.tool_calls) {
                 for (const tc of delta.tool_calls) {
                   if (!toolCalls[tc.index]) {
                     toolCalls[tc.index] = { id: '', type: 'function', function: { name: '', arguments: '' } }
                   }
-                  if (tc.id)                       toolCalls[tc.index].id                          = tc.id
-                  if (tc.function?.name)            toolCalls[tc.index].function.name               = tc.function.name
-                  if (tc.function?.arguments)       toolCalls[tc.index].function.arguments         += tc.function.arguments
+                  if (tc.id)                 toolCalls[tc.index].id                    = tc.id
+                  if (tc.function?.name)     toolCalls[tc.index].function.name         = tc.function.name
+                  if (tc.function?.arguments) toolCalls[tc.index].function.arguments  += tc.function.arguments
                 }
               }
             }
           }
 
-          // ── Exécuter les tools si nécessaire ─────────────────────────────
           if (finishReason === 'tool_calls' && toolCalls.length > 0) {
-            // Notifier le client des tools en cours
             for (const tc of toolCalls) {
               send({ type: 'tool_start', toolName: tc.function.name, toolCallId: tc.id })
             }
 
-            // Exécuter les tools en parallèle
             const results = await Promise.all(
               toolCalls.map(async tc => {
                 let args: Record<string, any> = {}
                 try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
 
-                // Injecter userId automatiquement si besoin
                 if (tc.function.name === 'getWatchlistAlerts' && !args.userId) {
                   args.userId = user.id
                 }
 
                 const result = await executeTool(tc.function.name, args)
 
-                // Gérer la navigation côté client
                 if (tc.function.name === 'navigateTo' && result.url) {
                   send({ type: 'navigate', url: result.url })
                 }
@@ -138,25 +130,25 @@ export async function POST(req: NextRequest) {
               })
             )
 
-            // Relancer OpenAI avec les résultats des tools
             const messagesWithTools = [
               ...openaiMessages,
               { role: 'assistant', content: assistantText || null, tool_calls: toolCalls },
               ...results.map(({ tc, result }) => ({
                 role:         'tool',
                 tool_call_id: tc.id,
+                name:         tc.function.name,
                 content:      JSON.stringify(result),
               })),
             ]
 
-            const response2 = await fetch(OPENAI_API_URL, {
+            const response2 = await fetch(MISTRAL_API_URL, {
               method: 'POST',
               headers: {
                 'Content-Type':  'application/json',
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                'Authorization': `Bearer ${MISTRAL_API_KEY}`,
               },
               body: JSON.stringify({
-                model:       'gpt-4o',
+                model:       'mistral-large-latest',
                 messages:    messagesWithTools,
                 temperature: 0.3,
                 max_tokens:  2000,
@@ -164,7 +156,6 @@ export async function POST(req: NextRequest) {
               }),
             })
 
-            // Streamer la réponse finale
             const reader2  = response2.body!.getReader()
             let finalText  = ''
 
@@ -187,12 +178,10 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            // Sauvegarder en base
             if (conversationId) {
               await saveMessage(supabase, conversationId, user.id, 'assistant', finalText, toolCalls, results.map(r => r.result))
             }
           } else {
-            // Pas de tool call — sauvegarder directement
             if (conversationId && assistantText) {
               await saveMessage(supabase, conversationId, user.id, 'assistant', assistantText)
             }
@@ -219,7 +208,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ── Sauvegarde message en base ─────────────────────────────────────────────────
 async function saveMessage(
   supabase: any,
   conversationId: string,
