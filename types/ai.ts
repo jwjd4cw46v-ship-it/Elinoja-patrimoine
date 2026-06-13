@@ -145,6 +145,23 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getPositions',
+      description: 'Récupère les positions boursières de l'utilisateur : positions ouvertes, partiellement vendues, runners. Inclut prix moyen, quantités, niveaux R1/R2/R3, stops, P&L réalisé.',
+      parameters: {
+        type: 'object',
+        properties: {
+          state: {
+            type: 'string',
+            enum: ['OPEN', 'PARTIALLY_SOLD', 'RUNNING', 'CLOSED', 'ALL'],
+            description: 'Filtrer par état (défaut: ALL sauf CLOSED)',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'getCMFAnnouncements',
       description: 'Récupère les publications officielles du CMF (Conseil du Marché Financier) : rapports annuels, prospectus, communiqués. Peut filtrer par ticker/société.',
       parameters: {
@@ -154,6 +171,49 @@ export const AI_TOOLS = [
           limit:  { type: 'number', description: 'Nombre de publications (défaut: 5)' },
         },
       },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getPositions',
+      description: 'Récupère toutes les positions boursières actives de l'utilisateur avec cours live, P&L latent et niveaux R1/R2/R3.',
+      parameters: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', enum: ['OPEN','PARTIALLY_SOLD','RUNNING','CLOSED'], description: 'Filtrer par état (défaut: toutes sauf CLOSED)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getPositionDetail',
+      description: 'Récupère le détail complet d'une position : niveaux, stops, historique des ventes, alertes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticker: { type: 'string', description: 'Le ticker de l'action (ex: BIAT, SFBT)' },
+        },
+        required: ['ticker'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getPositionAlerts',
+      description: 'Récupère les alertes de positions non traitées : stop loss atteint, objectifs R1/R2/R3 atteints.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getPortfolioSummary',
+      description: 'Résumé global du portefeuille : capital engagé, P&L latent total, P&L réalisé, performance globale.',
+      parameters: { type: 'object', properties: {} },
     },
   },
   {
