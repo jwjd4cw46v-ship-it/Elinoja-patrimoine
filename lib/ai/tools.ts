@@ -312,7 +312,191 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       }
     }
 
-    default:
+
+    // ── Positions de trading ────────────────────────────────────────────────
+    case 'getPositions': {
+      const { state } = args
+      let query = supabase
+        .from('positions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (state) query = query.eq('state', state)
+      else query = query.neq('state', 'CLOSED')
+
+      const { data, error } = await query
+      if (error || !data?.length) return { message: 'Aucune position ouverte', positions: [] }
+
+      const res = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/cotations', { cache: 'no-store' })
+      const cotData = res.ok ? await res.json() : null
+      const markets = cotData?.markets ?? []
+
+      return {
+        total: data.length,
+        positions: data.map((p: any) => {
+          const market = markets.find((m: any) =>
+            m.referentiel?.ticker?.toUpperCase() === p.ticker?.toUpperCase()
+          )
+          const cours = market?.last ?? null
+          const pnlLatent = cours ? ((cours - p.prix_moyen) * p.quantite_restante).toFixed(2) : null
+          const pnlPct = cours ? (((cours - p.prix_moyen) / p.prix_moyen) * 100).toFixed(2) : null
+          return {
+            ticker: p.ticker, etat: p.state,
+            prix_entree: p.prix_moyen, cours_actuel: cours,
+            quantite_restante: p.quantite_restante, quantite_totale: p.quantite_totale,
+            stop_actuel: p.stop_actuel,
+            r1: p.r1, r2: p.r2, r3: p.r3,
+            r1_atteint: p.r1_atteint, r2_atteint: p.r2_atteint, r3_atteint: p.r3_atteint,
+            pnl_latent: pnlLatent ? pnlLatent + ' DT' : 'N/A',
+            pnl_pct: pnlPct ? pnlPct + '%' : 'N/A',
+            pnl_realise: (p.pnl_realise ?? 0) + ' DT',
+            ouvert_le: new Date(p.created_at).toLocaleDateString('fr-FR'),
+          }
+        }),
+        source: 'Elinoja Patrimoine — Gestion de positions',
+      }
+    }
+
+    // ── Détail position ─────────────────────────────────────────────────────
+    case 'getPositionDetail': {
+      const { ticker } = args
+      const { data: pos } = await supabase
+        .from('positions')
+        .select('*')
+        .eq('user_id', user.id)
+        .ilike('ticker', ticker)
+        .neq('state', 'CLOSED')
+        .single()
+
+      if (!pos) return { error: 'Aucune position active sur ' + ticker }
+
+      const { data: ventes } = await supabase
+        .from('position_ventes')
+        .select('niveau, prix_vente, quantite, pnl, created_at')
+        .eq('position_id', pos.id)
+        .order('created_at', { ascending: true })
+
+      const { data: alertes } = await supabase
+        .from('position_alertes')
+        .select('type, prix_trigger, prix_marche, is_acted, created_at')
+        .eq('position_id', pos.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      const res = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/cotations', { cache: 'no-store' })
+      const cotData = res.ok ? await res.json() : null
+      const market = cotData?.markets?.find((m: any) =>
+        m.referentiel?.ticker?.toUpperCase() === ticker.toUpperCase()
+      )
+      const cours = market?.last ?? null
+      const pnlLatent = cours ? (cours - pos.prix_moyen) * pos.quantite_restante : null
+
+      return {
+        ticker: pos.ticker, etat: pos.state, cours,
+        prix_moyen: pos.prix_moyen, support: pos.support,
+        resistances: { R1: pos.r1, R2: pos.r2, R3: pos.r3 },
+        niveaux_atteints: { R1: pos.r1_atteint, R2: pos.r2_atteint, R3: pos.r3_atteint },
+        stop_actuel: pos.stop_actuel,
+        quantites: {
+          totale: pos.quantite_totale, restante: pos.quantite_restante,
+          q1_cible: pos.q1_cible, q2_cible: pos.q2_cible,
+          q3_cible: pos.q3_cible, runner: pos.runner_cible,
+        },
+        pnl: {
+          latent: pnlLatent ? pnlLatent.toFixed(2) + ' DT' : 'N/A',
+          realise: (pos.pnl_realise ?? 0) + ' DT',
+        },
+        historique_ventes: ventes?.map((v: any) => ({
+          niveau: v.niveau, prix: v.prix_vente,
+          quantite: v.quantite, pnl: v.pnl + ' DT',
+          date: new Date(v.created_at).toLocaleDateString('fr-FR'),
+        })) ?? [],
+        alertes_recentes: alertes?.map((a: any) => ({
+          type: a.type, trigger: a.prix_trigger,
+          marche: a.prix_marche, traitee: a.is_acted,
+          date: new Date(a.created_at).toLocaleDateString('fr-FR'),
+        })) ?? [],
+        source: 'Elinoja Patrimoine — Gestion de positions',
+      }
+    }
+
+    // ── Alertes positions ───────────────────────────────────────────────────
+    case 'getPositionAlerts': {
+      const { data: alertes } = await supabase
+        .from('position_alertes')
+        .select('type, prix_trigger, prix_marche, is_acted, created_at, positions(ticker, quantite_restante)')
+        .eq('user_id', user.id)
+        .eq('is_acted', false)
+        .order('created_at', { ascending: false })
+
+      if (!alertes?.length) return { message: 'Aucune alerte en attente', alertes: [] }
+
+      const labelMap: Record<string, string> = {
+        STOP_LOSS: 'Stop Loss atteint', TAKE_PROFIT_R1: 'Objectif R1 atteint',
+        TAKE_PROFIT_R2: 'Objectif R2 atteint', TAKE_PROFIT_R3: 'Objectif R3 atteint',
+        BREAK_EVEN: 'Break Even atteint', RUNNER_STOP: 'Stop Runner declenche',
+      }
+
+      return {
+        total: alertes.length,
+        alertes: alertes.map((a: any) => ({
+          ticker: (a.positions as any)?.ticker ?? 'N/A',
+          type: labelMap[a.type] ?? a.type,
+          prix_trigger: a.prix_trigger, prix_marche: a.prix_marche,
+          qte_restante: (a.positions as any)?.quantite_restante ?? 'N/A',
+          date: new Date(a.created_at).toLocaleDateString('fr-FR'),
+        })),
+        source: 'Elinoja Patrimoine — Alertes positions',
+      }
+    }
+
+    // ── Résumé portefeuille ─────────────────────────────────────────────────
+    case 'getPortfolioSummary': {
+      const { data: positions } = await supabase
+        .from('positions')
+        .select('ticker, state, prix_moyen, quantite_restante, pnl_realise')
+        .eq('user_id', user.id)
+
+      if (!positions?.length) return { message: 'Aucune position', portefeuille: null }
+
+      const res = await fetch(process.env.NEXT_PUBLIC_APP_URL + '/api/cotations', { cache: 'no-store' })
+      const cotData = res.ok ? await res.json() : null
+      const markets = cotData?.markets ?? []
+
+      let capitalEngage = 0, pnlLatentTotal = 0, pnlRealiseTotal = 0
+
+      const details = positions.map((p: any) => {
+        const cours = markets.find((m: any) =>
+          m.referentiel?.ticker?.toUpperCase() === p.ticker?.toUpperCase()
+        )?.last ?? null
+        const latent = cours ? (cours - p.prix_moyen) * p.quantite_restante : 0
+        capitalEngage   += p.prix_moyen * p.quantite_restante
+        pnlLatentTotal  += latent
+        pnlRealiseTotal += p.pnl_realise ?? 0
+        return { ticker: p.ticker, etat: p.state, pnl_latent: latent.toFixed(2) + ' DT' }
+      })
+
+      const perf = capitalEngage > 0
+        ? (((pnlLatentTotal + pnlRealiseTotal) / capitalEngage) * 100).toFixed(2) + '%'
+        : '0%'
+
+      return {
+        resume: {
+          positions_totales: positions.length,
+          positions_ouvertes: positions.filter((p: any) => p.state !== 'CLOSED').length,
+          capital_engage: capitalEngage.toFixed(0) + ' DT',
+          pnl_latent: pnlLatentTotal.toFixed(2) + ' DT',
+          pnl_realise: pnlRealiseTotal.toFixed(2) + ' DT',
+          pnl_total: (pnlLatentTotal + pnlRealiseTotal).toFixed(2) + ' DT',
+          performance: perf,
+        },
+        details,
+        source: 'Elinoja Patrimoine — Portefeuille',
+      }
+    }
+
+        default:
       return { error: `Tool inconnu: ${name}` }
   }
 }
