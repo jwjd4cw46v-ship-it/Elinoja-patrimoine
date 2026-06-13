@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, BarChart2,
   FileText, MessageSquare, Bell, Star, ChevronRight,
   Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
-  Menu, X, Globe,
+  Menu, X, Globe, Target,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -27,6 +27,7 @@ const navItems = [
   { href: '/client/watchlist',     icon: Star,            label: 'Ma Watchlist' },
   { href: '/client/marches',       icon: Globe,           label: 'Devises & Matières' },
   { href: '/client/calendrier',    icon: Calendar,        label: 'Calendrier AGO' },
+  { href: '/client/positions',     icon: Target,          label: 'Position Engine' },
 ]
 
 const PAGE_LABELS: Record<string, string> = {
@@ -41,6 +42,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/watchlist':     'Ma Watchlist',
   '/client/marches':       'Devises & Matières premières',
   '/client/calendrier':    'Calendrier AGO',
+  '/client/positions':     'Position Engine',
 }
 
 function getLabel(pathname: string) {
