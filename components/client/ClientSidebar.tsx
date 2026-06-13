@@ -27,7 +27,7 @@ const navItems = [
   { href: '/client/watchlist',     icon: Star,            label: 'Ma Watchlist' },
   { href: '/client/marches',       icon: Globe,           label: 'Devises & Matières' },
   { href: '/client/calendrier',    icon: Calendar,        label: 'Calendrier AGO' },
-  { href: '/client/positions',     icon: Target,          label: 'Position Engine' },
+  { href: '/client/positions',     icon: Target,          label: 'Elinoja Stratégie' },
 ]
 
 const PAGE_LABELS: Record<string, string> = {
@@ -42,7 +42,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/watchlist':     'Ma Watchlist',
   '/client/marches':       'Devises & Matières premières',
   '/client/calendrier':    'Calendrier AGO',
-  '/client/positions':     'Position Engine',
+  '/client/positions':     'Elinoja Stratégie',
 }
 
 function getLabel(pathname: string) {
