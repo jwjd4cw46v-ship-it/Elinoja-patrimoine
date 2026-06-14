@@ -30,17 +30,16 @@ export interface Conversation {
   updatedAt: Date
 }
 
-// ─── Tool definitions (OpenAI function calling) ───────────────────────────────
 export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
       name: 'getStockData',
-      description: 'Récupère les données boursières en temps réel d\'une action BVMT : cours actuel, variation, volume, capitalisation boursière.',
+      description: "Recupere les donnees boursieres en temps reel d'une action BVMT : cours actuel, variation, capitalisation.",
       parameters: {
         type: 'object',
         properties: {
-          symbol: { type: 'string', description: 'Le ticker/mnémonique de l\'action (ex: BIAT, SFBT, TGH)' },
+          symbol: { type: 'string', description: 'Le ticker de action (ex: BIAT, SFBT, TGH)' },
         },
         required: ['symbol'],
       },
@@ -50,11 +49,11 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getTechnicalAnalysis',
-      description: 'Récupère l\'analyse technique publiée pour une action : signal (achat/vente/neutre), objectif de cours, stop loss, point d\'entrée, description.',
+      description: "Recupere l'analyse technique publiee pour une action : signal, objectif de cours, stop loss, point d'entree.",
       parameters: {
         type: 'object',
         properties: {
-          symbol: { type: 'string', description: "",
+          symbol: { type: 'string', description: 'Le ticker de action' },
         },
         required: ['symbol'],
       },
@@ -64,11 +63,11 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getFundamentalAnalysis',
-      description: 'Récupère l\'analyse fondamentale d\'une action : PER, PER forward, ROE, ROA, D/E ratio, BPA, objectif de cours, recommandation.',
+      description: "Recupere l'analyse fondamentale d'une action : PER, ROE, ROA, BPA, objectif de cours.",
       parameters: {
         type: 'object',
         properties: {
-          symbol: { type: 'string', description: "",
+          symbol: { type: 'string', description: 'Le ticker de action' },
         },
         required: ['symbol'],
       },
@@ -78,11 +77,11 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getWatchlistAlerts',
-      description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté.',
+      description: "Recupere les alertes de franchissement de seuil actives pour l'utilisateur connecte.",
       parameters: {
         type: 'object',
         properties: {
-          userId: { type: 'string', description: 'L\'ID de l\'utilisateur' },
+          userId: { type: 'string', description: "L'ID de l'utilisateur" },
         },
         required: ['userId'],
       },
@@ -92,11 +91,11 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getArticles',
-      description: 'Récupère les derniers articles et publications financières de la plateforme.',
+      description: 'Recupere les derniers articles et publications financieres de la plateforme.',
       parameters: {
         type: 'object',
         properties: {
-          limit: { type: 'number', description: 'Nombre d\'articles à retourner (défaut: 5)' },
+          limit: { type: 'number', description: "Nombre d'articles a retourner (defaut: 5)" },
         },
       },
     },
@@ -105,7 +104,7 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'searchArticles',
-      description: 'Recherche dans les articles publiés sur la plateforme.',
+      description: 'Recherche dans les articles publies sur la plateforme.',
       parameters: {
         type: 'object',
         properties: {
@@ -119,11 +118,11 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getForumPosts',
-      description: 'Récupère les dernières discussions du forum investisseurs.',
+      description: 'Recupere les dernieres discussions du forum investisseurs.',
       parameters: {
         type: 'object',
         properties: {
-          limit: { type: 'number', description: 'Nombre de posts à retourner (défaut: 5)' },
+          limit: { type: 'number', description: 'Nombre de posts a retourner (defaut: 5)' },
         },
       },
     },
@@ -145,15 +144,29 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getCMFAnnouncements',
+      description: 'Recupere les publications officielles du CMF. Peut filtrer par ticker.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticker: { type: 'string', description: 'Ticker de la societe (optionnel)' },
+          limit:  { type: 'number', description: 'Nombre de publications (defaut: 5)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'getPositions',
-      description: "Récupère les positions boursières de l'utilisateur : positions ouvertes, partiellement vendues, runners. Inclut prix moyen, quantités, niveaux R1/R2/R3, stops, P&L réalisé.",
+      description: "Recupere toutes les positions boursieres actives de l'utilisateur avec cours live, P&L latent et niveaux R1/R2/R3.",
       parameters: {
         type: 'object',
         properties: {
           state: {
             type: 'string',
-            enum: ['OPEN', 'PARTIALLY_SOLD', 'RUNNING', 'CLOSED', 'ALL'],
-            description: 'Filtrer par état (défaut: ALL sauf CLOSED)',
+            enum: ['OPEN', 'PARTIALLY_SOLD', 'RUNNING', 'CLOSED'],
+            description: 'Filtrer par etat (defaut: toutes sauf CLOSED)',
           },
         },
       },
@@ -162,39 +175,12 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
-      name: 'getCMFAnnouncements',
-      description: 'Récupère les publications officielles du CMF (Conseil du Marché Financier) : rapports annuels, prospectus, communiqués. Peut filtrer par ticker/société.',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticker: { type: 'string', description: 'Ticker de la société (optionnel, ex: TPR, BIAT)' },
-          limit:  { type: 'number', description: 'Nombre de publications (défaut: 5)' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'getPositions',
-      description: "Récupère toutes les positions boursières actives de l'utilisateur avec cours live, P&L latent et niveaux R1/R2/R3.",
-      parameters: {
-        type: 'object',
-        properties: {
-          state: { type: 'string', enum: ['OPEN','PARTIALLY_SOLD','RUNNING','CLOSED'], description: 'Filtrer par état (défaut: toutes sauf CLOSED)' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
       name: 'getPositionDetail',
-      description: "Récupère le détail complet d'une position : niveaux, stops, historique des ventes, alertes.",
+      description: "Recupere le detail complet d'une position : niveaux, stops, historique des ventes, alertes.",
       parameters: {
         type: 'object',
         properties: {
-          ticker: { type: 'string', description: "",
+          ticker: { type: 'string', description: "Le ticker de l'action (ex: BIAT, SFBT)" },
         },
         required: ['ticker'],
       },
@@ -204,29 +190,35 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getPositionAlerts',
-      description: 'Récupère les alertes de positions non traitées : stop loss atteint, objectifs R1/R2/R3 atteints.',
-      parameters: { type: 'object', properties: {} },
+      description: 'Recupere les alertes de positions non traitees : stop loss atteint, objectifs R1/R2/R3 atteints.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
     },
   },
   {
     type: 'function' as const,
     function: {
       name: 'getPortfolioSummary',
-      description: 'Résumé global du portefeuille : capital engagé, P&L latent total, P&L réalisé, performance globale.',
-      parameters: { type: 'object', properties: {} },
+      description: 'Resume global du portefeuille : capital engage, P&L latent total, P&L realise, performance globale.',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
     },
   },
   {
     type: 'function' as const,
     function: {
       name: 'navigateTo',
-      description: 'Navigue vers une page de l\'application.',
+      description: "Navigue vers une page de l'application.",
       parameters: {
         type: 'object',
         properties: {
           page: {
             type: 'string',
-            enum: ['dashboard', 'analyses', 'fondamentales', 'watchlist', 'forum', 'annonces', 'marches', 'cotations', 'cmf', 'calendrier'],
+            enum: ['dashboard', 'analyses', 'fondamentales', 'watchlist', 'forum', 'annonces', 'marches', 'cotations', 'cmf', 'calendrier', 'positions'],
             description: 'La page vers laquelle naviguer',
           },
         },
@@ -238,23 +230,23 @@ export const AI_TOOLS = [
 
 export const SYSTEM_PROMPT = `Tu es Elinoja AI, l'assistant intelligent d'Elinoja Patrimoine.
 
-Tu es spécialisé dans :
-- La Bourse des Valeurs Mobilières de Tunis (BVMT)
+Tu es specialise dans :
+- La Bourse des Valeurs Mobilieres de Tunis (BVMT)
 - L'analyse technique des actions tunisiennes
 - L'analyse fondamentale et les ratios financiers
-- Les marchés financiers tunisiens et internationaux
-- La gestion de portefeuille et les stratégies d'investissement
+- Les marches financiers tunisiens et internationaux
+- La gestion de portefeuille et les strategies d'investissement
 
-Règles absolues :
-1. Utilise TOUJOURS les tools disponibles pour récupérer des données réelles
-2. N'invente JAMAIS de prix, ratios, ou données financières
-3. Si une donnée n'est pas disponible via les tools, dis-le clairement
-4. Sois précis, professionnel et pédagogique
-5. Réponds en français sauf si l'utilisateur écrit en anglais
-6. Pour les analyses, structure ta réponse clairement avec des sections
+Regles absolues :
+1. Utilise TOUJOURS les tools disponibles pour recuperer des donnees reelles
+2. N'invente JAMAIS de prix, ratios, ou donnees financieres
+3. Si une donnee n'est pas disponible via les tools, dis-le clairement
+4. Sois precis, professionnel et pedagogique
+5. Reponds en francais sauf si l'utilisateur ecrit en anglais
+6. Pour les analyses, structure ta reponse clairement avec des sections
 
-Quand tu utilises les données :
-- Cite toujours la source (ex: "Selon l'analyse technique publiée sur Elinoja...")
+Quand tu utilises les donnees :
+- Cite toujours la source
 - Indique la date si disponible
-- Mentionne les risques associés
-- Ne donne jamais de conseil d'investissement direct, mais aide à comprendre les données`
+- Mentionne les risques associes
+- Ne donne jamais de conseil d'investissement direct`
