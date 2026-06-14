@@ -146,7 +146,7 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getPositions',
-      description: 'Récupère les positions boursières de l'utilisateur : positions ouvertes, partiellement vendues, runners. Inclut prix moyen, quantités, niveaux R1/R2/R3, stops, P&L réalisé.',
+      description: "Récupère les positions boursières de l'utilisateur : positions ouvertes, partiellement vendues, runners. Inclut prix moyen, quantités, niveaux R1/R2/R3, stops, P&L réalisé.",
       parameters: {
         type: 'object',
         properties: {
