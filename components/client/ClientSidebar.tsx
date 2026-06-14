@@ -24,7 +24,7 @@ const C = {
   goldLight:   '#F0D060',
   goldDim:     'rgba(212,175,55,0.12)',
   goldBorder:  'rgba(212,175,55,0.22)',
-  text:        '#E8E8E8',
+  text:        '#FFFFFF',
   muted:       '#555555',
   label:       '#3A3A3A',
   red:         '#FF3B3B',
@@ -109,11 +109,11 @@ function WatchMiniCard({ item }: { item: any }) {
       }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: '#C0C0C0', letterSpacing: '0.04em' }}>{item.ticker}</div>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFFFFF', letterSpacing: '0.04em' }}>{item.ticker}</div>
           <div style={{ fontSize: '9px', color: C.muted, marginTop: '1px', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: item.current === 0 ? C.label : isBelowLow ? C.red : isAboveHigh ? '#00C853' : C.text, transition: 'color 0.3s' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: item.current === 0 ? C.label : isBelowLow ? C.red : isAboveHigh ? '#00C853' : '#FFFFFF', transition: 'color 0.3s' }}>
             {item.current > 0 ? fmt(item.current) : '—'}
           </div>
           {item.current > 0 && (
@@ -331,7 +331,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
             {profile.full_name?.charAt(0) || 'C'}
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.full_name}</div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.full_name}</div>
             <div style={{ fontSize: '10px', color: C.muted }}>Profil investisseur</div>
           </div>
           <ChevronRight size={14} style={{ color: C.label, flexShrink: 0 }} />
