@@ -247,13 +247,13 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                       borderRadius: '7px',
                       fontSize: '13px',
                       fontWeight: active ? 600 : 400,
-                      color: active ? C.gold : '#888888',
+                      color: active ? C.gold : '#FFFFFF',
                       background: active ? C.goldDim : 'transparent',
                       borderLeft: active ? `2px solid ${C.gold}` : '2px solid transparent',
                       cursor: 'pointer',
                       transition: 'all 0.15s',
                     }}>
-                    <item.icon size={15} style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }} />
+                    <item.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: active ? 1 : 0.75 }} />
                     <span style={{ flex: 1 }}>{item.label}</span>
                     {(item as any).premium && (
                       <span style={{
