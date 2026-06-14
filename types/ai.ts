@@ -54,7 +54,7 @@ export const AI_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          symbol: { type: 'string', description: 'Le ticker de l\'action' },
+          symbol: { type: 'string', description: "",
         },
         required: ['symbol'],
       },
@@ -68,7 +68,7 @@ export const AI_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          symbol: { type: 'string', description: 'Le ticker de l\'action' },
+          symbol: { type: 'string', description: "",
         },
         required: ['symbol'],
       },
@@ -177,7 +177,7 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getPositions',
-      description: 'Récupère toutes les positions boursières actives de l'utilisateur avec cours live, P&L latent et niveaux R1/R2/R3.',
+      description: "Récupère toutes les positions boursières actives de l'utilisateur avec cours live, P&L latent et niveaux R1/R2/R3.",
       parameters: {
         type: 'object',
         properties: {
@@ -190,11 +190,11 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getPositionDetail',
-      description: 'Récupère le détail complet d'une position : niveaux, stops, historique des ventes, alertes.',
+      description: "Récupère le détail complet d'une position : niveaux, stops, historique des ventes, alertes.",
       parameters: {
         type: 'object',
         properties: {
-          ticker: { type: 'string', description: 'Le ticker de l'action (ex: BIAT, SFBT)' },
+          ticker: { type: 'string', description: "",
         },
         required: ['ticker'],
       },
