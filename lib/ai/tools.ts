@@ -12,7 +12,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { symbol } = args
       try {
         // Cotation live depuis l'API BVMT
-        const res  = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/cotations`, { cache: 'no-store' })
+        const res  = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://elinoja-patrimoine-app-v02-286iv7tg6-iteb-ouerghi-s-projects.vercel.app'}/api/cotations`, { cache: 'no-store' })
         const data = res.ok ? await res.json() : null
         const market = data?.markets?.find((m: any) =>
           m.referentiel?.ticker?.toUpperCase() === symbol.toUpperCase()
@@ -142,7 +142,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       if (!watchlist?.length) return { message: 'Aucun titre dans la watchlist', alertes: [] }
 
       // Cotations live
-      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/cotations`, { cache: 'no-store' })
+      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://elinoja-patrimoine-app-v02-286iv7tg6-iteb-ouerghi-s-projects.vercel.app'}/api/cotations`, { cache: 'no-store' })
       const cotData = res.ok ? await res.json() : null
       const markets = cotData?.markets ?? []
 
@@ -332,7 +332,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { data, error } = await query
       if (error || !data?.length) return { message: 'Aucune position ouverte', positions: [] }
 
-      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/cotations`, { cache: 'no-store' })
+      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://elinoja-patrimoine-app-v02-286iv7tg6-iteb-ouerghi-s-projects.vercel.app'}/api/cotations`, { cache: 'no-store' })
       const cotData = res.ok ? await res.json() : null
       const markets = cotData?.markets ?? []
 
@@ -391,7 +391,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
           .limit(5),
       ])
 
-      const res    = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/cotations`, { cache: 'no-store' })
+      const res    = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://elinoja-patrimoine-app-v02-286iv7tg6-iteb-ouerghi-s-projects.vercel.app'}/api/cotations`, { cache: 'no-store' })
       const data   = res.ok ? await res.json() : null
       const market = data?.markets?.find((m: any) => m.referentiel?.ticker?.toUpperCase() === ticker.toUpperCase())
       const cours  = market?.last ?? null
@@ -486,7 +486,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
 
       if (!positions?.length) return { message: 'Aucune position dans le portefeuille', portefeuille: null }
 
-      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/api/cotations`, { cache: 'no-store' })
+      const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://elinoja-patrimoine-app-v02-286iv7tg6-iteb-ouerghi-s-projects.vercel.app'}/api/cotations`, { cache: 'no-store' })
       const cotData = res.ok ? await res.json() : null
       const markets = cotData?.markets ?? []
 
