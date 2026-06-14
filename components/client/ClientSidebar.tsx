@@ -15,19 +15,54 @@ import { createClient } from '@/lib/supabase/client'
 import { useWatchlist } from '@/hooks/useWatchlist'
 import type { Profile } from '@/types'
 
-const navItems = [
-  { href: '/client',               icon: LayoutDashboard, label: 'Tableau de bord' },
-  { href: '/client/cotations',     icon: LineChart,       label: 'Cotations BVMT' },
-  { href: '/client/analyses',      icon: TrendingUp,      label: 'Analyses Techniques' },
-  { href: '/client/fondamentales', icon: BarChart2,       label: 'Analyses Fondamentales' },
-  { href: '/client/cmf',           icon: FileText,        label: 'Publications CMF' },
-  { href: '/client/news',          icon: Newspaper,       label: 'Actualités' },
-  { href: '/client/forum',         icon: MessageSquare,   label: 'Forum' },
-  { href: '/client/annonces',      icon: Bell,            label: 'Annonces' },
-  { href: '/client/watchlist',     icon: Star,            label: 'Ma Watchlist' },
-  { href: '/client/marches',       icon: Globe,           label: 'Devises & Matières' },
-  { href: '/client/calendrier',    icon: Calendar,        label: 'Calendrier AGO' },
-  { href: '/client/positions',     icon: Target,          label: 'Elinoja Stratégie' },
+// ── Palette ────────────────────────────────────────────────────────────────
+const C = {
+  bg:          '#0A0A0A',   // noir logo
+  surface:     '#0F0F0F',   // sidebar
+  border:      '#1C1C1C',   // séparateurs très discrets
+  gold:        '#D4AF37',
+  goldLight:   '#F0D060',
+  goldDim:     'rgba(212,175,55,0.12)',
+  goldBorder:  'rgba(212,175,55,0.22)',
+  text:        '#E8E8E8',
+  muted:       '#555555',
+  label:       '#3A3A3A',
+  red:         '#FF3B3B',
+}
+
+const navSections = [
+  {
+    label: 'TABLEAU DE BORD',
+    items: [
+      { href: '/client', icon: LayoutDashboard, label: 'Tableau de bord' },
+    ],
+  },
+  {
+    label: 'MARCHÉS',
+    items: [
+      { href: '/client/cotations',     icon: LineChart,  label: 'Cotations BVMT' },
+      { href: '/client/analyses',      icon: TrendingUp, label: 'Analyses Techniques' },
+      { href: '/client/fondamentales', icon: BarChart2,  label: 'Analyses Fondamentales' },
+      { href: '/client/marches',       icon: Globe,      label: 'Devises & Matières' },
+      { href: '/client/calendrier',    icon: Calendar,   label: 'Calendrier AGO' },
+    ],
+  },
+  {
+    label: 'INFORMATIONS',
+    items: [
+      { href: '/client/cmf',      icon: FileText,      label: 'Publications CMF' },
+      { href: '/client/news',     icon: Newspaper,     label: 'Actualités' },
+      { href: '/client/forum',    icon: MessageSquare, label: 'Communauté Elinoja' },
+      { href: '/client/annonces', icon: Bell,          label: 'Annonces' },
+    ],
+  },
+  {
+    label: 'MES OUTILS',
+    items: [
+      { href: '/client/watchlist', icon: Star,   label: 'Mes Opportunités' },
+      { href: '/client/positions', icon: Target, label: 'Opportunités Elinoja', premium: true },
+    ],
+  },
 ]
 
 const PAGE_LABELS: Record<string, string> = {
@@ -68,33 +103,33 @@ function WatchMiniCard({ item }: { item: any }) {
   return (
     <div className={isBelowLow ? 'wmc-glow-low' : isAboveHigh ? 'wmc-glow-high' : ''}
       style={{
-        background: 'var(--noir-bg, #0D0D0D)',
-        border: `1px solid ${isBelowLow ? 'rgba(255,59,59,0.3)' : isAboveHigh ? 'rgba(0,200,83,0.25)' : 'var(--noir-border)'}`,
-        borderRadius: '10px', padding: '10px 12px', transition: 'border-color 0.4s',
+        background: C.bg,
+        border: `1px solid ${isBelowLow ? 'rgba(255,59,59,0.3)' : isAboveHigh ? 'rgba(0,200,83,0.25)' : C.border}`,
+        borderRadius: '8px', padding: '10px 12px', transition: 'border-color 0.4s',
       }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <div>
           <div style={{ fontSize: '11px', fontWeight: 600, color: '#C0C0C0', letterSpacing: '0.04em' }}>{item.ticker}</div>
-          <div style={{ fontSize: '9px', color: '#3A3A3A', marginTop: '1px', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+          <div style={{ fontSize: '9px', color: C.muted, marginTop: '1px', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: item.current === 0 ? '#3A3A3A' : isBelowLow ? '#FF3B3B' : isAboveHigh ? '#00C853' : '#F5F5F5', transition: 'color 0.3s' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'monospace', color: item.current === 0 ? C.label : isBelowLow ? C.red : isAboveHigh ? '#00C853' : C.text, transition: 'color 0.3s' }}>
             {item.current > 0 ? fmt(item.current) : '—'}
           </div>
           {item.current > 0 && (
-            <div style={{ fontSize: '9px', fontWeight: 500, color: item.change > 0 ? '#00C853' : item.change < 0 ? '#FF1744' : '#5C5C5C' }}>
+            <div style={{ fontSize: '9px', fontWeight: 500, color: item.change > 0 ? '#00C853' : item.change < 0 ? '#FF1744' : C.muted }}>
               {item.change > 0 ? '+' : ''}{item.change.toFixed(2)}%
             </div>
           )}
         </div>
       </div>
       {item.low > 0 && item.high > 0 && (
-        <div style={{ background: 'var(--noir-border)', borderRadius: '2px', height: '2px', marginBottom: '8px', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${pctClamped}%`, background: isBelowLow ? 'linear-gradient(90deg,#FF3B3B,#FF6B6B)' : isAboveHigh ? 'linear-gradient(90deg,#00C853,#00E676)' : 'linear-gradient(90deg,#2A5F8A,#3A8FD1)', borderRadius: '2px', transition: 'width 0.6s ease' }} />
+        <div style={{ background: C.border, borderRadius: '2px', height: '2px', marginBottom: '8px', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pctClamped}%`, background: isBelowLow ? 'linear-gradient(90deg,#FF3B3B,#FF6B6B)' : isAboveHigh ? 'linear-gradient(90deg,#00C853,#00E676)' : `linear-gradient(90deg,${C.gold},${C.goldLight})`, borderRadius: '2px', transition: 'width 0.6s ease' }} />
         </div>
       )}
       {(isBelowLow || isAboveHigh) && (
-        <div style={{ marginTop: '6px', fontSize: '8px', fontWeight: 600, color: isBelowLow ? '#FF3B3B' : '#00C853', textAlign: 'center', letterSpacing: '0.08em' }}>
+        <div style={{ marginTop: '6px', fontSize: '8px', fontWeight: 600, color: isBelowLow ? C.red : '#00C853', textAlign: 'center', letterSpacing: '0.08em' }}>
           {isBelowLow ? '▼ Seuil bas franchi' : '▲ Seuil haut franchi'}
         </div>
       )}
@@ -105,13 +140,11 @@ function WatchMiniCard({ item }: { item: any }) {
 export default function ClientSidebar({ profile }: { profile: Profile }) {
   const pathname  = usePathname()
   const supabase  = createClient()
-  const [userId,     setUserId]     = useState<string>('')
-  const [watchOpen,  setWatchOpen]  = useState(true)
-  const [spinning,   setSpinning]   = useState(false)
-  // ── Mobile state ──
-  // Initialisé à false (SSR-safe) — mis à jour après montage côté client
-  const [isMobile,   setIsMobile]   = useState<boolean | null>(null)
-  const [menuOpen,   setMenuOpen]   = useState(false)
+  const [userId,    setUserId]    = useState<string>('')
+  const [watchOpen, setWatchOpen] = useState(true)
+  const [spinning,  setSpinning]  = useState(false)
+  const [isMobile,  setIsMobile]  = useState<boolean | null>(null)
+  const [menuOpen,  setMenuOpen]  = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -119,7 +152,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
     })
   }, [])
 
-  // Détection mobile — uniquement côté client après hydratation
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)')
     setIsMobile(mq.matches)
@@ -128,7 +160,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Fermer le menu à chaque navigation
   useEffect(() => { setMenuOpen(false) }, [pathname])
 
   const { items, loading: watchLoading, refresh } = useWatchlist(userId || profile.id || '')
@@ -142,86 +173,130 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
     refresh().then(() => setTimeout(() => setSpinning(false), 600))
   }
 
-  // ── Sidebar content (partagé desktop + mobile) ──
+  const isActive = (href: string) =>
+    href === '/client' ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+
   const sidebar = (
     <aside
       className="w-64 flex flex-col flex-shrink-0 h-full"
       style={{
-        background: 'var(--noir-surface)',
-        borderRight: '1px solid var(--noir-border)',
+        background: C.surface,
+        borderRight: `1px solid ${C.border}`,
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
       } as React.CSSProperties}>
 
-      {/* Logo */}
-      <div className="px-4 py-4 border-b flex items-center justify-center flex-shrink-0"
-        style={{ borderColor: 'var(--noir-border)' }}>
-        <Image src="/logo.jpeg" alt="Elinoja Patrimoine" width={150} height={65}
+      {/* ── Logo ── */}
+      <div style={{
+        padding: '20px 16px 16px',
+        borderBottom: `1px solid ${C.border}`,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '10px',
+        background: C.bg,
+      }}>
+        <Image src="/logo.jpeg" alt="Elinoja Patrimoine" width={130} height={56}
           style={{ objectFit: 'contain' }} />
+        <p style={{ fontSize: '10px', color: C.muted, letterSpacing: '0.06em', textAlign: 'center', margin: 0 }}>
+          L'expertise au service de votre patrimoine
+        </p>
+
+        {/* Badge abonnement */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: '6px',
+          padding: '5px 12px', borderRadius: '20px',
+          background: C.goldDim,
+          border: `1px solid ${C.goldBorder}`,
+        }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.gold, display: 'inline-block' }} />
+          <span style={{ fontSize: '10px', fontWeight: 700, color: C.gold, letterSpacing: '0.08em' }}>
+            {profile.subscription_status === 'active' ? 'ABONNEMENT PREMIUM' :
+             profile.subscription_status === 'trial'  ? "PÉRIODE D'ESSAI" : 'ABONNEMENT EXPIRÉ'}
+          </span>
+        </div>
       </div>
 
-      {/* Badge abonnement */}
-      <div className="px-4 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${
-          profile.subscription_status === 'active' ? 'badge-buy' :
-          profile.subscription_status === 'trial'  ? 'badge-watch' : 'badge-sell'
-        }`}>
-          <div className="w-1.5 h-1.5 rounded-full bg-current" />
-          {profile.subscription_status === 'active' ? 'ABONNEMENT ACTIF' :
-           profile.subscription_status === 'trial'  ? "PÉRIODE D'ESSAI" : 'ABONNEMENT EXPIRÉ'}
-        </span>
-      </div>
+      {/* ── Navigation par sections ── */}
+      <nav style={{ padding: '8px 0', flex: 1 }}>
+        {navSections.map((section) => (
+          <div key={section.label} style={{ marginBottom: '4px' }}>
+            {/* Section label */}
+            <div style={{
+              padding: '10px 16px 4px',
+              fontSize: '9px', fontWeight: 700,
+              color: C.label,
+              letterSpacing: '0.12em',
+            }}>
+              {section.label}
+            </div>
 
-      {/* Navigation */}
-      <nav className="px-3 py-3 space-y-0.5 flex-shrink-0">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href ||
-            (item.href !== '/client' && pathname.startsWith(item.href))
-          const isWatch = item.href === '/client/watchlist'
-          return (
-            <Link key={item.href} href={item.href}>
-              <motion.div whileHover={{ x: 2 }} style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '9px 12px', borderRadius: '8px', fontSize: '13px',
-                fontWeight: isActive ? 500 : 400,
-                color: isActive ? '#D4AF37' : '#707070',
-                background: isActive ? 'rgba(212,175,55,0.08)' : 'transparent',
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}>
-                <item.icon size={16} style={{ flexShrink: 0 }} />
-                <span>{item.label}</span>
-                {isWatch && activeAlerts > 0 && (
-                  <span style={{ marginLeft: 'auto', background: '#FF3B3B', color: '#fff', fontSize: '8px', fontWeight: 700, minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', boxShadow: '0 0 6px rgba(255,59,59,0.6)' }}>
-                    {activeAlerts}
-                  </span>
-                )}
-                {isActive && !(isWatch && activeAlerts > 0) && (
-                  <ChevronRight size={12} style={{ marginLeft: 'auto', color: '#D4AF37' }} />
-                )}
-              </motion.div>
-            </Link>
-          )
-        })}
+            {/* Items */}
+            {section.items.map((item) => {
+              const active = isActive(item.href)
+              const isWatch = item.href === '/client/watchlist'
+              return (
+                <Link key={item.href} href={item.href}>
+                  <motion.div
+                    whileHover={{ x: 3 }}
+                    transition={{ duration: 0.12 }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '8px 16px',
+                      margin: '1px 8px',
+                      borderRadius: '7px',
+                      fontSize: '13px',
+                      fontWeight: active ? 600 : 400,
+                      color: active ? C.gold : '#888888',
+                      background: active ? C.goldDim : 'transparent',
+                      borderLeft: active ? `2px solid ${C.gold}` : '2px solid transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}>
+                    <item.icon size={15} style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }} />
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {(item as any).premium && (
+                      <span style={{
+                        fontSize: '8px', fontWeight: 700, color: C.bg,
+                        background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
+                        padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',
+                      }}>PREMIUM</span>
+                    )}
+                    {isWatch && activeAlerts > 0 && (
+                      <span style={{ background: C.red, color: '#fff', fontSize: '8px', fontWeight: 700, minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', boxShadow: `0 0 6px rgba(255,59,59,0.6)` }}>
+                        {activeAlerts}
+                      </span>
+                    )}
+                    {active && !(isWatch && activeAlerts > 0) && !(item as any).premium && (
+                      <ChevronRight size={11} style={{ color: C.gold, opacity: 0.7 }} />
+                    )}
+                  </motion.div>
+                </Link>
+              )
+            })}
+          </div>
+        ))}
       </nav>
 
-      <div style={{ height: '1px', background: 'var(--noir-border)', margin: '0 16px', flexShrink: 0 }} />
+      {/* ── Séparateur ── */}
+      <div style={{ height: '1px', background: C.border, margin: '0 16px' }} />
 
-      {/* Watchlist */}
+      {/* ── Watchlist ── */}
       <div style={{ flexShrink: 0 }}>
         <div onClick={() => setWatchOpen(o => !o)}
           style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', cursor: 'pointer', userSelect: 'none' }}>
-          <Star size={13} style={{ color: '#D4AF37', flexShrink: 0 }} />
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#707070', letterSpacing: '0.1em', textTransform: 'uppercase', flex: 1 }}>Watchlist</span>
+          <Star size={12} style={{ color: C.gold, flexShrink: 0 }} />
+          <span style={{ fontSize: '9px', fontWeight: 700, color: C.label, letterSpacing: '0.12em', textTransform: 'uppercase', flex: 1 }}>Watchlist</span>
           {activeAlerts > 0 && (
-            <span style={{ fontSize: '8px', fontWeight: 700, color: '#FF3B3B', background: 'rgba(255,59,59,0.1)', padding: '1px 5px', borderRadius: '4px', border: '1px solid rgba(255,59,59,0.2)' }}>
+            <span style={{ fontSize: '8px', fontWeight: 700, color: C.red, background: 'rgba(255,59,59,0.1)', padding: '1px 5px', borderRadius: '4px', border: `1px solid rgba(255,59,59,0.2)` }}>
               {activeAlerts} alerte{activeAlerts > 1 ? 's' : ''}
             </span>
           )}
           <button onClick={e => { e.stopPropagation(); handleRefresh() }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: '#3A3A3A', display: 'flex' }}>
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: C.label, display: 'flex' }}>
             <RefreshCw size={11} style={{ transition: 'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
           </button>
-          <ChevronDown size={12} style={{ color: '#3A3A3A', transition: 'transform 0.2s', transform: watchOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
+          <ChevronDown size={12} style={{ color: C.label, transition: 'transform 0.2s', transform: watchOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
         </div>
         <AnimatePresence initial={false}>
           {watchOpen && (
@@ -231,9 +306,9 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
               style={{ overflow: 'hidden' }}>
               <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
                 {watchLoading
-                  ? [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: '80px', borderRadius: '10px' }} />)
+                  ? [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: '80px', borderRadius: '8px' }} />)
                   : items.length === 0
-                  ? <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '11px', color: '#3A3A3A' }}>Aucun titre en watchlist</div>
+                  ? <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '11px', color: C.label }}>Aucun titre en watchlist</div>
                   : items.map(item => <WatchMiniCard key={item.id} item={item} />)
                 }
               </div>
@@ -242,17 +317,24 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </AnimatePresence>
       </div>
 
-      {/* Footer */}
-      <div className="p-4 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-            style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
+      {/* ── Footer profil ── */}
+      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.bg }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '13px', fontWeight: 700, flexShrink: 0,
+            background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
+            color: C.bg,
+            boxShadow: `0 0 10px rgba(212,175,55,0.3)`,
+          }}>
             {profile.full_name?.charAt(0) || 'C'}
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium truncate" style={{ color: '#F5F5F5' }}>{profile.full_name}</div>
-            <div className="text-xs truncate" style={{ color: '#5C5C5C' }}>Investisseur</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.full_name}</div>
+            <div style={{ fontSize: '10px', color: C.muted }}>Profil investisseur</div>
           </div>
+          <ChevronRight size={14} style={{ color: C.label, flexShrink: 0 }} />
         </div>
       </div>
     </aside>
@@ -271,27 +353,25 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         .wmc-glow-high  { animation: wmc-glow-high 2s ease-in-out infinite; }
       `}</style>
 
-      {/* ── DESKTOP : rendu normal (null = SSR, on attend hydratation) ── */}
+      {/* ── DESKTOP ── */}
       {(isMobile === false || isMobile === null) && sidebar}
 
-      {/* ── MOBILE : bouton + drawer ── */}
+      {/* ── MOBILE ── */}
       {isMobile && (
         <>
-          {/* Bouton hamburger flottant — positionné dans le header existant */}
           <button
             onClick={() => setMenuOpen(v => !v)}
             style={{
               position: 'fixed', top: 10, left: 14, zIndex: 202,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 36, height: 36, borderRadius: 8,
-              background: menuOpen ? 'rgba(212,175,55,0.15)' : 'rgba(212,175,55,0.08)',
-              border: '1px solid rgba(212,175,55,0.25)',
-              color: '#D4AF37', cursor: 'pointer',
+              background: menuOpen ? C.goldDim : 'rgba(212,175,55,0.06)',
+              border: `1px solid ${C.goldBorder}`,
+              color: C.gold, cursor: 'pointer',
             }}>
             {menuOpen ? <X size={16} /> : <Menu size={16} />}
           </button>
 
-          {/* Backdrop + drawer */}
           <AnimatePresence>
             {menuOpen && (
               <>
@@ -299,7 +379,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   key="bd"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   onClick={() => setMenuOpen(false)}
-                  style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.65)' }}
+                  style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)' }}
                 />
                 <motion.div
                   key="drawer"
@@ -309,8 +389,8 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   style={{
                     position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 201,
                     width: '85vw', maxWidth: 320,
-                    background: 'var(--noir-surface)',
-                    boxShadow: '4px 0 24px rgba(0,0,0,0.6)',
+                    background: C.surface,
+                    boxShadow: '4px 0 32px rgba(0,0,0,0.8)',
                     overflowY: 'auto', WebkitOverflowScrolling: 'touch',
                   } as React.CSSProperties}>
                   {sidebar}
