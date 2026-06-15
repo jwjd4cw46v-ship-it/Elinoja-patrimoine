@@ -10,14 +10,18 @@ import Link from 'next/link'
 import type { TechnicalAnalysis, Announcement } from '@/types'
 
 export default function ClientDashboard() {
-  const [analyses, setAnalyses] = useState<TechnicalAnalysis[]>([])
+  const [analyses, setAnalyses]           = useState<TechnicalAnalysis[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
-  const [newItem, setNewItem] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [fundamentals, setFundamentals]   = useState<any[]>([])
+  const [articles, setArticles]           = useState<any[]>([])
+  const [cmfPubs, setCmfPubs]             = useState<any[]>([])
+  const [forumPosts, setForumPosts]       = useState<any[]>([])
+  const [newItem, setNewItem]             = useState<string | null>(null)
+  const [loading, setLoading]             = useState(true)
   const supabase = createClient()
 
   async function fetchData() {
-    const [{ data: ta }, { data: ann }] = await Promise.all([
+    const [{ data: ta }, { data: ann }, { data: fa }, { data: art }, { data: cmf }, { data: forum }] = await Promise.all([
       supabase
         .from('technical_analyses')
         .select('*')
@@ -30,10 +34,35 @@ export default function ClientDashboard() {
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(3),
+      supabase
+        .from('fundamental_analyses')
+        .select('id, ticker, company_name, recommendation, target_price, created_at')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(4),
+      supabase
+        .from('announcements')
+        .select('id, title, type, created_at')
+        .order('created_at', { ascending: false })
+        .limit(4),
+      supabase
+        .from('cmf_announcements')
+        .select('id, title, company, ticker, category')
+        .order('id', { ascending: false })
+        .limit(4),
+      supabase
+        .from('forum_posts')
+        .select('id, titre, replies_count, likes_count, created_at, profiles(full_name)')
+        .order('created_at', { ascending: false })
+        .limit(4),
     ])
 
-    if (ta) setAnalyses(ta as any)
-    if (ann) setAnnouncements(ann as any)
+    if (ta)    setAnalyses(ta as any)
+    if (ann)   setAnnouncements(ann as any)
+    if (fa)    setFundamentals(fa)
+    if (art)   setArticles(art)
+    if (cmf)   setCmfPubs(cmf)
+    if (forum) setForumPosts(forum)
     setLoading(false)
   }
 
@@ -246,6 +275,161 @@ export default function ClientDashboard() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Analyses fondamentales */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold" style={{ color: '#F5F5F5' }}>
+            Dernières analyses fondamentales
+          </h2>
+          <Link href="/client/fondamentales"
+            className="flex items-center gap-1 text-xs transition-colors"
+            style={{ color: '#5C5C5C' }}
+            onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+            onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+            Voir toutes <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {fundamentals.map((f, i) => {
+            const recoCfg: Record<string, { label: string; cls: string }> = {
+              buy:   { label: 'ACHAT',  cls: 'badge-buy'  },
+              sell:  { label: 'VENTE',  cls: 'badge-sell' },
+              hold:  { label: 'NEUTRE', cls: 'badge-hold' },
+              watch: { label: 'VEILLE', cls: 'badge-watch' },
+            }
+            const reco = recoCfg[f.recommendation] ?? { label: (f.recommendation ?? '—').toUpperCase(), cls: 'badge-watch' }
+            return (
+              <motion.div key={f.id}
+                initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="card-premium p-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background: 'rgba(33,150,243,0.1)', color: '#2196F3' }}>
+                  {f.ticker?.slice(0, 3)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate" style={{ color: '#F5F5F5' }}>{f.company_name}</div>
+                  <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                    {f.target_price ? `Objectif : ${f.target_price} DT` : format(new Date(f.created_at), 'dd MMM yyyy', { locale: fr })}
+                  </div>
+                </div>
+                <span className={`${reco.cls} text-[10px] font-bold px-2 py-0.5 rounded flex-shrink-0`}>{reco.label}</span>
+              </motion.div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Articles + CMF */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Derniers articles */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold" style={{ color: '#F5F5F5' }}>Derniers articles</h2>
+            <Link href="/client/annonces"
+              className="flex items-center gap-1 text-xs transition-colors"
+              style={{ color: '#5C5C5C' }}
+              onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+              Voir tous <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className="card-premium divide-y" style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+            {articles.length === 0
+              ? <p className="text-sm text-center py-6" style={{ color: '#5C5C5C' }}>Aucun article</p>
+              : articles.map(a => (
+                <div key={a.id} className="flex items-center gap-3 p-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(212,175,55,0.1)', color: '#D4AF37' }}>
+                    <FileText size={14} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: '#F5F5F5' }}>{a.title}</div>
+                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                      {format(new Date(a.created_at), 'dd MMM yyyy', { locale: fr })} · {a.type ?? 'Article'}
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded badge-watch flex-shrink-0">
+                    {(a.type ?? 'ARTICLE').toUpperCase()}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        {/* Publications CMF */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold" style={{ color: '#F5F5F5' }}>Publications CMF</h2>
+            <Link href="/client/cmf"
+              className="flex items-center gap-1 text-xs transition-colors"
+              style={{ color: '#5C5C5C' }}
+              onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+              Voir toutes <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className="card-premium divide-y" style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+            {cmfPubs.length === 0
+              ? <p className="text-sm text-center py-6" style={{ color: '#5C5C5C' }}>Aucune publication</p>
+              : cmfPubs.map(c => (
+                <div key={c.id} className="flex items-center gap-3 p-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ background: 'rgba(255,152,0,0.1)', color: '#FF9800' }}>
+                    {c.ticker?.slice(0, 3) ?? <FileText size={14} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: '#F5F5F5' }}>{c.title}</div>
+                    <div className="text-xs" style={{ color: '#5C5C5C' }}>{c.company} · {c.category ?? 'CMF'}</div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded flex-shrink-0"
+                    style={{ background: 'rgba(255,152,0,0.1)', color: '#FF9800', border: '1px solid rgba(255,152,0,0.2)' }}>
+                    CMF
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Forum */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold" style={{ color: '#F5F5F5' }}>Derniers sujets de discussion</h2>
+          <Link href="/client/forum"
+            className="flex items-center gap-1 text-xs transition-colors"
+            style={{ color: '#5C5C5C' }}
+            onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+            onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+            Voir tous <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {forumPosts.map((p, i) => (
+            <motion.div key={p.id}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              className="card-premium p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                style={{ background: 'rgba(156,39,176,0.1)', color: '#CE93D8' }}>
+                {(p.profiles as any)?.full_name?.charAt(0) ?? '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate" style={{ color: '#F5F5F5' }}>{p.titre}</div>
+                <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                  {(p.profiles as any)?.full_name ?? 'Anonyme'} · {p.replies_count ?? 0} réponse{(p.replies_count ?? 0) > 1 ? 's' : ''}
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded flex-shrink-0"
+                style={{ background: 'rgba(156,39,176,0.1)', color: '#CE93D8', border: '1px solid rgba(156,39,176,0.2)' }}>
+                FORUM
+              </span>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </div>
   )
