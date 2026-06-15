@@ -25,7 +25,10 @@ export default async function ClientLayout({
     <div
       className="flex"
       style={{ height: '100dvh', overflow: 'hidden', background: 'var(--noir-primary)' }}>
-      <div style={{ height: '100%', flexShrink: 0 } as React.CSSProperties}>
+      <div className="hidden md:block" style={{ height: '100%', flexShrink: 0 } as React.CSSProperties}>
+        <ClientSidebar profile={profile} />
+      </div>
+      <div className="md:hidden">
         <ClientSidebar profile={profile} />
       </div>
       <div className="flex-1 flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
