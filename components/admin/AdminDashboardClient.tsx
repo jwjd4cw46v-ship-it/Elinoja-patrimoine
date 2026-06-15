@@ -23,6 +23,10 @@ interface Props {
   }
   recentAnalyses: any[]
   recentClients: any[]
+  recentFundamentals: any[]
+  recentArticles: any[]
+  recentCmf: any[]
+  recentPosts: any[]
 }
 
 const signalConfig = {
@@ -32,7 +36,7 @@ const signalConfig = {
   watch: { label: 'VEILLE', className: 'badge-watch' },
 }
 
-export default function AdminDashboardClient({ stats, recentAnalyses, recentClients }: Props) {
+export default function AdminDashboardClient({ stats, recentAnalyses, recentClients, recentFundamentals, recentArticles, recentCmf, recentPosts }: Props) {
   const [liveStats, setLiveStats] = useState(stats)
   const supabase = createClient()
 
@@ -219,6 +223,212 @@ export default function AdminDashboardClient({ stats, recentAnalyses, recentClie
             ))}
           </div>
         </motion.div>
+      </div>
+
+      {/* Second row — 4 new sections */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        {/* Analyses fondamentales récentes */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="card-premium p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold" style={{ color: '#F5F5F5' }}>
+              Analyses fondamentales
+            </h3>
+            <Link href="/admin/analyses-fondamentales"
+              className="text-xs transition-colors"
+              style={{ color: '#5C5C5C' }}
+              onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+              Voir tout →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {recentFundamentals.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: '#5C5C5C' }}>
+                Aucune analyse publiée
+              </p>
+            ) : recentFundamentals.map((a) => {
+              const cfg = signalConfig[a.recommendation as keyof typeof signalConfig] ?? { label: a.recommendation?.toUpperCase() ?? '—', className: 'badge-watch' }
+              return (
+                <div key={a.id}
+                  className="flex items-center justify-between py-2.5 border-b last:border-0"
+                  style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ background: 'rgba(33,150,243,0.1)', color: '#2196F3' }}>
+                      {a.ticker?.slice(0, 3) || 'N/A'}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium line-clamp-1" style={{ color: '#F5F5F5' }}>
+                        {a.company_name ?? a.title}
+                      </div>
+                      <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                        {format(new Date(a.created_at), 'dd MMM yyyy', { locale: fr })}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`${cfg.className} text-[10px] font-bold px-2 py-0.5 rounded`}>
+                    {cfg.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </motion.div>
+
+        {/* Derniers articles */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="card-premium p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold" style={{ color: '#F5F5F5' }}>
+              Derniers articles
+            </h3>
+            <Link href="/admin/annonces"
+              className="text-xs transition-colors"
+              style={{ color: '#5C5C5C' }}
+              onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+              Voir tout →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {recentArticles.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: '#5C5C5C' }}>
+                Aucun article publié
+              </p>
+            ) : recentArticles.map((a) => (
+              <div key={a.id}
+                className="flex items-center justify-between py-2.5 border-b last:border-0"
+                style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: 'rgba(212,175,55,0.1)', color: '#D4AF37' }}>
+                    <FileText size={14} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium line-clamp-1" style={{ color: '#F5F5F5' }}>
+                      {a.title}
+                    </div>
+                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                      {format(new Date(a.created_at), 'dd MMM yyyy', { locale: fr })} · {a.type ?? 'Article'}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded badge-watch">
+                  {(a.type ?? 'ARTICLE').toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Publications CMF récentes */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8 }}
+          className="card-premium p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold" style={{ color: '#F5F5F5' }}>
+              Publications CMF
+            </h3>
+            <Link href="/admin/cmf"
+              className="text-xs transition-colors"
+              style={{ color: '#5C5C5C' }}
+              onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+              Voir tout →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {recentCmf.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: '#5C5C5C' }}>
+                Aucune publication CMF
+              </p>
+            ) : recentCmf.map((c) => (
+              <div key={c.id}
+                className="flex items-center justify-between py-2.5 border-b last:border-0"
+                style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ background: 'rgba(255,152,0,0.1)', color: '#FF9800' }}>
+                    {c.ticker?.slice(0, 3) || <FileText size={14} />}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium line-clamp-1" style={{ color: '#F5F5F5' }}>
+                      {c.title}
+                    </div>
+                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                      {c.company} · {c.category ?? 'CMF'}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded"
+                  style={{ background: 'rgba(255,152,0,0.1)', color: '#FF9800', border: '1px solid rgba(255,152,0,0.2)' }}>
+                  CMF
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Derniers sujets de discussion */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.9 }}
+          className="card-premium p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold" style={{ color: '#F5F5F5' }}>
+              Sujets de discussion
+            </h3>
+            <Link href="/admin/forum"
+              className="text-xs transition-colors"
+              style={{ color: '#5C5C5C' }}
+              onMouseOver={e => (e.currentTarget.style.color = '#D4AF37')}
+              onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+              Voir tout →
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {recentPosts.length === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: '#5C5C5C' }}>
+                Aucun sujet de discussion
+              </p>
+            ) : recentPosts.map((p) => (
+              <div key={p.id}
+                className="flex items-center justify-between py-2.5 border-b last:border-0"
+                style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ background: 'rgba(156,39,176,0.1)', color: '#CE93D8' }}>
+                    {p.profiles?.full_name?.charAt(0) ?? '?'}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium line-clamp-1" style={{ color: '#F5F5F5' }}>
+                      {p.titre}
+                    </div>
+                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                      {p.profiles?.full_name ?? 'Anonyme'} · {p.replies_count ?? 0} réponse{(p.replies_count ?? 0) > 1 ? 's' : ''}
+                    </div>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded"
+                  style={{ background: 'rgba(156,39,176,0.1)', color: '#CE93D8', border: '1px solid rgba(156,39,176,0.2)' }}>
+                  FORUM
+                </span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
       </div>
     </div>
   )
