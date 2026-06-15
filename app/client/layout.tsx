@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import ClientSidebar from '@/components/client/ClientSidebar'
 import ClientHeader from '@/components/client/ClientHeader'
+import { ElinojaAI } from '@/components/ai/ElinojaAI'
 
 export default async function ClientLayout({
   children,
@@ -10,7 +11,6 @@ export default async function ClientLayout({
 }) {
   const supabase = createClient()
   const { data: { session } } = await supabase.auth.getSession()
-
   if (!session) redirect('/auth/login')
 
   const { data: profile } = await supabase
@@ -24,24 +24,18 @@ export default async function ClientLayout({
   return (
     <div
       className="flex"
-      style={{
-        height:   '100dvh', // dynamic viewport height — corrige Safari/iOS
-        overflow: 'hidden',
-        background: 'var(--noir-primary)',
-      }}
-    >
-      {/* Sidebar : scroll indépendant */}
-      <div style={{ height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch', flexShrink: 0 } as React.CSSProperties}>
+      style={{ height: '100dvh', overflow: 'hidden', background: 'var(--noir-primary)' }}>
+      <div className="hidden md:block" style={{ height: '100%', flexShrink: 0 } as React.CSSProperties}>
         <ClientSidebar profile={profile} />
       </div>
-
-      {/* Zone principale */}
+      <div className="md:hidden">
+        <ClientSidebar profile={profile} />
+      </div>
       <div className="flex-1 flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
         <ClientHeader profile={profile} />
-        <main className="flex-1 overflow-y-auto p-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
+      <ElinojaAI profile={profile} />
     </div>
   )
 }
