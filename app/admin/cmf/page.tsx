@@ -5,6 +5,25 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Trash2, Edit, FileText, Upload, X, AlertCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
+async function extractTextFromPDF(file: File): Promise<string> {
+  try {
+    // Import dynamique pour éviter le SSR
+    const pdfjsLib = await import('pdfjs-dist')
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
+    const arrayBuffer = await file.arrayBuffer()
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    let fullText = ''
+    for (let i = 1; i <= Math.min(pdf.numPages, 10); i++) {
+      const page = await pdf.getPage(i)
+      const textContent = await page.getTextContent()
+      const pageText = textContent.items.map((item: any) => item.str).join(' ')
+      fullText += pageText + '\n'
+    }
+    return fullText.slice(0, 15000)
+  } catch {
+    return ''
+  }
+}
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { CmfAnnouncement } from '@/types'
@@ -137,6 +156,16 @@ function CmfForm({ item, onClose, onSaved }: { item: CmfAnnouncement | null; onC
         const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filename)
         pdf_url = publicUrl
         pdf_filename = pdfFile.name
+        if (!form.content) {
+          toast.loading('Extraction du texte PDF...', { id: 'pdf-extract' })
+          const extractedText = await extractTextFromPDF(pdfFile)
+          if (extractedText) {
+            setForm(prev => ({ ...prev, content: extractedText }))
+            toast.success('Texte extrait automatiquement', { id: 'pdf-extract' })
+          } else {
+            toast.dismiss('pdf-extract')
+          }
+        }
       }
     }
 

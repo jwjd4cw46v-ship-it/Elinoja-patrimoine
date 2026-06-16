@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "middleware": {
+    "/": {
+      "files": [
+        "prerender-manifest.js",
+        "server/edge-runtime-webpack.js",
+        "server/middleware.js"
+      ],
+      "name": "middleware",
+      "page": "/",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?(?:\\/((?!_next\\/static|_next\\/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*))(.json)?[\\/#\\?]?$",
+          "originalSource": "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "environments": {
+        "previewModeId": "4501674990a3beb05d323d618fbda91c",
+        "previewModeSigningKey": "159d56d18966378410889d345bb6a61d4d349a6afd1987c31f326cfd45ffeb6d",
+        "previewModeEncryptionKey": "d982c6bb4b2f03c44be36992e1a4500c8dd15d186c938586e6a1e4b005b5d539"
+      }
+    }
+  },
+  "functions": {
+    "/api/ai/chat/route": {
+      "files": [
+        "server/middleware-build-manifest.js",
+        "server/middleware-react-loadable-manifest.js",
+        "server/next-font-manifest.js",
+        "server/interception-route-rewrite-manifest.js",
+        "prerender-manifest.js",
+        "server/edge-runtime-webpack.js",
+        "server/app/api/ai/chat/route.js"
+      ],
+      "name": "app/api/ai/chat/route",
+      "page": "/api/ai/chat/route",
+      "matchers": [
+        {
+          "regexp": "^/api/ai/chat$",
+          "originalSource": "/api/ai/chat"
+        }
+      ],
+      "wasm": [],
+      "assets": [],
+      "environments": {
+        "previewModeId": "4501674990a3beb05d323d618fbda91c",
+        "previewModeSigningKey": "159d56d18966378410889d345bb6a61d4d349a6afd1987c31f326cfd45ffeb6d",
+        "previewModeEncryptionKey": "d982c6bb4b2f03c44be36992e1a4500c8dd15d186c938586e6a1e4b005b5d539"
+      }
+    }
+  },
+  "sortedMiddleware": [
+    "/"
+  ]
+}

@@ -44,6 +44,11 @@ interface Entreprise {
   dividende_2030: number | null
   benefice_par_action: number | null
   rendement_dividende: number | null
+  // Données bilan (ajoutées via migration SQL)
+  bpa_previsionnel: number | null
+  capitaux_propres: number | null
+  total_actifs: number | null
+  total_dettes: number | null
 }
 
 // cotations = map MNEMO → cours (number), identique à la page admin
@@ -92,41 +97,24 @@ function buildChartData(e: Entreprise) {
 /** Compute ratios from entreprise + live cours */
 function computeRatios(e: Entreprise, cours: number | null) {
   const titres = e.titres_admis
+
+  // Valorisation boursière = cours live × titres admis
   const capitalisation = cours && titres ? cours * titres : null
 
-  // BPA : utilise RN n-1 (2025) en priorité, sinon n-2 (2024)
-  // RN est en millions → on ramène en unités pour diviser par titres
-  const currentRN = e.resultat_net_2025 ?? e.resultat_net_2024 ?? null
-  const bpaCalc = (currentRN != null && titres && titres > 0)
-    ? (currentRN * 1_000_000) / titres
+  // BPA = resultat_net_2025 (en millions) × 1_000_000 / titres_admis
+  const bpa = (e.resultat_net_2025 != null && titres && titres > 0)
+    ? (e.resultat_net_2025 * 1_000_000) / titres
     : null
-  const bpa = e.benefice_par_action ?? bpaCalc
 
-  // PER = cours / BPA
+  // PER = cours live / BPA
   const per = (cours && bpa && bpa !== 0) ? cours / bpa : null
 
-  // Dividende courant : n-1 (2025) en priorité
-  const currentDiv = e.dividende_2025 ?? e.dividende_2024 ?? null
-
-  // Rendement dividende = div / cours × 100
-  const rendCalc = (currentDiv != null && cours && cours > 0)
-    ? (currentDiv / cours) * 100
-    : null
-  const rendement = e.rendement_dividende ?? rendCalc
-
-  // Pay-out = div / BPA × 100
-  const payOut = (currentDiv != null && bpa && bpa !== 0)
-    ? (currentDiv / bpa) * 100
-    : null
-
   // Croissance RN : (RN_2025 - RN_2024) / |RN_2024| × 100
-  const rn_nm1 = e.resultat_net_2025  // n-1
-  const rn_nm2 = e.resultat_net_2024  // n-2
-  const rnGrowth = (rn_nm1 != null && rn_nm2 != null && rn_nm2 !== 0)
-    ? ((rn_nm1 - rn_nm2) / Math.abs(rn_nm2)) * 100
+  const rnGrowth = (e.resultat_net_2025 != null && e.resultat_net_2024 != null && e.resultat_net_2024 !== 0)
+    ? ((e.resultat_net_2025 - e.resultat_net_2024) / Math.abs(e.resultat_net_2024)) * 100
     : null
 
-  return { capitalisation, bpa, per, rendement, payOut, rnGrowth }
+  return { capitalisation, bpa, per, rnGrowth }
 }
 
 /* ─────────────────────────────────────────────
@@ -286,10 +274,7 @@ export default function ClientFondamentalesPage() {
 
   function getEntreprise(a: FundamentalAnalysis): Entreprise | null {
     const ticker = a.ticker.toUpperCase()
-    return entreprises.find(e =>
-      e.mnemo?.toUpperCase() === ticker ||
-      e.valeur?.toUpperCase().includes(ticker)
-    ) ?? null
+    return entreprises.find(e => e.mnemo?.toUpperCase() === ticker) ?? null
   }
 
   /* ── Filter ── */
@@ -446,8 +431,8 @@ export default function ClientFondamentalesPage() {
                   <div className="text-center p-2 rounded"
                     style={{ background: 'rgba(255,255,255,0.02)' }}>
                     <div className="text-xs font-mono"
-                      style={{ color: ratios?.rendement && ratios.rendement > 3 ? '#00C853' : '#A0A0A0' }}>
-                      {ratios?.rendement ? `${ratios.rendement.toFixed(2)}%` : '—'}
+                      style={{ color: a.dividend_yield && Number(a.dividend_yield) > 3 ? '#00C853' : '#A0A0A0' }}>
+                      {a.dividend_yield != null ? `${Number(a.dividend_yield).toFixed(2)}%` : '—'}
                     </div>
                     <div className="text-[10px]" style={{ color: '#4A4A4A' }}>Rend. div.</div>
                   </div>
@@ -514,12 +499,12 @@ function FundamentalDetailModal({
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center p-2 sm:p-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.85)' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div
         initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95 }}
-        className="w-full max-w-3xl rounded-2xl border my-8 overflow-hidden"
+        className="w-full max-w-3xl rounded-2xl border my-2 sm:my-8 overflow-hidden"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
         {/* ── Modal header ── */}
@@ -544,7 +529,7 @@ function FundamentalDetailModal({
           </div>
         </div>
 
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[80vh]">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto" style={{ maxHeight: 'calc(100dvh - 120px)' }}>
 
           {/* ── 1. Cours / Objectif / Potentiel ── */}
           <div className="grid grid-cols-3 gap-3">
@@ -606,36 +591,58 @@ function FundamentalDetailModal({
               </span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {/* Calculés avec le cours live */}
               <RatioBadge
                 label="PER"
-                value={ratios?.per ? ratios.per.toFixed(1) : (a.pe_ratio?.toFixed(1) || null)}
+                value={ratios?.per != null ? ratios.per.toFixed(1) : null}
                 color={ratios?.per && ratios.per < 15 ? '#00C853' : ratios?.per && ratios.per > 25 ? '#FF1744' : '#F5F5F5'}
-                sub={ratios?.per ? 'cours / BPA' : undefined}
+                sub="cours / BPA"
               />
               <RatioBadge
                 label="BPA (Bén. / action)"
-                value={ratios?.bpa ? fmt(ratios.bpa, 3) : null}
+                value={ratios?.bpa != null ? fmt(ratios.bpa, 3) : null}
                 color="#A0A0A0"
-                sub="RN / titres admis"
+                sub="RN 2025 / titres admis"
               />
+              {/* Directement depuis fundamental_analyses */}
               <RatioBadge
                 label="Rend. dividende"
-                value={ratios?.rendement ? ratios.rendement.toFixed(2) : (a.dividend_yield?.toFixed(2) || null)}
+                value={a.dividend_yield != null ? Number(a.dividend_yield).toFixed(2) : null}
                 suffix="%"
-                color={ratios?.rendement && ratios.rendement > 4 ? '#00C853' : '#A0A0A0'}
+                color={a.dividend_yield && Number(a.dividend_yield) > 4 ? '#00C853' : '#A0A0A0'}
                 sub="div. / cours × 100"
               />
               <RatioBadge
-                label="Pay-out ratio"
-                value={ratios?.payOut ? ratios.payOut.toFixed(1) : null}
-                suffix="%"
-                color={ratios?.payOut && ratios.payOut > 100 ? '#FF1744' : '#A0A0A0'}
-                sub="div. / BPA × 100"
+                label="PER Forward"
+                value={a.forward_pe != null ? Number(a.forward_pe).toFixed(1) : null}
+                color="#A0A0A0"
               />
-              <RatioBadge label="ROE" value={a.roe?.toFixed(1) || null} suffix="%" color={a.roe && a.roe > 15 ? '#00C853' : '#A0A0A0'} />
-              <RatioBadge label="ROA" value={a.roa?.toFixed(1) || null} suffix="%" color={a.roa && a.roa > 8 ? '#00C853' : '#A0A0A0'} />
-              <RatioBadge label="D/E ratio" value={a.debt_to_equity?.toFixed(2) || null} color={a.debt_to_equity && a.debt_to_equity > 1 ? '#FF1744' : '#A0A0A0'} />
-              <RatioBadge label="PER Forward" value={a.forward_pe?.toFixed(1) || null} color="#A0A0A0" />
+              <RatioBadge
+                label="ROE"
+                value={a.roe != null ? Number(a.roe).toFixed(1) : null}
+                suffix="%"
+                color={Number(a.roe) > 15 ? '#00C853' : '#A0A0A0'}
+                sub="RN / cap. propres × 100"
+              />
+              <RatioBadge
+                label="ROA"
+                value={a.roa != null ? Number(a.roa).toFixed(1) : null}
+                suffix="%"
+                color={Number(a.roa) > 8 ? '#00C853' : '#A0A0A0'}
+                sub="RN / total actifs × 100"
+              />
+              <RatioBadge
+                label="D/E ratio"
+                value={a.debt_to_equity != null ? Number(a.debt_to_equity).toFixed(2) : null}
+                color={Number(a.debt_to_equity) > 1 ? '#FF1744' : '#A0A0A0'}
+                sub="dettes / cap. propres"
+              />
+              <RatioBadge
+                label="Croiss. bénéfices"
+                value={a.earnings_growth != null ? Number(a.earnings_growth).toFixed(1) : null}
+                suffix="%"
+                color={Number(a.earnings_growth) > 0 ? '#00C853' : '#FF1744'}
+              />
             </div>
           </div>
 

@@ -22,18 +22,47 @@ async function getDashboardStats() {
     supabase.from('cmf_announcements').select('*', { count: 'exact', head: true }),
   ])
 
-  const { data: recentAnalyses } = await supabase
-    .from('technical_analyses')
-    .select('id, title, ticker, signal, created_at, status')
-    .order('created_at', { ascending: false })
-    .limit(5)
-
-  const { data: recentClients } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, created_at, subscription_status')
-    .eq('role', 'client')
-    .order('created_at', { ascending: false })
-    .limit(5)
+  const [
+    { data: recentAnalyses },
+    { data: recentClients },
+    { data: recentFundamentals },
+    { data: recentArticles },
+    { data: recentCmf },
+    { data: recentPosts },
+  ] = await Promise.all([
+    supabase
+      .from('technical_analyses')
+      .select('id, title, ticker, signal, created_at, status')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('profiles')
+      .select('id, full_name, email, created_at, subscription_status')
+      .eq('role', 'client')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('fundamental_analyses')
+      .select('id, ticker, company_name, recommendation, created_at')
+      .eq('status', 'published')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('announcements')
+      .select('id, title, type, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabase
+      .from('cmf_announcements')
+      .select('id, title, company, ticker, category')
+      .order('id', { ascending: false })
+      .limit(5),
+    supabase
+      .from('forum_posts')
+      .select('id, titre, replies_count, created_at, profiles(full_name)')
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ])
 
   return {
     stats: {
@@ -45,8 +74,12 @@ async function getDashboardStats() {
       fundamentalCount:  fundamentalCount || 0,
       cmfCount:          cmfCount || 0,
     },
-    recentAnalyses: recentAnalyses || [],
-    recentClients:  recentClients || [],
+    recentAnalyses:     recentAnalyses     || [],
+    recentClients:      recentClients      || [],
+    recentFundamentals: recentFundamentals || [],
+    recentArticles:     recentArticles     || [],
+    recentCmf:          recentCmf          || [],
+    recentPosts:        recentPosts        || [],
   }
 }
 
