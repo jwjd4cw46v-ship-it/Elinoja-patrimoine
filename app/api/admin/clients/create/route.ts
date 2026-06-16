@@ -33,10 +33,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
     }
 
-    // Create profile
+    // Upsert profile — handles case where trigger already created the row
     const { error: profileError } = await serviceSupabase
       .from('profiles')
-      .insert({
+      .upsert({
         id:                  authData.user.id,
         email,
         full_name,
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         role:                'client',
         subscription_status: subscription_status || 'active',
         is_active:           is_active ?? true,
-      })
+      }, { onConflict: 'id' })
 
     if (profileError) {
       // Rollback: delete auth user
