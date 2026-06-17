@@ -483,9 +483,9 @@ function PostDetailModal({ post, replies, replyText, replyImage, submitting, isL
           ))}
         </div>
 
-        {/* Zone de réponse — fixée en bas */}
+        {/* Zone de réponse — fixée en bas, padding pour éviter le bouton IA flottant */}
         {!post.is_locked && (
-          <div className="px-4 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+          <div className="px-4 pt-3 pb-20 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
 
             {/* Prévisualisation image */}
             {preview && (
