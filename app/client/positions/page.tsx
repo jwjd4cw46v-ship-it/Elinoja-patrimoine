@@ -667,6 +667,36 @@ export default function PositionsDashboard() {
         if (nom && last != null) map[nom] = last
       })
       setCotations(map)
+      // Détecter et créer les alertes pour chaque position
+      await detecterEtCreerAlertes(map)
+    } catch (_) {}
+  }
+
+  async function detecterEtCreerAlertes(cotationsMap: Record<string, number>) {
+    try {
+      const { data: pos } = await supabase
+        .from('positions').select('*').neq('state', 'CLOSED')
+      const { data: alertesExist } = await supabase
+        .from('position_alertes').select('*').eq('is_acted', false)
+      if (!pos) return
+
+      for (const p of pos as Position[]) {
+        const prix = cotationsMap[p.ticker.toUpperCase()]
+        if (!prix) continue
+        const alertesDeja = (alertesExist || []).filter(a => a.position_id === p.id) as AlertePosition[]
+        const nouvelles = detecterAlertes(p, prix, alertesDeja)
+        for (const a of nouvelles) {
+          await supabase.from('position_alertes').insert({
+            position_id:  p.id,
+            type:         a.type,
+            prix_trigger: a.prix_trigger,
+            prix_marche:  prix,
+            is_read:      false,
+            is_acted:     false,
+          })
+        }
+      }
+      if (pos.length > 0) fetchAll()
     } catch (_) {}
   }
 
@@ -799,7 +829,7 @@ export default function PositionsDashboard() {
             <span className="text-xs font-semibold tracking-wider" style={{ color: '#5C5C5C' }}>
               POSITIONS OUVERTES
             </span>
-            <Link href="/client/positions/voir-tout"
+            <Link href="/client/positions/historique"
               className="text-xs flex items-center gap-1" style={{ color: '#D4AF37' }}>
               Voir tout <ChevronRight size={11} />
             </Link>
