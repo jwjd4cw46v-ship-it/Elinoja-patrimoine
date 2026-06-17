@@ -156,19 +156,22 @@ export async function GET() {
     if (ageSec < 60) {
       // Données fraîches en base, on les retourne directement
       const data = await getFromBase(today)
-      return NextResponse.json(
-        {
-          source:      'cache',
-          bvmt_ouverte: true,
-          cached_il_y_a: Math.round(ageSec) + 's',
-          count:       data.length,
-          markets:     dbToMarkets(data),
-        },
-        { headers: { 'Cache-Control': 'public, max-age=30' } }
-      )
+      // Si la base est vide malgré un updated_at récent, on force l'API
+      if (data.length > 0) {
+        return NextResponse.json(
+          {
+            source:        'cache',
+            bvmt_ouverte:  true,
+            cached_il_y_a: Math.round(ageSec) + 's',
+            count:         data.length,
+            markets:       dbToMarkets(data),
+          },
+          { headers: { 'Cache-Control': 'public, max-age=30' } }
+        )
+      }
     }
 
-    // 3. Cache périmé → appel API BVMT
+    // 3. Cache absent/vide/périmé → appel API BVMT
     let bvmtData
     try {
       bvmtData = await fetchFromBvmt()
