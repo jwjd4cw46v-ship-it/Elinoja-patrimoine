@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY // service key pour écriture
-)
+// Instancié à la demande pour éviter l'erreur "supabaseUrl is required" au build
+function getSupabase() {
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_KEY
+  )
+}
 
 const BVMT_URL = 'https://www.bvmt.com.tn/rest_api/rest/market/groups/11,12,52,95,99'
 
@@ -41,6 +44,7 @@ function isBvmtOuverte() {
 }
 
 async function getFromBase(today) {
+  const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cotations')
     .select('*')
@@ -52,6 +56,7 @@ async function getFromBase(today) {
 }
 
 async function getLastUpdateFromBase(today) {
+  const supabase = getSupabase()
   const { data } = await supabase
     .from('cotations')
     .select('updated_at')
@@ -77,6 +82,7 @@ async function fetchFromBvmt() {
 }
 
 async function upsertCotations(markets, today) {
+  const supabase = getSupabase()
   const now = new Date().toISOString()
 
   // Récupérer les plus_haut/plus_bas existants pour la journée
@@ -122,7 +128,7 @@ async function upsertCotations(markets, today) {
     }
   })
 
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('cotations')
     .upsert(rows, { onConflict: 'nom,date' })
 
