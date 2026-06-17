@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X } from 'lucide-react'
+import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Image, Send } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
@@ -10,16 +10,15 @@ import { fr } from 'date-fns/locale'
 import type { ForumPost, ForumReply } from '@/types'
 
 export default function ForumPage() {
-  const [posts, setPosts]           = useState<ForumPost[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [search, setSearch]         = useState('')
+  const [posts, setPosts]             = useState<ForumPost[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [search, setSearch]           = useState('')
   const [showNewPost, setShowNewPost] = useState(false)
   const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null)
-  const [userId, setUserId]         = useState<string | null>(null)
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
+  const [userId, setUserId]           = useState<string | null>(null)
+  const [likedPosts, setLikedPosts]   = useState<Set<string>>(new Set())
   const supabase = createClient()
 
-  // ── Charger les posts ──────────────────────────────
   const fetchPosts = useCallback(async () => {
     const { data } = await supabase
       .from('forum_posts')
@@ -30,16 +29,13 @@ export default function ForumPage() {
     setLoading(false)
   }, [])
 
-  // ── Charger les likes de l'utilisateur ────────────
   async function fetchUserLikes(uid: string) {
     const { data } = await supabase
       .from('forum_likes')
       .select('post_id')
       .eq('user_id', uid)
       .not('post_id', 'is', null)
-    if (data) {
-      setLikedPosts(new Set(data.map(l => l.post_id).filter(Boolean)))
-    }
+    if (data) setLikedPosts(new Set(data.map(l => l.post_id).filter(Boolean)))
   }
 
   useEffect(() => {
@@ -62,10 +58,11 @@ export default function ForumPage() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  const [replies, setReplies]       = useState<ForumReply[]>([])
-  const [replyText, setReplyText]   = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [likingPost, setLikingPost] = useState<string | null>(null)
+  const [replies, setReplies]         = useState<ForumReply[]>([])
+  const [replyText, setReplyText]     = useState('')
+  const [replyImage, setReplyImage]   = useState<File | null>(null)
+  const [submitting, setSubmitting]   = useState(false)
+  const [likingPost, setLikingPost]   = useState<string | null>(null)
 
   async function fetchReplies(postId: string) {
     const { data } = await supabase
@@ -86,53 +83,67 @@ export default function ForumPage() {
   }
 
   async function submitReply() {
-    if (!replyText.trim() || !selectedPost || !userId) return
+    if ((!replyText.trim() && !replyImage) || !selectedPost || !userId) return
     setSubmitting(true)
+
+    let imageUrl: string | null = null
+
+    // Upload image si présente
+    if (replyImage) {
+      const ext  = replyImage.name.split('.').pop()
+      const path = `forum/${selectedPost.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('forum-images')
+        .upload(path, replyImage, { upsert: true })
+      if (upErr) {
+        toast.error("Erreur upload image")
+        setSubmitting(false)
+        return
+      }
+      const { data: urlData } = supabase.storage.from('forum-images').getPublicUrl(path)
+      imageUrl = urlData.publicUrl
+    }
+
     const { error } = await supabase.from('forum_replies').insert({
       post_id:   selectedPost.id,
-      content:   replyText.trim(),
+      content:   replyText.trim() || null,
+      image_url: imageUrl,
       author_id: userId,
     })
+
     if (error) toast.error('Erreur lors de la publication')
     else {
       setReplyText('')
+      setReplyImage(null)
       fetchReplies(selectedPost.id)
     }
     setSubmitting(false)
   }
 
-  // ── Toggle like avec fonction SQL ─────────────────
   async function toggleLike(post: ForumPost) {
     if (!userId) { toast.error('Connectez-vous pour liker'); return }
-    if (likingPost === post.id) return // éviter double-clic
+    if (likingPost === post.id) return
     setLikingPost(post.id)
 
     const { data, error } = await supabase.rpc('toggle_post_like', {
-      p_post_id:  post.id,
-      p_user_id:  userId,
+      p_post_id: post.id,
+      p_user_id: userId,
     })
 
     if (error) {
       toast.error('Erreur')
     } else {
-      // Mettre à jour l'état local immédiatement (sans attendre le realtime)
       const isNowLiked = data.liked as boolean
       const newCount   = data.likes_count as number
-
       setLikedPosts(prev => {
         const next = new Set(prev)
         if (isNowLiked) next.add(post.id)
         else next.delete(post.id)
         return next
       })
-
-      setPosts(prev => prev.map(p =>
-        p.id === post.id ? { ...p, likes_count: newCount } : p
-      ))
-
-      if (selectedPost?.id === post.id) {
+      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, likes_count: newCount } : p))
+      if (selectedPost?.id === post.id)
         setSelectedPost(prev => prev ? { ...prev, likes_count: newCount } : null)
-      }
     }
     setLikingPost(null)
   }
@@ -170,10 +181,7 @@ export default function ForumPage() {
             <div key={i} className="card-premium p-5 space-y-2">
               <div className="skeleton h-5 w-64" />
               <div className="skeleton h-4 w-full" />
-              <div className="flex gap-4">
-                <div className="skeleton h-3 w-20" />
-                <div className="skeleton h-3 w-20" />
-              </div>
+              <div className="flex gap-4"><div className="skeleton h-3 w-20" /><div className="skeleton h-3 w-20" /></div>
             </div>
           ))}
         </div>
@@ -186,10 +194,11 @@ export default function ForumPage() {
         <div className="space-y-2">
           {filtered.map((post, i) => {
             const isLiked = likedPosts.has(post.id)
+            const authorName = (post.author as any)?.full_name || 'Anonyme'
+            const authorInitial = authorName.charAt(0).toUpperCase()
             return (
               <motion.div key={post.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
                 onClick={() => openPost(post)}
                 className="card-premium p-5 cursor-pointer group"
@@ -209,15 +218,11 @@ export default function ForumPage() {
                       </span>
                     </div>
                     <h3 className="font-semibold text-sm group-hover:text-white transition-colors line-clamp-1"
-                      style={{ color: '#E0E0E0' }}>
-                      {post.title}
-                    </h3>
+                      style={{ color: '#E0E0E0' }}>{post.title}</h3>
                     <p className="text-xs mt-1 line-clamp-1" style={{ color: '#5C5C5C' }}>{post.content}</p>
                   </div>
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
-                      {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
-                    </div>
+                  <div className="text-xs flex-shrink-0" style={{ color: '#5C5C5C' }}>
+                    {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
                   </div>
                 </div>
 
@@ -226,19 +231,16 @@ export default function ForumPage() {
                   <div className="flex items-center gap-1.5">
                     <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
                       style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
-                      {(post.author as any)?.full_name?.charAt(0) || '?'}
+                      {authorInitial}
                     </div>
                     <span className="text-xs" style={{ color: '#707070' }}>
-                      {(post.author as any)?.full_name}
+                      {authorName}
                       {(post.author as any)?.role === 'admin' && (
-                        <span className="ml-1 text-[10px] font-bold" style={{ color: '#D4AF37' }}>ADMIN</span>
+                        <span className="ml-1 text-[10px] font-bold" style={{ color: '#D4AF37' }}> ADMIN</span>
                       )}
                     </span>
                   </div>
-
-                  {/* Bouton Like */}
-                  <button
-                    onClick={e => { e.stopPropagation(); toggleLike(post) }}
+                  <button onClick={e => { e.stopPropagation(); toggleLike(post) }}
                     disabled={likingPost === post.id}
                     className="flex items-center gap-1 text-xs transition-all px-2 py-1 rounded-lg"
                     style={{
@@ -249,7 +251,6 @@ export default function ForumPage() {
                     <ThumbsUp size={12} fill={isLiked ? '#D4AF37' : 'none'} />
                     <span>{post.likes_count || 0}</span>
                   </button>
-
                   <div className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
                     <Reply size={12} /> {post.replies_count || 0}
                   </div>
@@ -272,12 +273,14 @@ export default function ForumPage() {
             post={selectedPost}
             replies={replies}
             replyText={replyText}
+            replyImage={replyImage}
             submitting={submitting}
             isLiked={likedPosts.has(selectedPost.id)}
             onReplyChange={setReplyText}
+            onImageChange={setReplyImage}
             onSubmitReply={submitReply}
             onLike={() => toggleLike(selectedPost)}
-            onClose={() => { setSelectedPost(null); setReplies([]) }}
+            onClose={() => { setSelectedPost(null); setReplies([]); setReplyText(''); setReplyImage(null) }}
           />
         )}
       </AnimatePresence>
@@ -345,17 +348,38 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }
 
 // ── Detail Post ────────────────────────────────────────────
-function PostDetailModal({ post, replies, replyText, submitting, isLiked, onReplyChange, onSubmitReply, onLike, onClose }: {
+function PostDetailModal({ post, replies, replyText, replyImage, submitting, isLiked, onReplyChange, onImageChange, onSubmitReply, onLike, onClose }: {
   post: ForumPost
   replies: ForumReply[]
   replyText: string
+  replyImage: File | null
   submitting: boolean
   isLiked: boolean
   onReplyChange: (t: string) => void
+  onImageChange: (f: File | null) => void
   onSubmitReply: () => void
   onLike: () => void
   onClose: () => void
 }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] || null
+    onImageChange(file)
+    if (file) setPreview(URL.createObjectURL(file))
+    else setPreview(null)
+  }
+
+  function removeImage() {
+    onImageChange(null)
+    setPreview(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  function authorName(a: any) { return a?.full_name || 'Anonyme' }
+  function authorInit(a: any) { return authorName(a).charAt(0).toUpperCase() }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -363,38 +387,36 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
       onClick={e => e.target === e.currentTarget && onClose()}>
       <motion.div initial={{ y: 60 }} animate={{ y: 0 }} exit={{ y: 60 }}
         className="w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl border flex flex-col"
-        style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)', maxHeight: '85vh' }}>
+        style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)', maxHeight: '90vh' }}>
 
+        {/* Header */}
         <div className="px-5 py-4 border-b flex items-start justify-between flex-shrink-0"
           style={{ borderColor: 'var(--noir-border)' }}>
           <div className="flex-1 min-w-0 pr-4">
             <div className="flex items-center gap-2 mb-1">
-              {post.ticker && (
-                <span className="badge-watch text-[10px] font-bold px-2 py-0.5 rounded">{post.ticker}</span>
-              )}
+              {post.ticker && <span className="badge-watch text-[10px] font-bold px-2 py-0.5 rounded">{post.ticker}</span>}
               <span className="text-xs px-2 py-0.5 rounded"
-                style={{ background: 'var(--noir-elevated)', color: '#707070' }}>
-                {post.category}
-              </span>
+                style={{ background: 'var(--noir-elevated)', color: '#707070' }}>{post.category}</span>
             </div>
             <h2 className="font-semibold" style={{ color: '#F5F5F5' }}>{post.title}</h2>
           </div>
           <button onClick={onClose}><X size={16} style={{ color: '#5C5C5C' }} /></button>
         </div>
 
+        {/* Contenu scrollable */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+
           {/* Post original */}
-          <div className="p-4 rounded-xl"
-            style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
+          <div className="p-4 rounded-xl" style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
-                {(post.author as any)?.full_name?.charAt(0)}
+                {authorInit(post.author)}
               </div>
               <span className="text-sm font-medium" style={{ color: '#A0A0A0' }}>
-                {(post.author as any)?.full_name}
+                {authorName(post.author)}
                 {(post.author as any)?.role === 'admin' && (
-                  <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
+                  <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded"> ADMIN</span>
                 )}
               </span>
               <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
@@ -404,8 +426,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
             <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
               {post.content}
             </p>
-            <div className="flex items-center gap-3 mt-3 pt-3 border-t"
-              style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
+            <div className="flex items-center gap-3 mt-3 pt-3 border-t" style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
               <button onClick={onLike}
                 className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg transition-all"
                 style={{
@@ -423,55 +444,95 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
           {replies.map((r, i) => (
             <motion.div key={r.id}
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="ml-6 p-4 rounded-xl"
+              transition={{ delay: i * 0.04 }}
+              className="ml-4 p-4 rounded-xl"
               style={{
-                background: (r.author as any)?.role === 'admin'
-                  ? 'rgba(212,175,55,0.05)' : 'var(--noir-elevated)',
-                border: `1px solid ${(r.author as any)?.role === 'admin'
-                  ? 'rgba(212,175,55,0.2)' : 'var(--noir-border)'}`,
+                background: (r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.05)' : 'var(--noir-elevated)',
+                border: `1px solid ${(r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.2)' : 'var(--noir-border)'}`,
               }}>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
                   style={{
-                    background: (r.author as any)?.role === 'admin'
-                      ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
+                    background: (r.author as any)?.role === 'admin' ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.06)',
                     color: (r.author as any)?.role === 'admin' ? '#D4AF37' : '#A0A0A0',
                   }}>
-                  {(r.author as any)?.full_name?.charAt(0)}
+                  {authorInit(r.author)}
                 </div>
                 <span className="text-xs font-medium" style={{ color: '#A0A0A0' }}>
-                  {(r.author as any)?.full_name}
+                  {authorName(r.author)}
                   {(r.author as any)?.role === 'admin' && (
-                    <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
+                    <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded"> ADMIN</span>
                   )}
                 </span>
                 <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
                   {formatDistanceToNow(new Date(r.created_at), { locale: fr, addSuffix: true })}
                 </span>
               </div>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
-                {r.content}
-              </p>
+              {r.content && (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
+                  {r.content}
+                </p>
+              )}
+              {(r as any).image_url && (
+                <img src={(r as any).image_url} alt="image"
+                  className="mt-2 rounded-lg max-w-full max-h-64 object-contain cursor-pointer"
+                  onClick={() => window.open((r as any).image_url, '_blank')}
+                />
+              )}
             </motion.div>
           ))}
         </div>
 
-        {/* Zone de réponse */}
+        {/* Zone de réponse — fixée en bas */}
         {!post.is_locked && (
-          <div className="px-5 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-            <div className="flex gap-3">
-              <textarea value={replyText} onChange={e => onReplyChange(e.target.value)}
-                placeholder="Votre réponse..." rows={2}
-                className="input-premium flex-1 resize-none text-sm"
-                onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }} />
-              <motion.button whileTap={{ scale: 0.95 }} onClick={onSubmitReply}
-                disabled={!replyText.trim() || submitting}
-                className="btn-gold px-4 self-end flex items-center gap-2"
-                style={{ opacity: !replyText.trim() ? 0.5 : 1 }}>
+          <div className="px-4 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+
+            {/* Prévisualisation image */}
+            {preview && (
+              <div className="relative mb-2 inline-block">
+                <img src={preview} alt="preview" className="h-20 rounded-lg object-cover" />
+                <button onClick={removeImage}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
+                  style={{ background: '#FF1744' }}>
+                  <X size={10} color="white" />
+                </button>
+              </div>
+            )}
+
+            {/* Textarea */}
+            <textarea
+              value={replyText}
+              onChange={e => onReplyChange(e.target.value)}
+              placeholder="Votre réponse..."
+              rows={2}
+              className="input-premium w-full resize-none text-sm"
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }}
+            />
+
+            {/* Boutons sous le textarea */}
+            <div className="flex items-center justify-between mt-2">
+              {/* Bouton image */}
+              <button onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-all"
+                style={{
+                  color:      replyImage ? '#D4AF37' : '#707070',
+                  background: replyImage ? 'rgba(212,175,55,0.1)' : 'var(--noir-elevated)',
+                  border:     '1px solid var(--noir-border)',
+                }}>
+                <Image size={13} />
+                {replyImage ? 'Image ajoutée' : 'Ajouter une image'}
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+
+              {/* Bouton envoyer */}
+              <motion.button whileTap={{ scale: 0.95 }}
+                onClick={onSubmitReply}
+                disabled={(!replyText.trim() && !replyImage) || submitting}
+                className="btn-gold flex items-center gap-2 px-4 py-2"
+                style={{ opacity: (!replyText.trim() && !replyImage) ? 0.5 : 1 }}>
                 {submitting
                   ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  : <Reply size={14} />}
+                  : <><Send size={13} /> Envoyer</>}
               </motion.button>
             </div>
           </div>
