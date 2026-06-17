@@ -137,7 +137,21 @@ async function upsertCotations(markets, today) {
 }
 
 export async function GET() {
+  const now   = new Date()
   const today = new Date().toLocaleDateString('fr-CA', { timeZone: 'Africa/Tunis' }) // YYYY-MM-DD
+
+  // Debug timezone
+  const utcMs    = now.getTime() + now.getTimezoneOffset() * 60000
+  const tunisie  = new Date(utcMs + 3600000)
+  const debugInfo = {
+    utcHeure:     now.toISOString(),
+    tunisieHeure: `${tunisie.getUTCHours()}:${String(tunisie.getUTCMinutes()).padStart(2,'0')}`,
+    jour:         tunisie.getUTCDay(),
+    totalMin:     tunisie.getUTCHours() * 60 + tunisie.getUTCMinutes(),
+    ouverte:      isBvmtOuverte(),
+    today,
+  }
+  console.log('DEBUG cotations:', JSON.stringify(debugInfo))
 
   try {
     // 1. Si BVMT fermée → base directement
