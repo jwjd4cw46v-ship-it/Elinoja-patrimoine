@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 function getSupabase() {
   return createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY
   )
 }
 
@@ -25,20 +25,20 @@ const JOURS_FERIES = [
 function isBvmtOuverte() {
   const now = new Date()
 
-  // Tunisie = UTC+1
-  const tunisie = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Tunis' }))
-  const jour    = tunisie.getDay()   // 0=dim, 6=sam
-  const mois    = String(tunisie.getMonth() + 1).padStart(2, '0')
-  const jourd   = String(tunisie.getDate()).padStart(2, '0')
-  const cle     = `${mois}-${jourd}`
-  const heures  = tunisie.getHours()
-  const minutes = tunisie.getMinutes()
-  const totalMin = heures * 60 + minutes
+  // Tunisie = UTC+1 fixe (pas de changement d'heure)
+  const utcMs   = now.getTime() + now.getTimezoneOffset() * 60000
+  const tunisie = new Date(utcMs + 3600000)
 
-  if (jour === 0 || jour === 6) return false          // Week-end
-  if (JOURS_FERIES.includes(cle)) return false        // Férié
-  if (totalMin < 9 * 60) return false                 // Avant 9h
-  if (totalMin > 14 * 60 + 15) return false           // Après 14h15
+  const jour     = tunisie.getUTCDay()
+  const mois     = String(tunisie.getUTCMonth() + 1).padStart(2, '0')
+  const jourd    = String(tunisie.getUTCDate()).padStart(2, '0')
+  const cle      = `${mois}-${jourd}`
+  const totalMin = tunisie.getUTCHours() * 60 + tunisie.getUTCMinutes()
+
+  if (jour === 0 || jour === 6)   return false  // Week-end
+  if (JOURS_FERIES.includes(cle)) return false  // Férié
+  if (totalMin < 9 * 60)          return false  // Avant 9h
+  if (totalMin > 14 * 60 + 15)    return false  // Après 14h15
 
   return true
 }
