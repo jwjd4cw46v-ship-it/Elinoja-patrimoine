@@ -46,7 +46,7 @@ function FigureImage({ nom }: { nom: string }) {
     <img
       src={`/figures/${slug}.jpeg`}
       alt={nom}
-      style={{ width: '100%', display: 'block', maxHeight: 260, objectFit: 'contain', background: '#0A0A0A' }}
+      style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover', background: '#0A0A0A' }}
     />
   )
 }
