@@ -4,6 +4,19 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, AlertTriangle } from 'lucide-react'
 
+
+// ─── Types ───────────────────────────────────────────────────────
+interface Figure {
+  nom: string
+  type: 'haussière' | 'baissière' | 'neutre'
+  description: string
+  objectif: string
+  probabilite: number
+  probabiliteLabel: string
+  confirmation: string[]
+  invalidite: string[]
+}
+
 const gold = '#D4AF37'
 
 // ─── Image figure depuis /public/figures/ ────────────────────────
