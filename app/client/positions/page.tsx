@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Bell, TrendingUp, TrendingDown, Shield,
@@ -16,6 +16,7 @@ import {
   type Position, type AlertePosition,
 } from '@/lib/positions-engine'
 import Link from 'next/link'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 /* ─────────────────────── Helpers ─────────────────────────────── */
 const fmt = (n: number | null | undefined, d = 3) =>
@@ -642,7 +643,10 @@ export default function PositionsDashboard() {
   const [showForm,   setShowForm]   = useState(false)
   const [detailPos,  setDetailPos]  = useState<Position | null>(null)
   const [venteData,  setVenteData]  = useState<{ pos: Position; alerte: AlertePosition | null } | null>(null)
-  const supabase = createClient()
+  const [prefill,    setPrefill]    = useState<Record<string, string> | null>(null)
+  const supabase  = createClient()
+  const searchParams = useSearchParams()
+  const router    = useRouter()
 
   async function fetchAll() {
     const [{ data: pos }, { data: al }] = await Promise.all([
@@ -710,6 +714,18 @@ export default function PositionsDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'position_alertes' }, fetchAll)
       .subscribe()
     const timer = setInterval(fetchCotations, 15 * 60 * 1000)
+
+    // Ouvrir automatiquement le formulaire si ?nouvelle=1
+    if (searchParams.get('nouvelle') === '1') {
+      const params: Record<string, string> = {}
+      const keys = ['ticker', 'support', 'r1', 'r2', 'r3', 'note']
+      keys.forEach(k => { const v = searchParams.get(k); if (v) params[k] = v })
+      setPrefill(params)
+      setShowForm(true)
+      // Nettoyer l'URL sans rechargement
+      router.replace('/client/positions', { scroll: false })
+    }
+
     return () => { supabase.removeChannel(ch); clearInterval(timer) }
   }, [])
 
@@ -854,8 +870,9 @@ export default function PositionsDashboard() {
       <AnimatePresence>
         {showForm && (
           <NouvellePositionModal
-            onClose={() => setShowForm(false)}
-            onSaved={() => { fetchAll(); setShowForm(false) }}
+            prefill={prefill}
+            onClose={() => { setShowForm(false); setPrefill(null) }}
+            onSaved={() => { fetchAll(); setShowForm(false); setPrefill(null) }}
           />
         )}
         {detailPos && (
@@ -880,8 +897,21 @@ export default function PositionsDashboard() {
 }
 
 /* ─── Nouvelle Position Modal ─────────────────────────────────── */
-function NouvellePositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ ticker:'', p0:'', quantite:'', support:'', r1:'', r2:'', r3:'', note:'' })
+function NouvellePositionModal({ onClose, onSaved, prefill }: {
+  onClose: () => void
+  onSaved: () => void
+  prefill?: Record<string, string> | null
+}) {
+  const [form, setForm] = useState({
+    ticker:   prefill?.ticker   || '',
+    p0:       '',
+    quantite: '',
+    support:  prefill?.support  || '',
+    r1:       prefill?.r1       || '',
+    r2:       prefill?.r2       || '',
+    r3:       prefill?.r3       || '',
+    note:     prefill?.note     || '',
+  })
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
