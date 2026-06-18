@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, BarChart2,
   FileText, MessageSquare, Bell, Star, ChevronRight,
   Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
-  Menu, X, Globe, Target,
+  Menu, X, Globe, Target, BookOpen,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -45,6 +45,7 @@ const navSections = [
       { href: '/client/fondamentales', icon: BarChart2,  label: 'Analyses Fondamentales' },
       { href: '/client/marches',       icon: Globe,      label: 'Devises & Matières' },
       { href: '/client/calendrier',    icon: Calendar,   label: 'Calendrier AGO' },
+      { href: '/client/figures-chartistes', icon: BookOpen, label: 'Figures Chartistes' },
     ],
   },
   {
@@ -77,6 +78,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/watchlist':     'Ma Watchlist',
   '/client/marches':       'Devises & Matières premières',
   '/client/calendrier':    'Calendrier AGO',
+  '/client/figures-chartistes': 'Figures Chartistes',
   '/client/positions':     'Elinoja Stratégie',
 }
 
