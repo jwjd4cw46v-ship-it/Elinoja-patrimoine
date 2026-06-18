@@ -669,7 +669,7 @@ export default function PositionsDashboard() {
       setCotations(map)
       // Détecter et créer les alertes pour chaque position
       await detecterEtCreerAlertes(map)
-    } catch (_) {}
+    } catch (err) { console.error('fetchCotations error:', err) }
   }
 
   async function detecterEtCreerAlertes(cotationsMap: Record<string, number>) {
@@ -686,18 +686,21 @@ export default function PositionsDashboard() {
         const alertesDeja = (alertesExist || []).filter(a => a.position_id === p.id) as AlertePosition[]
         const nouvelles = detecterAlertes(p, prix, alertesDeja)
         for (const a of nouvelles) {
-          await supabase.from('position_alertes').insert({
+          const { data: { user } } = await supabase.auth.getUser()
+          const { error: insErr } = await supabase.from('position_alertes').insert({
             position_id:  p.id,
+            user_id:      user?.id ?? null,
             type:         a.type,
             prix_trigger: a.prix_trigger,
             prix_marche:  prix,
             is_read:      false,
             is_acted:     false,
           })
+          if (insErr) console.error('insert alerte error:', insErr.message, insErr.code)
         }
       }
       if (pos.length > 0) fetchAll()
-    } catch (_) {}
+    } catch (err) { console.error('detecterAlertes error:', err) }
   }
 
   useEffect(() => {
