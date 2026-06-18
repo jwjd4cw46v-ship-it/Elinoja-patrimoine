@@ -143,17 +143,41 @@ export default function FiguresChartistesPage() {
 
       {/* Catégories */}
       <div className="grid grid-cols-4 gap-2">
-        {categories.map((cat, i) => (
-          <button key={cat.label} onClick={() => { setCatIdx(i); setFigIdx(0) }}
-            className="py-2 px-1 rounded-xl text-center transition-all text-[10px] font-bold tracking-wide"
-            style={{
-              background: catIdx === i ? `${cat.color}18` : 'var(--noir-elevated)',
-              color:      catIdx === i ? cat.color : '#5C5C5C',
-              border:     `1px solid ${catIdx === i ? `${cat.color}40` : 'var(--noir-border)'}`,
-            }}>
-            {cat.label}
-          </button>
-        ))}
+        {[
+          { label: 'RETOURNEMENT', icon: '↻', count: categories[0].figures.length },
+          { label: 'CONTINUATION', icon: '→', count: categories[1].figures.length },
+          { label: 'FIGURES RARES', icon: '◇', count: categories[2].figures.length },
+          { label: 'HARMONIQUES',  icon: '✦', count: categories[3].figures.length },
+        ].map((cat, i) => {
+          const active = catIdx === i
+          return (
+            <button key={cat.label}
+              onClick={() => { setCatIdx(i); setFigIdx(0) }}
+              style={{
+                background:    active ? '#0A0A0A' : '#0A0A0A',
+                border:        `1px solid ${active ? '#C8A64A' : '#1E1E1E'}`,
+                borderRadius:  12,
+                padding:       '10px 4px',
+                cursor:        'pointer',
+                display:       'flex',
+                flexDirection: 'column',
+                alignItems:    'center',
+                gap:           4,
+                boxShadow:     active ? '0 0 12px rgba(200,166,74,0.25), inset 0 0 8px rgba(200,166,74,0.06)' : 'none',
+                transition:    'all 0.2s ease',
+              }}>
+              <span style={{ fontSize: 16, color: active ? '#C8A64A' : '#333', transition: 'color 0.2s' }}>
+                {cat.icon}
+              </span>
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: active ? '#C8A64A' : '#3A3A3A', lineHeight: 1.3, textAlign: 'center', transition: 'color 0.2s' }}>
+                {cat.label}
+              </span>
+              <span style={{ fontSize: 9, fontWeight: 600, color: active ? 'rgba(200,166,74,0.7)' : '#2A2A2A', transition: 'color 0.2s' }}>
+                {cat.count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Combobox */}
