@@ -6,6 +6,18 @@ import { ChevronDown, AlertTriangle } from 'lucide-react'
 
 const gold = '#D4AF37'
 
+// ─── Types ───────────────────────────────────────────────────────
+interface Figure {
+  nom: string
+  type: 'haussière' | 'baissière' | 'neutre'
+  description: string
+  objectif: string
+  probabilite: number
+  probabiliteLabel: string
+  confirmation: string[]
+  invalidite: string[]
+}
+
 // ─── Image figure depuis /public/figures/ ────────────────────────
 function nomToSlug(nom: string): string {
   return nom
