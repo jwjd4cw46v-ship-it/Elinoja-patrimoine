@@ -4,19 +4,6 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, AlertTriangle } from 'lucide-react'
 
-
-// ─── Types ───────────────────────────────────────────────────────
-interface Figure {
-  nom: string
-  type: 'haussière' | 'baissière' | 'neutre'
-  description: string
-  objectif: string
-  probabilite: number
-  probabiliteLabel: string
-  confirmation: string[]
-  invalidite: string[]
-}
-
 const gold = '#D4AF37'
 
 // ─── Image figure depuis /public/figures/ ────────────────────────
@@ -46,7 +33,7 @@ function FigureImage({ nom }: { nom: string }) {
     <img
       src={`/figures/${slug}.jpeg`}
       alt={nom}
-      style={{ width: '100%', height: 'auto', display: 'block', objectFit: 'cover', background: '#0A0A0A' }}
+      style={{ width: '100%', display: 'block', maxHeight: 260, objectFit: 'contain', background: '#0A0A0A' }}
     />
   )
 }
@@ -110,6 +97,10 @@ const categories = [
       { nom: 'Crabe Baissier',            type: 'baissière', description: "Pattern harmonique baissier avec extension CD extrême. Signal de retournement fort depuis une zone de résistance étendue.", objectif: "Retour vers 0.382-0.618 de AD.", probabilite: 66, probabiliteLabel: 'Modérée', confirmation: ['Zone D à 1.618-3.618 de XA','RSI en surachat extrême','AB à 0.382-0.618'], invalidite: ['Dépassement de la zone D','Ratios non respectés'] },
       { nom: 'Papillon Haussier',         type: 'haussière', description: "Pattern harmonique avec AB=0.786 de XA et D dépassant le point X. Retournement haussier puissant.", objectif: "Extension vers 1.27-1.618 de XA depuis D.", probabilite: 65, probabiliteLabel: 'Modérée', confirmation: ['AB à 0.786 de XA','D dépasse le point X','CD à 1.27-1.618'], invalidite: ['AB différent de 0.786','D très éloigné de X'] },
       { nom: 'Papillon Baissier',         type: 'baissière', description: "Pattern harmonique baissier avec AB=0.786 et D dépassant X. Retournement baissier puissant.", objectif: "Extension vers 1.27-1.618 de XA depuis D.", probabilite: 63, probabiliteLabel: 'Modérée', confirmation: ['AB à 0.786 de XA','D dépasse le point X','RSI en surachat'], invalidite: ['AB différent de 0.786','Volumes croissants en D'] },
+      { nom: 'Shark Haussier',             type: 'haussière', description: "Pattern harmonique OXABC avec AB=1.13-1.618 de XA et BC=0.886-1.13 de OX. La zone C constitue le point d'entrée haussier. Figure récente et très précise.", objectif: "Retour vers 0.50 et 0.886 de BC depuis le point C.", probabilite: 67, probabiliteLabel: 'Modérée', confirmation: ['BC à 0.886-1.13 de OX','AB à 1.13-1.618 de XA','RSI en survente en zone C','Volumes décroissants vers C'], invalidite: ['Dépassement du point O','Ratios Fibonacci non respectés','Volumes croissants vers C'] },
+      { nom: 'Shark Baissier',             type: 'baissière', description: "Pattern harmonique OXABC inversé avec AB=1.13-1.618 de XA et BC=0.886-1.13 de OX. La zone C constitue le point d'entrée baissier.", objectif: "Retour vers 0.50 et 0.886 de BC depuis le point C.", probabilite: 65, probabiliteLabel: 'Modérée', confirmation: ['BC à 0.886-1.13 de OX','AB à 1.13-1.618 de XA','RSI en surachat en zone C','Volumes décroissants vers C'], invalidite: ['Dépassement du point O','Ratios non respectés','Volumes croissants vers C'] },
+      { nom: 'Cypher Haussier',            type: 'haussière', description: "Pattern harmonique XABCD avec AB=0.382-0.618 de XA, BC=1.13-1.414 de XA et CD=0.786 de XC. Figure très précise avec un excellent ratio risque/rendement.", objectif: "Extension vers 0.382 et 0.618 de CD depuis le point D.", probabilite: 69, probabiliteLabel: 'Modérée à élevée', confirmation: ['CD à 0.786 de XC','BC à 1.13-1.414 de XA','RSI divergent en zone D','Volumes faibles vers D'], invalidite: ['CD ne respecte pas 0.786 de XC','Dépassement du point X','Volumes croissants vers D'] },
+      { nom: 'Cypher Baissier',            type: 'baissière', description: "Pattern harmonique XABCD inversé avec CD=0.786 de XC. Figure très précise signalant un retournement baissier depuis la zone D.", objectif: "Extension vers 0.382 et 0.618 de CD depuis le point D.", probabilite: 67, probabiliteLabel: 'Modérée', confirmation: ['CD à 0.786 de XC','BC à 1.13-1.414 de XA','RSI en surachat en zone D','Volumes faibles vers D'], invalidite: ['CD ne respecte pas 0.786 de XC','Dépassement du point X','Volumes croissants vers D'] },
     ] as Figure[],
   },
 ]
@@ -143,41 +134,17 @@ export default function FiguresChartistesPage() {
 
       {/* Catégories */}
       <div className="grid grid-cols-4 gap-2">
-        {[
-          { label: 'RETOURNEMENT', icon: '↻', count: categories[0].figures.length },
-          { label: 'CONTINUATION', icon: '→', count: categories[1].figures.length },
-          { label: 'FIGURES RARES', icon: '◇', count: categories[2].figures.length },
-          { label: 'HARMONIQUES',  icon: '✦', count: categories[3].figures.length },
-        ].map((cat, i) => {
-          const active = catIdx === i
-          return (
-            <button key={cat.label}
-              onClick={() => { setCatIdx(i); setFigIdx(0) }}
-              style={{
-                background:    active ? '#0A0A0A' : '#0A0A0A',
-                border:        `1px solid ${active ? '#C8A64A' : '#1E1E1E'}`,
-                borderRadius:  12,
-                padding:       '10px 4px',
-                cursor:        'pointer',
-                display:       'flex',
-                flexDirection: 'column',
-                alignItems:    'center',
-                gap:           4,
-                boxShadow:     active ? '0 0 12px rgba(200,166,74,0.25), inset 0 0 8px rgba(200,166,74,0.06)' : 'none',
-                transition:    'all 0.2s ease',
-              }}>
-              <span style={{ fontSize: 16, color: active ? '#C8A64A' : '#333', transition: 'color 0.2s' }}>
-                {cat.icon}
-              </span>
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.08em', color: active ? '#C8A64A' : '#3A3A3A', lineHeight: 1.3, textAlign: 'center', transition: 'color 0.2s' }}>
-                {cat.label}
-              </span>
-              <span style={{ fontSize: 9, fontWeight: 600, color: active ? 'rgba(200,166,74,0.7)' : '#2A2A2A', transition: 'color 0.2s' }}>
-                {cat.count}
-              </span>
-            </button>
-          )
-        })}
+        {categories.map((cat, i) => (
+          <button key={cat.label} onClick={() => { setCatIdx(i); setFigIdx(0) }}
+            className="py-2 px-1 rounded-xl text-center transition-all text-[10px] font-bold tracking-wide"
+            style={{
+              background: catIdx === i ? `${cat.color}18` : 'var(--noir-elevated)',
+              color:      catIdx === i ? cat.color : '#5C5C5C',
+              border:     `1px solid ${catIdx === i ? `${cat.color}40` : 'var(--noir-border)'}`,
+            }}>
+            {cat.label}
+          </button>
+        ))}
       </div>
 
       {/* Combobox */}
