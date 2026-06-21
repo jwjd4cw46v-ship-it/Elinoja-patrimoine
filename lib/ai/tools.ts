@@ -290,9 +290,11 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
 
     // ── Contenu complet CMF ─────────────────────────────────────────────────
     case 'getCMFAnnouncementContent': {
-      const { mnemo, keyword, limit = 3 } = args
+      const { mnemo, keyword, limit = 5 } = args
 
-      let query = supabase
+      // 1. Chercher par ticker SANS filtrer sur content/keyword en SQL
+      //    pour ne pas rater des docs dont le keyword est dans le titre
+      const { data, error } = await supabase
         .from('cmf_announcements')
         .select('id, title, company, ticker, category, content, pdf_url, created_at')
         .ilike('ticker', mnemo)
@@ -300,25 +302,30 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         .order('id', { ascending: false })
         .limit(Math.min(limit, 10))
 
-      if (keyword) {
-        query = query.ilike('content', `%${keyword}%`)
-      }
-
-      const { data, error } = await query
-
       if (error) return { error: error.message }
 
       if (!data?.length) return {
-        message: keyword
-          ? `Aucune publication CMF avec le mot-clé "${keyword}" pour "${mnemo}"`
-          : `Aucune publication CMF avec contenu disponible pour "${mnemo}"`,
+        message: `Aucune publication CMF avec contenu disponible pour "${mnemo}"`,
         publications: [],
       }
 
+      // 2. Filtrer côté JS si keyword fourni (title OU content)
+      const filtered = keyword
+        ? data.filter(p =>
+            p.title?.toLowerCase().includes(keyword.toLowerCase()) ||
+            p.content?.toLowerCase().includes(keyword.toLowerCase())
+          )
+        : data
+
+      // 3. Si le filtre keyword ne trouve rien → retourner quand même tous les docs
+      const results = filtered.length > 0 ? filtered : data
+
       return {
-        total:   data.length,
-        société: mnemo.toUpperCase(),
-        publications: data.map(p => ({
+        total:         results.length,
+        société:       mnemo.toUpperCase(),
+        keyword_used:  keyword ?? null,
+        keyword_match: filtered.length > 0,
+        publications: results.map(p => ({
           id:        p.id,
           titre:     p.title,
           société:   p.company,
