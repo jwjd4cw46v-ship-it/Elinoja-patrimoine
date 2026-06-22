@@ -146,17 +146,48 @@ export default function FiguresChartistesPage() {
 
       {/* Catégories */}
       <div className="grid grid-cols-4 gap-2">
-        {categories.map((cat, i) => (
-          <button key={cat.label} onClick={() => { setCatIdx(i); setFigIdx(0) }}
-            className="py-2 px-1 rounded-xl text-center transition-all text-[10px] font-bold tracking-wide"
-            style={{
-              background: catIdx === i ? `${cat.color}18` : 'var(--noir-elevated)',
-              color:      catIdx === i ? cat.color : '#5C5C5C',
-              border:     `1px solid ${catIdx === i ? `${cat.color}40` : 'var(--noir-border)'}`,
-            }}>
-            {cat.label}
-          </button>
-        ))}
+        {categories.map((cat, i) => {
+          const isActive = catIdx === i
+          return (
+            <button
+              key={cat.label}
+              onClick={() => { setCatIdx(i); setFigIdx(0) }}
+              className="text-center text-[10px] font-bold tracking-wide"
+              style={{
+                position: 'relative',
+                padding: '6px 4px',
+                borderRadius: 12,
+                border: `1px solid ${isActive ? `${cat.color}35` : 'rgba(255,255,255,0.07)'}`,
+                background: isActive
+                  ? `rgba(${cat.color === '#FF6B35' ? '255,107,53' : cat.color === '#00C853' ? '0,200,83' : cat.color === '#D4AF37' ? '212,175,55' : '156,39,176'},0.07)`
+                  : 'rgba(255,255,255,0.03)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                color: isActive ? cat.color : 'rgba(255,255,255,0.35)',
+                boxShadow: isActive
+                  ? `0 0 10px ${cat.color}18, inset 0 1px 0 rgba(255,255,255,0.06)`
+                  : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                transition: 'all 0.25s ease',
+                cursor: 'pointer',
+                overflow: 'hidden',
+              }}
+            >
+              {cat.label}
+              {/* Trait lumineux doré sous l'onglet actif */}
+              <span style={{
+                position: 'absolute',
+                bottom: 0,
+                left: isActive ? '10%' : '50%',
+                width: isActive ? '80%' : '0%',
+                height: 2,
+                borderRadius: 2,
+                background: `linear-gradient(90deg, transparent, ${cat.color}, transparent)`,
+                transition: 'all 0.35s cubic-bezier(0.4,0,0.2,1)',
+                opacity: isActive ? 1 : 0,
+              }} />
+            </button>
+          )
+        })}
       </div>
 
       {/* Combobox */}
