@@ -145,7 +145,7 @@ export default function FiguresChartistesPage() {
       </div>
 
       {/* Catégories */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {categories.map((cat, i) => {
           const isActive = catIdx === i
           return (
