@@ -90,8 +90,9 @@ function getLabel(pathname: string) {
 }
 
 function WatchMiniCard({ item }: { item: any }) {
-  const isBelowLow  = item.low  > 0 && item.current > 0 && item.current < item.low
-  const isAboveHigh = item.high > 0 && item.current > 0 && item.current > item.high
+  // FIX : <= et >= pour déclencher l'alerte quand le cours touche exactement le seuil
+  const isBelowLow  = item.low  > 0 && item.current > 0 && item.current <= item.low
+  const isAboveHigh = item.high > 0 && item.current > 0 && item.current >= item.high
   const pct = item.high > item.low
     ? ((item.current - item.low) / (item.high - item.low)) * 100 : 50
   const pctClamped = Math.max(0, Math.min(100, pct))
@@ -166,8 +167,9 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
 
   const { items, loading: watchLoading, refresh } = useWatchlist(userId || profile.id || '')
 
+  // FIX : <= et >= pour le compteur d'alertes actives
   const activeAlerts = items.filter(
-    i => i.current > 0 && ((i.low > 0 && i.current < i.low) || (i.high > 0 && i.current > i.high))
+    i => i.current > 0 && ((i.low > 0 && i.current <= i.low) || (i.high > 0 && i.current >= i.high))
   ).length
 
   function handleRefresh() {
@@ -364,7 +366,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
           <button
             onClick={() => setMenuOpen(v => !v)}
             style={{
-              position: 'fixed', top: 10, left: 14, zIndex: 202,
+              position: 'fixed', top: 10, left: 58, zIndex: 202,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               width: 36, height: 36, borderRadius: 8,
               background: menuOpen ? C.goldDim : 'rgba(212,175,55,0.06)',
