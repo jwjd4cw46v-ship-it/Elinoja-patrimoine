@@ -5,7 +5,7 @@
 
 // ─── Types ────────────────────────────────────────────────────────
 export type PositionState = 'OPEN' | 'PARTIALLY_SOLD' | 'RUNNING' | 'CLOSED'
-export type AlertType = 'STOP_LOSS' | 'TAKE_PROFIT_R1' | 'TAKE_PROFIT_R2' | 'TAKE_PROFIT_R3' | 'BREAK_EVEN' | 'RUNNER_STOP'
+export type AlertType = 'STOP_LOSS' | 'TAKE_PROFIT_R1' | 'TAKE_PROFIT_R2' | 'TAKE_PROFIT_R3' | 'RUNNER_STOP'
 export type VenteNiveau = 'R1' | 'R2' | 'R3' | 'RUNNER' | 'STOP' | 'MANUEL'
 
 export interface PositionInput {
@@ -137,6 +137,7 @@ export function calculerPnlVente(
 /**
  * Détection des alertes à partir du prix courant (t-15min)
  * Retourne la liste des alertes à déclencher (idempotent)
+ * Alertes : STOP_LOSS, TAKE_PROFIT_R1/R2/R3, RUNNER_STOP uniquement
  */
 export function detecterAlertes(
   position: Position,
@@ -147,34 +148,29 @@ export function detecterAlertes(
   const deja = (type: AlertType) =>
     alertesExistantes.some(a => a.type === type && !a.is_acted)
 
-  // Stop loss
+  // Stop loss — prix <= stop actuel
   if (prixCourant <= position.stop_actuel && !deja('STOP_LOSS')) {
     alertes.push({ type: 'STOP_LOSS', prix_trigger: position.stop_actuel })
   }
 
-  // Break even
-  if (prixCourant >= position.prix_moyen && !deja('BREAK_EVEN') && !position.r1_atteint) {
-    alertes.push({ type: 'BREAK_EVEN', prix_trigger: position.prix_moyen })
-  }
-
-  // R1
+  // R1 — prix >= R1 et R1 pas encore atteint
   if (!position.r1_atteint && prixCourant >= position.r1 && !deja('TAKE_PROFIT_R1')) {
     alertes.push({ type: 'TAKE_PROFIT_R1', prix_trigger: position.r1 })
   }
 
-  // R2
+  // R2 — R1 déjà atteint, prix >= R2 et R2 pas encore atteint
   if (position.r1_atteint && position.r2 &&
       !position.r2_atteint && prixCourant >= position.r2 && !deja('TAKE_PROFIT_R2')) {
     alertes.push({ type: 'TAKE_PROFIT_R2', prix_trigger: position.r2 })
   }
 
-  // R3
+  // R3 — R2 déjà atteint, prix >= R3 et R3 pas encore atteint
   if (position.r2_atteint && position.r3 &&
       !position.r3_atteint && prixCourant >= position.r3 && !deja('TAKE_PROFIT_R3')) {
     alertes.push({ type: 'TAKE_PROFIT_R3', prix_trigger: position.r3 })
   }
 
-  // Runner stop
+  // Runner stop — position en mode RUNNING et prix <= stop runner
   if (position.state === 'RUNNING' && position.stop_runner &&
       prixCourant <= position.stop_runner && !deja('RUNNER_STOP')) {
     alertes.push({ type: 'RUNNER_STOP', prix_trigger: position.stop_runner })
@@ -192,7 +188,6 @@ export function labelAlerte(type: AlertType): { titre: string; couleur: string; 
     TAKE_PROFIT_R1:  { titre: 'Objectif R1 atteint',     couleur: '#00C853', emoji: '🎯' },
     TAKE_PROFIT_R2:  { titre: 'Objectif R2 atteint',     couleur: '#00C853', emoji: '🎯' },
     TAKE_PROFIT_R3:  { titre: 'Objectif R3 atteint',     couleur: '#D4AF37', emoji: '🏆' },
-    BREAK_EVEN:      { titre: 'Break Even atteint',      couleur: '#2196F3', emoji: '⚖️' },
     RUNNER_STOP:     { titre: 'Stop Runner déclenché',   couleur: '#FF9800', emoji: '🏃' },
   }
   return map[type]
