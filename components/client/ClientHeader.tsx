@@ -138,7 +138,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   ] as Market[]
 
   const tickerItems  = sorted.length > 0 ? [...sorted, ...sorted, ...sorted, ...sorted] : []
-  const animDuration = Math.max(40, sorted.length * 3)
+  const animDuration = Math.max(15, sorted.length * 1.2)  // accéléré : ~24s pour 20 items
   const totalAlerts  = countLow + countHigh
 
   return (
@@ -165,7 +165,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
           ) : (
             <div
               className="ticker-track"
-              style={{ animationDuration: `${animDuration}s`, gap: '20px' }}>
+              style={{ animationDuration: `${animDuration}s`, gap: '20px', width: 'max-content' }}>
                 {tickerItems.map((m, i) => {
                   const color = m.change > 0 ? '#00C853' : m.change < 0 ? '#FF1744' : '#707070'
                   return (
