@@ -179,8 +179,11 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         className="flex items-center justify-between px-4 sm:px-6 h-14 flex-shrink-0 border-b"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
+        {/* Spacer mobile — réserve la place du bouton hamburger fixe (left:14 + width:36 + gap:8 = 58px) */}
+        <div className="block sm:hidden flex-shrink-0" style={{ width: '58px' }} />
+
         {/* ── Ticker Band ─────────────────────────────── */}
-        <div className="flex items-center gap-2 overflow-hidden mr-2" style={{ flex: "0 1 auto", minWidth: 0, maxWidth: "calc(100% - 120px)" }}>
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden mr-2" style={{ flex: "0 1 auto", maxWidth: "calc(100% - 180px)" }}>
           <span
             className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden sm:block"
             style={{ color: '#5C5C5C' }}>
