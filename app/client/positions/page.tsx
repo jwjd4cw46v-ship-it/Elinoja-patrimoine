@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Bell, TrendingUp, TrendingDown, Shield,
@@ -16,7 +16,6 @@ import {
   type Position, type AlertePosition,
 } from '@/lib/positions-engine'
 import Link from 'next/link'
-import { useSearchParams, useRouter } from 'next/navigation'
 
 /* ─────────────────────── Helpers ─────────────────────────────── */
 const fmt = (n: number | null | undefined, d = 3) =>
@@ -643,10 +642,7 @@ export default function PositionsDashboard() {
   const [showForm,   setShowForm]   = useState(false)
   const [detailPos,  setDetailPos]  = useState<Position | null>(null)
   const [venteData,  setVenteData]  = useState<{ pos: Position; alerte: AlertePosition | null } | null>(null)
-  const [prefill,    setPrefill]    = useState<Record<string, string> | null>(null)
-  const supabase  = createClient()
-  const searchParams = useSearchParams()
-  const router    = useRouter()
+  const supabase = createClient()
 
   async function fetchAll() {
     const [{ data: pos }, { data: al }] = await Promise.all([
@@ -687,8 +683,30 @@ export default function PositionsDashboard() {
       for (const p of pos as Position[]) {
         const prix = cotationsMap[p.ticker.toUpperCase()]
         if (!prix) continue
+
         const alertesDeja = (alertesExist || []).filter(a => a.position_id === p.id) as AlertePosition[]
-        const nouvelles = detecterAlertes(p, prix, alertesDeja)
+        const nouvelles   = detecterAlertes(p, prix, alertesDeja)
+
+        // Supprimer les alertes qui ne sont plus valides
+        // (le prix est revenu dans la zone normale depuis la dernière cotation)
+        for (const alerteDeja of alertesDeja) {
+          const encoreValide =
+            (alerteDeja.type === 'STOP_LOSS'      && prix <= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'RUNNER_STOP'    && prix <= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'TAKE_PROFIT_R1' && prix >= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'TAKE_PROFIT_R2' && prix >= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'TAKE_PROFIT_R3' && prix >= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'BREAK_EVEN'     && prix >= alerteDeja.prix_trigger)
+
+          if (!encoreValide) {
+            await supabase
+              .from('position_alertes')
+              .delete()
+              .eq('id', alerteDeja.id)
+          }
+        }
+
+        // Insérer les nouvelles alertes valides
         for (const a of nouvelles) {
           const { data: { user } } = await supabase.auth.getUser()
           const { error: insErr } = await supabase.from('position_alertes').insert({
@@ -714,18 +732,6 @@ export default function PositionsDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'position_alertes' }, fetchAll)
       .subscribe()
     const timer = setInterval(fetchCotations, 15 * 60 * 1000)
-
-    // Ouvrir automatiquement le formulaire si ?nouvelle=1
-    if (searchParams.get('nouvelle') === '1') {
-      const params: Record<string, string> = {}
-      const keys = ['ticker', 'support', 'r1', 'r2', 'r3', 'note']
-      keys.forEach(k => { const v = searchParams.get(k); if (v) params[k] = v })
-      setPrefill(params)
-      setShowForm(true)
-      // Nettoyer l'URL sans rechargement
-      router.replace('/client/positions', { scroll: false })
-    }
-
     return () => { supabase.removeChannel(ch); clearInterval(timer) }
   }, [])
 
@@ -870,9 +876,8 @@ export default function PositionsDashboard() {
       <AnimatePresence>
         {showForm && (
           <NouvellePositionModal
-            prefill={prefill}
-            onClose={() => { setShowForm(false); setPrefill(null) }}
-            onSaved={() => { fetchAll(); setShowForm(false); setPrefill(null) }}
+            onClose={() => setShowForm(false)}
+            onSaved={() => { fetchAll(); setShowForm(false) }}
           />
         )}
         {detailPos && (
@@ -897,21 +902,8 @@ export default function PositionsDashboard() {
 }
 
 /* ─── Nouvelle Position Modal ─────────────────────────────────── */
-function NouvellePositionModal({ onClose, onSaved, prefill }: {
-  onClose: () => void
-  onSaved: () => void
-  prefill?: Record<string, string> | null
-}) {
-  const [form, setForm] = useState({
-    ticker:   prefill?.ticker   || '',
-    p0:       '',
-    quantite: '',
-    support:  prefill?.support  || '',
-    r1:       prefill?.r1       || '',
-    r2:       prefill?.r2       || '',
-    r3:       prefill?.r3       || '',
-    note:     prefill?.note     || '',
-  })
+function NouvellePositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ ticker:'', p0:'', quantite:'', support:'', r1:'', r2:'', r3:'', note:'' })
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
