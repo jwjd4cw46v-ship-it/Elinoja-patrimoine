@@ -90,9 +90,8 @@ function getLabel(pathname: string) {
 }
 
 function WatchMiniCard({ item }: { item: any }) {
-  // FIX : <= et >= pour déclencher l'alerte quand le cours touche exactement le seuil
-  const isBelowLow  = item.low  > 0 && item.current > 0 && item.current <= item.low
-  const isAboveHigh = item.high > 0 && item.current > 0 && item.current >= item.high
+  const isBelowLow  = item.low  > 0 && item.current > 0 && item.current < item.low
+  const isAboveHigh = item.high > 0 && item.current > 0 && item.current > item.high
   const pct = item.high > item.low
     ? ((item.current - item.low) / (item.high - item.low)) * 100 : 50
   const pctClamped = Math.max(0, Math.min(100, pct))
@@ -167,9 +166,8 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
 
   const { items, loading: watchLoading, refresh } = useWatchlist(userId || profile.id || '')
 
-  // FIX : <= et >= pour le compteur d'alertes actives
   const activeAlerts = items.filter(
-    i => i.current > 0 && ((i.low > 0 && i.current <= i.low) || (i.high > 0 && i.current >= i.high))
+    i => i.current > 0 && ((i.low > 0 && i.current < i.low) || (i.high > 0 && i.current > i.high))
   ).length
 
   function handleRefresh() {
@@ -363,17 +361,19 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
       {/* ── MOBILE ── */}
       {isMobile && (
         <>
+          {/* Bouton hamburger — flush left, même hauteur que le header (h-14 = 56px) */}
           <button
             onClick={() => setMenuOpen(v => !v)}
             style={{
-              position: 'fixed', top: 10, left: 58, zIndex: 202,
+              position: 'fixed', top: 0, left: 0, zIndex: 202,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 36, height: 36, borderRadius: 8,
-              background: menuOpen ? C.goldDim : 'rgba(212,175,55,0.06)',
-              border: `1px solid ${C.goldBorder}`,
+              width: 56, height: 56,
+              background: menuOpen ? C.goldDim : 'transparent',
+              border: 'none',
+              borderRight: `1px solid ${menuOpen ? C.goldBorder : 'transparent'}`,
               color: C.gold, cursor: 'pointer',
             }}>
-            {menuOpen ? <X size={16} /> : <Menu size={16} />}
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 
           <AnimatePresence>

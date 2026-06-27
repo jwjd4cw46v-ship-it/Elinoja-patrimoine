@@ -176,7 +176,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
 
         /* Mobile : padding-left pour le bouton hamburger fixe du sidebar */
         @media (max-width: 767px) {
-          .client-header { padding-left: 62px !important; padding-right: 16px; }
+          .client-header { padding-left: 56px !important; padding-right: 16px; }
         }
         @media (min-width: 768px) {
           .client-header { padding-left: 24px; padding-right: 24px; }
