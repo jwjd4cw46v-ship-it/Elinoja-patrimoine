@@ -60,10 +60,10 @@ function DonutChart({ data }: { data: { ticker: string; pct: number }[] }) {
     const e2 = polarToCartesian(startDeg + gap / 2, rInner)
     const large = endDeg - startDeg > 180 ? 1 : 0
     return [
-      \`M \${s1.x} \${s1.y}\`,
-      \`A \${r} \${r} 0 \${large} 1 \${e1.x} \${e1.y}\`,
-      \`L \${s2.x} \${s2.y}\`,
-      \`A \${rInner} \${rInner} 0 \${large} 0 \${e2.x} \${e2.y}\`,
+      `M \${s1.x} \${s1.y}`,
+      `A \${r} \${r} 0 \${large} 1 \${e1.x} \${e1.y}`,
+      `L \${s2.x} \${s2.y}`,
+      `A \${rInner} \${rInner} 0 \${large} 0 \${e2.x} \${e2.y}`,
       'Z',
     ].join(' ')
   }
@@ -72,11 +72,11 @@ function DonutChart({ data }: { data: { ticker: string; pct: number }[] }) {
   const biggest = data.reduce((a, b) => a.pct > b.pct ? a : b, data[0])
 
   return (
-    <svg width={size} height={size} viewBox={\`0 0 \${size} \${size}\`} style={{ flexShrink: 0 }}>
+    <svg width={size} height={size} viewBox={`0 0 \${size} \${size}`} style={{ flexShrink: 0 }}>
       {segments.map((seg, i) => (
         <path key={seg.ticker} d={arcPath(seg.startDeg, seg.endDeg)}
           fill={seg.color}
-          style={{ filter: \`drop-shadow(0 2px 6px \${seg.color}55)\`, transition: 'opacity 0.2s' }}
+          style={{ filter: `drop-shadow(0 2px 6px \${seg.color}55)`, transition: 'opacity 0.2s' }}
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
         />
