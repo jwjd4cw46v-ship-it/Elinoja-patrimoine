@@ -31,67 +31,103 @@ const fmtPct = (n: number) =>
 /* ─── Palette donut ─────────────────────────────────────────────── */
 const DONUT_COLORS = ['#4CAF50', '#FFC107', '#2196F3', '#9C27B0', '#F44336', '#00BCD4', '#FF9800', '#E91E63']
 
-/* ─── Composant DonutChart SVG ──────────────────────────────────── */
+/* ─── Composant DonutChart 3D ───────────────────────────────────── */
 function DonutChart({ data }: { data: { ticker: string; pct: number }[] }) {
-  const size = 140
-  const cx = size / 2
-  const cy = size / 2
-  const R = 52
-  const r = 30
-  const GAP = 0.04
+  const W = 180, H = 200
+  const cx = W / 2, cy = 95
+  const RX = 78, RY = 48   // ellipse extérieure
+  const rx = 36, ry = 22   // ellipse intérieure (trou)
+  const DEPTH = 22          // hauteur 3D
+  const GAP = 0.025
 
   const total = data.reduce((s, d) => s + d.pct, 0)
   const norm  = data.map(d => ({ ...d, pct: total > 0 ? (d.pct / total) * 100 : 0 }))
 
-  function xy(angle: number, radius: number) {
+  // angles cumulés
+  let cum = -Math.PI / 2
+  const segs = norm.map((d, i) => {
+    const start = cum + GAP
+    const sweep = (d.pct / 100) * 2 * Math.PI - GAP * 2
+    cum += (d.pct / 100) * 2 * Math.PI
+    const end = start + sweep
+    return { ...d, start, end, color: DONUT_COLORS[i % DONUT_COLORS.length] }
+  })
+
+  function ept(a: number, outer: boolean) {
     return {
-      x: cx + radius * Math.cos(angle - Math.PI / 2),
-      y: cy + radius * Math.sin(angle - Math.PI / 2),
+      x: cx + (outer ? RX : rx) * Math.cos(a),
+      y: cy + (outer ? RY : ry) * Math.sin(a),
     }
   }
 
-  function seg(sa: number, ea: number): string {
-    const s = sa + GAP / 2
-    const e = ea - GAP / 2
-    if (e <= s) return ''
-    const lg = e - s > Math.PI ? 1 : 0
-    const a = xy(s, R), b = xy(e, R), c = xy(e, r), d = xy(s, r)
-    return `M${a.x.toFixed(2)} ${a.y.toFixed(2)} A${R} ${R} 0 ${lg} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)} L${c.x.toFixed(2)} ${c.y.toFixed(2)} A${r} ${r} 0 ${lg} 0 ${d.x.toFixed(2)} ${d.y.toFixed(2)}Z`
+  function topPath(s: number, e: number) {
+    const large = e - s > Math.PI ? 1 : 0
+    const a1 = ept(s, true), a2 = ept(e, true)
+    const b1 = ept(e, false), b2 = ept(s, false)
+    return `M${a1.x.toFixed(1)} ${a1.y.toFixed(1)} A${RX} ${RY} 0 ${large} 1 ${a2.x.toFixed(1)} ${a2.y.toFixed(1)} L${b1.x.toFixed(1)} ${b1.y.toFixed(1)} A${rx} ${ry} 0 ${large} 0 ${b2.x.toFixed(1)} ${b2.y.toFixed(1)}Z`
   }
 
-  let cum = 0
-  const segs = norm.map((d, i) => {
-    const start = cum
-    const sweep = (d.pct / 100) * 2 * Math.PI
-    cum += sweep
-    return { ...d, start, end: cum, color: DONUT_COLORS[i % DONUT_COLORS.length] }
-  })
+  function sidePath(s: number, e: number) {
+    // face avant uniquement (angles entre -PI/2 et PI/2 = bas du donut)
+    const clampS = Math.max(s, -Math.PI / 2)
+    const clampE = Math.min(e, Math.PI * 3 / 2)
+    if (clampS >= clampE) return ''
+    const large = clampE - clampS > Math.PI ? 1 : 0
+    const a1 = ept(clampS, true), a2 = ept(clampE, true)
+    const b1 = ept(clampE, true), b2 = ept(clampS, true)
+    return `M${a1.x.toFixed(1)} ${a1.y.toFixed(1)} A${RX} ${RY} 0 ${large} 1 ${a2.x.toFixed(1)} ${a2.y.toFixed(1)} L${b1.x.toFixed(1)} ${(b1.y + DEPTH).toFixed(1)} A${RX} ${RY} 0 ${large} 0 ${b2.x.toFixed(1)} ${(b2.y + DEPTH).toFixed(1)}Z`
+  }
+
+  // Label au milieu du segment
+  function labelPos(s: number, e: number) {
+    const mid = (s + e) / 2
+    const lx = cx + (RX * 0.65) * Math.cos(mid)
+    const ly = cy + (RY * 0.65) * Math.sin(mid)
+    return { x: lx, y: ly }
+  }
 
   const biggest = norm.reduce((a, b) => a.pct > b.pct ? a : b, norm[0])
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0, overflow: 'visible' }}>
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ flexShrink: 0, overflow: 'visible' }}>
+      {/* Ombre sous le donut */}
+      <ellipse cx={cx} cy={cy + DEPTH + 8} rx={RX - 4} ry={10}
+        fill="rgba(0,0,0,0.45)" />
+
+      {/* Faces latérales 3D (dessinées en premier, sous le dessus) */}
       {segs.map(s => {
-        const d = seg(s.start, s.end)
+        const d = sidePath(s.start, s.end)
         if (!d) return null
+        // Couleur plus sombre pour la face latérale
+        return <path key={`side-${s.ticker}`} d={d}
+          fill={s.color} opacity={0.45} />
+      })}
+
+      {/* Faces du dessus */}
+      {segs.map(s => (
+        <path key={`top-${s.ticker}`} d={topPath(s.start, s.end)}
+          fill={s.color}
+          style={{ filter: `drop-shadow(0 0 6px ${s.color}66)` }}
+        />
+      ))}
+
+      {/* Trou central dessus */}
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#111" />
+
+      {/* Labels % sur les segments */}
+      {segs.map(s => {
+        const pos = labelPos(s.start, s.end)
+        if (s.pct < 8) return null
         return (
-          <path key={s.ticker} d={d} fill={s.color}
-            style={{ filter: `drop-shadow(0 0 5px ${s.color}99)`, transition: 'opacity 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-          />
+          <text key={`lbl-${s.ticker}`}
+            x={pos.x} y={pos.y}
+            textAnchor="middle" dominantBaseline="middle"
+            fill="#FFFFFF" fontSize="11" fontWeight="700" fontFamily="monospace"
+            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
+            {s.pct.toFixed(0)}%
+          </text>
         )
       })}
-      {biggest && (
-        <>
-          <text x={cx} y={cy - 4} textAnchor="middle" fill="#FFFFFF" fontSize="14" fontWeight="700" fontFamily="monospace">
-            {biggest.pct.toFixed(0)}%
-          </text>
-          <text x={cx} y={cy + 12} textAnchor="middle" fill="#5C5C5C" fontSize="9">
-            {biggest.ticker}
-          </text>
-        </>
-      )}
     </svg>
   )
 }
