@@ -200,6 +200,7 @@ body {
 .ticker-track {
   display: flex;
   white-space: nowrap;
+  width: max-content;
   animation: ticker-scroll linear infinite;
   will-change: transform;
 }
