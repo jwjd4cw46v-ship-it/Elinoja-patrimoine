@@ -695,8 +695,7 @@ export default function PositionsDashboard() {
             (alerteDeja.type === 'RUNNER_STOP'    && prix <= alerteDeja.prix_trigger) ||
             (alerteDeja.type === 'TAKE_PROFIT_R1' && prix >= alerteDeja.prix_trigger) ||
             (alerteDeja.type === 'TAKE_PROFIT_R2' && prix >= alerteDeja.prix_trigger) ||
-            (alerteDeja.type === 'TAKE_PROFIT_R3' && prix >= alerteDeja.prix_trigger) ||
-            (alerteDeja.type === 'BREAK_EVEN'     && prix >= alerteDeja.prix_trigger)
+            (alerteDeja.type === 'TAKE_PROFIT_R3' && prix >= alerteDeja.prix_trigger)
 
           if (!encoreValide) {
             await supabase
