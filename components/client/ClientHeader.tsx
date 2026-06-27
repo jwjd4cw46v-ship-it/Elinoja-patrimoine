@@ -173,17 +173,23 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
           75%       { transform: rotate(4deg); }
         }
         .bell-ring { animation: bell-ring 0.6s ease; }
+
+        /* Mobile : padding-left pour le bouton hamburger fixe du sidebar */
+        @media (max-width: 767px) {
+          .client-header { padding-left: 62px !important; padding-right: 16px; }
+        }
+        @media (min-width: 768px) {
+          .client-header { padding-left: 24px; padding-right: 24px; }
+        }
       `}</style>
 
       <header
-        className="flex items-center justify-between px-4 sm:px-6 h-14 flex-shrink-0 border-b"
+        className="flex items-center justify-between h-14 flex-shrink-0 border-b client-header"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
-        {/* Spacer mobile — réserve la place du bouton hamburger fixe (left:14 + width:36 + gap:8 = 58px) */}
-        <div className="block sm:hidden flex-shrink-0" style={{ width: '58px' }} />
 
         {/* ── Ticker Band ─────────────────────────────── */}
-        <div className="flex items-center gap-2 min-w-0 overflow-hidden mr-2" style={{ flex: "0 1 auto", maxWidth: "calc(100% - 180px)" }}>
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden mr-2">
           <span
             className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden sm:block"
             style={{ color: '#5C5C5C' }}>
