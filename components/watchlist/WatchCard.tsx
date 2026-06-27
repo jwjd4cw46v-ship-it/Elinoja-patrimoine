@@ -11,6 +11,10 @@
  *   item.low       — seuil alerte bas (prix_bas en DB)
  *   item.high      — seuil alerte haut (prix_haut en DB)
  *   item.change    — variation % du jour
+ *
+ * Fix : conditions <= / >= pour déclencher l'alerte quand le cours
+ *       touche exactement le seuil (et non plus seulement quand il
+ *       le franchit strictement).
  */
 
 import { TrendingUp, TrendingDown } from 'lucide-react'
@@ -25,8 +29,10 @@ export interface WatchItem {
 }
 
 export function WatchCard({ item }: { item: WatchItem }) {
-  const isBelowLow  = item.low  > 0 && item.current < item.low
-  const isAboveHigh = item.high > 0 && item.current > item.high
+  // ── FIX : <= et >= au lieu de < et > ──────────────────────────────────────
+  const isBelowLow  = item.low  > 0 && item.current <= item.low
+  const isAboveHigh = item.high > 0 && item.current >= item.high
+  // ──────────────────────────────────────────────────────────────────────────
 
   const pct = (item.high > item.low)
     ? ((item.current - item.low) / (item.high - item.low)) * 100
