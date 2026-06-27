@@ -67,17 +67,17 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         : data.potential_gain ? data.potential_gain + '%' : null
 
       return {
-        symbol:      data.ticker,
-        titre:       data.title,
-        signal:      data.signal,
-        entrée:      data.entry_price,
-        objectif:    data.target_price,
-        stop:        data.stop_loss,
+        symbol:     data.ticker,
+        titre:      data.title,
+        signal:     data.signal,
+        entrée:     data.entry_price,
+        objectif:   data.target_price,
+        stop:       data.stop_loss,
         potentiel,
-        risque:      data.risk_level,
+        risque:     data.risk_level,
         description: data.description,
-        publiée_le:  new Date(data.created_at).toLocaleDateString('fr-FR'),
-        source:      'Elinoja Patrimoine — Analyses Techniques',
+        publiée_le: new Date(data.created_at).toLocaleDateString('fr-FR'),
+        source:     'Elinoja Patrimoine — Analyses Techniques',
       }
     }
 
@@ -148,8 +148,8 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         )
         const cours = market?.last ?? null
         const status =
-          cours && w.alert_price_low  && cours < w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
-          cours && w.alert_price_high && cours > w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
+          cours && w.alert_price_low  && cours <= w.alert_price_low  ? '▼ SEUIL BAS FRANCHI' :
+          cours && w.alert_price_high && cours >= w.alert_price_high ? '▲ SEUIL HAUT FRANCHI' :
           'Dans la zone'
 
         return {
@@ -168,6 +168,123 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         alertes_actives: actives.length,
         détails:         alertes,
         source:          'Watchlist personnelle Elinoja',
+      }
+    }
+
+    // ── Positions / Portefeuille ────────────────────────────────────────────
+    case 'getPositions': {
+      const { userId, state } = args
+      // state optionnel : 'open' | 'closed' | undefined (= toutes)
+
+      let query = supabase
+        .from('positions')
+        .select(`
+          id,
+          ticker,
+          state,
+          prix_moyen,
+          quantite_totale,
+          quantite_restante,
+          support,
+          r1, r2, r3,
+          stop_initial,
+          stop_actuel,
+          stop_runner,
+          q1_cible, q2_cible, q3_cible,
+          runner_cible,
+          r1_atteint, r2_atteint, r3_atteint,
+          pnl_realise,
+          prix_max_observe,
+          note,
+          created_at,
+          updated_at,
+          closed_at
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+
+      if (state) query = query.eq('state', state)
+
+      const { data: positions, error } = await query
+
+      if (error) return { error: error.message }
+      if (!positions?.length) return {
+        message: state
+          ? `Aucune position ${state === 'open' ? 'ouverte' : 'clôturée'} trouvée`
+          : 'Aucune position trouvée',
+        positions: [],
+      }
+
+      // Enrichir avec les cours live
+      let markets: any[] = []
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cotations`, { cache: 'no-store' })
+        const cotData = res.ok ? await res.json() : null
+        markets = cotData?.markets ?? []
+      } catch { /* silencieux */ }
+
+      const enriched = positions.map(p => {
+        const market = markets.find((m: any) =>
+          m.referentiel?.ticker?.toUpperCase() === p.ticker?.toUpperCase()
+        )
+        const coursActuel = market?.last ?? null
+
+        // P&L latent sur quantité restante
+        const pnlLatent = coursActuel && p.prix_moyen && p.quantite_restante
+          ? +((coursActuel - p.prix_moyen) * p.quantite_restante).toFixed(3)
+          : null
+
+        const pnlPct = coursActuel && p.prix_moyen
+          ? +(((coursActuel - p.prix_moyen) / p.prix_moyen) * 100).toFixed(2)
+          : null
+
+        const objectifsAtteints = [
+          p.r1_atteint ? 'R1' : null,
+          p.r2_atteint ? 'R2' : null,
+          p.r3_atteint ? 'R3' : null,
+        ].filter(Boolean)
+
+        return {
+          ticker:            p.ticker,
+          statut:            p.state === 'open' ? 'Ouverte' : 'Clôturée',
+          prix_moyen:        p.prix_moyen,
+          quantite_totale:   p.quantite_totale,
+          quantite_restante: p.quantite_restante,
+          cours_actuel:      coursActuel,
+          pnl_latent_tnd:    pnlLatent,
+          pnl_pct:           pnlPct !== null ? pnlPct + '%' : null,
+          pnl_realise:       p.pnl_realise,
+          support:           p.support,
+          objectifs: {
+            r1: p.r1, r2: p.r2, r3: p.r3,
+            runner: p.runner_cible,
+          },
+          stops: {
+            initial: p.stop_initial,
+            actuel:  p.stop_actuel,
+            runner:  p.stop_runner,
+          },
+          quantites_cibles: {
+            q1: p.q1_cible, q2: p.q2_cible, q3: p.q3_cible,
+          },
+          objectifs_atteints: objectifsAtteints,
+          prix_max_observe:   p.prix_max_observe,
+          note:               p.note,
+          ouvert_le:          new Date(p.created_at).toLocaleDateString('fr-FR'),
+          cloture_le:         p.closed_at ? new Date(p.closed_at).toLocaleDateString('fr-FR') : null,
+        }
+      })
+
+      // Résumé portefeuille
+      const ouvertes = enriched.filter(p => p.statut === 'Ouverte')
+      const pnlTotal = ouvertes.reduce((sum, p) => sum + (p.pnl_latent_tnd ?? 0), 0)
+
+      return {
+        total_positions:    positions.length,
+        positions_ouvertes: ouvertes.length,
+        pnl_latent_total:   +pnlTotal.toFixed(3) + ' TND',
+        positions:          enriched,
+        source:             'Portefeuille Elinoja Patrimoine',
       }
     }
 
@@ -256,7 +373,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       }
     }
 
-    // ── Publications CMF (liste) ────────────────────────────────────────────
+    // ── Publications CMF ────────────────────────────────────────────────────
     case 'getCMFAnnouncements': {
       const { ticker, limit = 5 } = args
       let query = supabase
@@ -270,7 +387,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { data } = await query
 
       if (!data?.length) return {
-        message: ticker ? `Aucune publication CMF pour "${ticker}"` : 'Aucune publication CMF disponible',
+        message: ticker
+          ? `Aucune publication CMF pour "${ticker}"`
+          : 'Aucune publication CMF disponible',
         publications: [],
       }
 
@@ -283,60 +402,6 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
           catégorie: p.category,
           résumé:    p.content?.slice(0, 200) + (p.content?.length > 200 ? '…' : ''),
           pdf:       p.pdf_url ?? null,
-        })),
-        source: 'CMF — Conseil du Marché Financier Tunisien',
-      }
-    }
-
-    // ── Contenu complet CMF ─────────────────────────────────────────────────
-    case 'getCMFAnnouncementContent': {
-      const { mnemo, keyword, limit = 5 } = args
-
-      // 1. Chercher par ticker SANS filtrer sur content/keyword en SQL
-      //    pour ne pas rater des docs dont le keyword est dans le titre
-      const { data, error } = await supabase
-        .from('cmf_announcements')
-        .select('id, title, company, ticker, category, content, pdf_url, created_at')
-        .ilike('ticker', mnemo)
-        .not('content', 'is', null)
-        .order('id', { ascending: false })
-        .limit(Math.min(limit, 10))
-
-      if (error) return { error: error.message }
-
-      if (!data?.length) return {
-        message: `Aucune publication CMF avec contenu disponible pour "${mnemo}"`,
-        publications: [],
-      }
-
-      // 2. Filtrer côté JS si keyword fourni (title OU content)
-      const filtered = keyword
-        ? data.filter(p =>
-            p.title?.toLowerCase().includes(keyword.toLowerCase()) ||
-            p.content?.toLowerCase().includes(keyword.toLowerCase())
-          )
-        : data
-
-      // 3. Si le filtre keyword ne trouve rien → retourner quand même tous les docs
-      const results = filtered.length > 0 ? filtered : data
-
-      return {
-        total:         results.length,
-        société:       mnemo.toUpperCase(),
-        keyword_used:  keyword ?? null,
-        keyword_match: filtered.length > 0,
-        publications: results.map(p => ({
-          id:        p.id,
-          titre:     p.title,
-          société:   p.company,
-          ticker:    p.ticker,
-          catégorie: p.category,
-          content:   p.content?.slice(0, 3000) ?? '',
-          tronqué:   (p.content?.length ?? 0) > 3000,
-          pdf:       p.pdf_url ?? null,
-          date:      p.created_at
-            ? new Date(p.created_at).toLocaleDateString('fr-FR')
-            : null,
         })),
         source: 'CMF — Conseil du Marché Financier Tunisien',
       }
@@ -355,6 +420,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
         cotations:     '/client/cotations',
         cmf:           '/client/cmf',
         calendrier:    '/client/calendrier',
+        portefeuille:  '/client/portefeuille',
       }
       return {
         action:  'navigate',
