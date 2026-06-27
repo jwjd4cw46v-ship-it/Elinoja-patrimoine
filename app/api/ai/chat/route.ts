@@ -4,8 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { executeTool } from '@/lib/ai/tools'
 import { AI_TOOLS, SYSTEM_PROMPT } from '@/types/ai'
 
-// ⚠️ PAS de `runtime = 'edge'` — le server Supabase client nécessite Node.js
-// Edge runtime n'a pas accès aux cookies, donc createClient() échoue silencieusement
 export const maxDuration = 60
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
@@ -115,7 +113,8 @@ export async function POST(req: NextRequest) {
                 let args: Record<string, any> = {}
                 try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
 
-                if (tc.function.name === 'getWatchlistAlerts' && !args.userId) {
+                // Injection automatique du userId pour tous les tools qui en ont besoin
+                if (['getWatchlistAlerts', 'getPositions'].includes(tc.function.name) && !args.userId) {
                   args.userId = user.id
                 }
 
