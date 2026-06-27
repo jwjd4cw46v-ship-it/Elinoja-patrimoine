@@ -14,18 +14,17 @@ interface WatchItem {
   alert_price_low:  number | null
   alert_price_high: number | null
   notes:            string | null
-  // enrichi depuis API
   current:  number
   change:   number
 }
 
 export default function WatchlistPage() {
-  const [items,   setItems]   = useState<WatchItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
-  const [userId,  setUserId]  = useState<string | null>(null)
-  const [spinning, setSpinning] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [items,     setItems]     = useState<WatchItem[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [showAdd,   setShowAdd]   = useState(false)
+  const [userId,    setUserId]    = useState<string | null>(null)
+  const [spinning,  setSpinning]  = useState(false)
+  const [lastUpdate,setLastUpdate]= useState<Date | null>(null)
   const triggered = useRef<Record<string, { low: boolean; high: boolean }>>({})
   const supabase = createClient()
 
@@ -42,7 +41,6 @@ export default function WatchlistPage() {
 
     if (!rows?.length) { setItems([]); setLoading(false); return }
 
-    // Enrichir avec les cotations BVMT
     try {
       const res = await fetch('/api/cotations', { cache: 'no-store' })
       const data = res.ok ? await res.json() : {}
@@ -51,11 +49,7 @@ export default function WatchlistPage() {
       const enriched: WatchItem[] = rows.map((row: any) => {
         const ticker = row.ticker?.toUpperCase()
         const market = markets.find(m => m.referentiel?.ticker?.toUpperCase() === ticker)
-        return {
-          ...row,
-          current: market?.last   ?? 0,
-          change:  market?.change ?? 0,
-        }
+        return { ...row, current: market?.last ?? 0, change: market?.change ?? 0 }
       })
 
       setItems(enriched)
@@ -84,10 +78,11 @@ export default function WatchlistPage() {
     toast.success('Retiré de la watchlist')
   }
 
+  // FIX : <= et >= pour compter les alertes actives
   const alertsCount = items.filter(i =>
     i.current > 0 && (
-      (i.alert_price_low  && i.current < i.alert_price_low) ||
-      (i.alert_price_high && i.current > i.alert_price_high)
+      (i.alert_price_low  && i.current <= i.alert_price_low) ||
+      (i.alert_price_high && i.current >= i.alert_price_high)
     )
   ).length
 
@@ -113,10 +108,10 @@ export default function WatchlistPage() {
       <div className="space-y-5">
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-semibold" style={{ color: '#F5F5F5' }}>Ma Watchlist</h1>
-            <div className="flex items-center gap-3 mt-0.5">
+            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
               <p className="text-sm" style={{ color: '#707070' }}>
                 {items.length} titre{items.length !== 1 ? 's' : ''} suivi{items.length !== 1 ? 's' : ''}
               </p>
@@ -132,7 +127,8 @@ export default function WatchlistPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          {/* FIX : flex-shrink-0 + gap réduit pour éviter chevauchement avec le ticker du header */}
+          <div className="flex items-center gap-2 flex-shrink-0">
             {lastUpdate && (
               <span style={{ fontSize: '10px', color: '#3A3A3A' }}>
                 {lastUpdate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
@@ -176,8 +172,9 @@ export default function WatchlistPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {items.map((item, i) => {
-              const isBelowLow  = item.current > 0 && !!item.alert_price_low  && item.current < item.alert_price_low
-              const isAboveHigh = item.current > 0 && !!item.alert_price_high && item.current > item.alert_price_high
+              // FIX : <= et >= au lieu de < et >
+              const isBelowLow  = item.current > 0 && !!item.alert_price_low  && item.current <= item.alert_price_low
+              const isAboveHigh = item.current > 0 && !!item.alert_price_high && item.current >= item.alert_price_high
               const hasAlerts   = !!(item.alert_price_low || item.alert_price_high)
 
               const low  = item.alert_price_low  ?? 0
@@ -218,7 +215,6 @@ export default function WatchlistPage() {
                       </div>
                     </div>
 
-                    {/* Cours actuel + variation */}
                     <div className="text-right">
                       {item.current > 0 ? (
                         <>
@@ -229,10 +225,7 @@ export default function WatchlistPage() {
                           }}>
                             {fmt(item.current)}
                           </div>
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: '3px',
-                            justifyContent: 'flex-end', marginTop: '2px',
-                          }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', marginTop: '2px' }}>
                             {item.change > 0 ? <TrendingUp size={10} color="#00C853" /> : item.change < 0 ? <TrendingDown size={10} color="#FF1744" /> : null}
                             <span style={{
                               fontSize: '10px', fontWeight: 500,
@@ -254,7 +247,6 @@ export default function WatchlistPage() {
                   {/* Zone Bas | Actuel | Haut */}
                   {hasAlerts && (
                     <>
-                      {/* Barre progression */}
                       {low > 0 && high > 0 && item.current > 0 && (
                         <div style={{
                           background: 'var(--noir-border)', borderRadius: '3px',
@@ -273,7 +265,6 @@ export default function WatchlistPage() {
                         </div>
                       )}
 
-                      {/* Grille Bas | Actuel | Haut */}
                       <div style={{
                         background: 'rgba(255,255,255,0.02)',
                         border: '1px solid var(--noir-border)',
@@ -316,7 +307,6 @@ export default function WatchlistPage() {
                         </div>
                       </div>
 
-                      {/* Statut alerte */}
                       {(isBelowLow || isAboveHigh) && (
                         <div style={{
                           fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em',
@@ -330,12 +320,10 @@ export default function WatchlistPage() {
                     </>
                   )}
 
-                  {/* Notes */}
                   {item.notes && (
                     <p className="text-xs leading-relaxed" style={{ color: '#5C5C5C' }}>{item.notes}</p>
                   )}
 
-                  {/* Bouton supprimer */}
                   <div className="flex justify-end mt-3">
                     <button onClick={() => removeItem(item.id)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg"
@@ -350,7 +338,6 @@ export default function WatchlistPage() {
         )}
       </div>
 
-      {/* ── Modal ajout ── */}
       <AnimatePresence>
         {showAdd && userId && (
           <AddWatchlistModal
@@ -364,7 +351,6 @@ export default function WatchlistPage() {
   )
 }
 
-// ─── Modal ajout ──────────────────────────────────────────────────────────────
 function AddWatchlistModal({ userId, onClose, onAdded }: {
   userId: string; onClose: () => void; onAdded: () => void
 }) {
