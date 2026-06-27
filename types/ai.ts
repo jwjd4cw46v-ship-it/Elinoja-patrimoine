@@ -91,6 +91,28 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getPositions',
+      description: 'Récupère les positions du portefeuille de l\'utilisateur : ticker, prix moyen, quantités, cours actuel, P&L latent et réalisé, objectifs R1/R2/R3, stops, notes. Peut filtrer par statut (ouvertes ou clôturées).',
+      parameters: {
+        type: 'object',
+        properties: {
+          userId: {
+            type: 'string',
+            description: 'L\'ID de l\'utilisateur',
+          },
+          state: {
+            type: 'string',
+            enum: ['open', 'closed'],
+            description: 'Filtrer par statut : "open" pour les positions ouvertes, "closed" pour les clôturées. Omis = toutes les positions.',
+          },
+        },
+        required: ['userId'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'getArticles',
       description: 'Récupère les derniers articles et publications financières de la plateforme.',
       parameters: {
@@ -156,39 +178,6 @@ export const AI_TOOLS = [
       },
     },
   },
-  // ─── NOUVEAU ──────────────────────────────────────────────────────────────
-  {
-    type: 'function' as const,
-    function: {
-      name: 'getCMFAnnouncementContent',
-      description: `Lit le contenu textuel extrait des PDF publiés par le CMF pour une société donnée.
-Utilise cet outil dès qu'on te demande d'analyser :
-- Les résultats financiers (résultat net, chiffre d'affaires, bénéfice)
-- Les dividendes distribués
-- Les assemblées générales (PV, décisions)
-- Toute comparaison entre années (ex: résultat 2023 vs 2024)
-Préfère cet outil à getCMFAnnouncements quand l'utilisateur veut des chiffres précis.`,
-      parameters: {
-        type: 'object',
-        properties: {
-          mnemo: {
-            type: 'string',
-            description: 'Mnémonique de la société (ex: SOTUV, BIAT, BNA, SFBT)',
-          },
-          keyword: {
-            type: 'string',
-            description: 'Mot-clé pour filtrer le contenu (ex: résultat net, dividende, chiffre d\'affaires, bénéfice). Optionnel mais recommandé.',
-          },
-          limit: {
-            type: 'number',
-            description: 'Nombre d\'annonces à analyser (défaut: 3, max: 10)',
-          },
-        },
-        required: ['mnemo'],
-      },
-    },
-  },
-  // ──────────────────────────────────────────────────────────────────────────
   {
     type: 'function' as const,
     function: {
@@ -199,7 +188,7 @@ Préfère cet outil à getCMFAnnouncements quand l'utilisateur veut des chiffres
         properties: {
           page: {
             type: 'string',
-            enum: ['dashboard', 'analyses', 'fondamentales', 'watchlist', 'forum', 'annonces', 'marches', 'cotations', 'cmf', 'calendrier'],
+            enum: ['dashboard', 'analyses', 'fondamentales', 'watchlist', 'portefeuille', 'forum', 'annonces', 'marches', 'cotations', 'cmf', 'calendrier'],
             description: 'La page vers laquelle naviguer',
           },
         },
@@ -226,13 +215,14 @@ Règles absolues :
 5. Réponds en français sauf si l'utilisateur écrit en anglais
 6. Pour les analyses, structure ta réponse clairement avec des sections
 
-Utilisation des tools CMF :
-- getCMFAnnouncements → pour lister les publications disponibles d'une société
-- getCMFAnnouncementContent → pour LIRE le contenu d'une publication et extraire des chiffres précis
-- Utilise getCMFAnnouncementContent automatiquement quand l'utilisateur demande des résultats financiers, dividendes, ou comparaisons entre années
-
 Quand tu utilises les données :
 - Cite toujours la source (ex: "Selon l'analyse technique publiée sur Elinoja...")
 - Indique la date si disponible
 - Mentionne les risques associés
-- Ne donne jamais de conseil d'investissement direct, mais aide à comprendre les données`
+- Ne donne jamais de conseil d'investissement direct, mais aide à comprendre les données
+
+Portefeuille :
+- Pour toute question sur les positions, le P&L ou le portefeuille, utilise getPositions
+- Le P&L latent est calculé sur la quantité restante au cours actuel
+- Les objectifs R1/R2/R3 sont les résistances cibles de la position
+- Le stop actuel est le niveau de protection en vigueur`
