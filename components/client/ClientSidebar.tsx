@@ -344,35 +344,16 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
 
   return (
     <>
-      <style>{`
-        @keyframes wmc-pulse-low  { 0%,100%{color:#FF3B3B;opacity:1}50%{color:#FF6B6B;opacity:.72} }
-        @keyframes wmc-pulse-high { 0%,100%{color:#00E676;opacity:1}50%{color:#69F0AE;opacity:.72} }
-        @keyframes wmc-glow-low   { 0%,100%{box-shadow:0 0 0 0 rgba(255,59,59,0)}50%{box-shadow:0 0 0 3px rgba(255,59,59,.12)} }
-        @keyframes wmc-glow-high  { 0%,100%{box-shadow:0 0 0 0 rgba(0,200,83,0)}50%{box-shadow:0 0 0 3px rgba(0,200,83,.12)} }
-        .wmc-alert-low  { animation: wmc-pulse-low  1.8s ease-in-out infinite; }
-        .wmc-alert-high { animation: wmc-pulse-high 1.8s ease-in-out infinite; }
-        .wmc-glow-low   { animation: wmc-glow-low  2s ease-in-out infinite; }
-        .wmc-glow-high  { animation: wmc-glow-high 2s ease-in-out infinite; }
-      `}</style>
-
-      {/* ── DESKTOP ── */}
+{/* ── DESKTOP ── */}
       {(isMobile === false || isMobile === null) && sidebar}
 
       {/* ── MOBILE ── */}
       {isMobile && (
         <>
-          {/* Bouton hamburger — flush left, même hauteur que le header (h-14 = 56px) */}
+          {/* Bouton hamburger — flush left, classe définie dans globals.css */}
           <button
             onClick={() => setMenuOpen(v => !v)}
-            style={{
-              position: 'fixed', top: 0, left: 0, zIndex: 202,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: 56, height: 56,
-              background: menuOpen ? C.goldDim : 'transparent',
-              border: 'none',
-              borderRight: `1px solid ${menuOpen ? C.goldBorder : 'transparent'}`,
-              color: C.gold, cursor: 'pointer',
-            }}>
+            className={`hamburger-btn${menuOpen ? ' open' : ''}`}>
             {menuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
 

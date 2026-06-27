@@ -143,48 +143,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
 
   return (
     <>
-      <style>{`
-        @keyframes ticker-scroll {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .ticker-track {
-          display: flex;
-          white-space: nowrap;
-          animation: ticker-scroll linear infinite;
-          will-change: transform;
-        }
-        .ticker-track:hover { animation-play-state: paused; }
-
-        @keyframes badge-pop {
-          0%   { transform: scale(1); }
-          40%  { transform: scale(1.5); }
-          70%  { transform: scale(0.88); }
-          100% { transform: scale(1); }
-        }
-        .badge-pop { animation: badge-pop 0.4s cubic-bezier(.36,.07,.19,.97); }
-
-        @keyframes bell-ring {
-          0%, 100% { transform: rotate(0deg); }
-          15%       { transform: rotate(12deg); }
-          30%       { transform: rotate(-10deg); }
-          45%       { transform: rotate(8deg); }
-          60%       { transform: rotate(-6deg); }
-          75%       { transform: rotate(4deg); }
-        }
-        .bell-ring { animation: bell-ring 0.6s ease; }
-
-        /* Mobile : padding-left pour le bouton hamburger fixe du sidebar */
-        @media (max-width: 767px) {
-          .client-header { padding-left: 56px !important; padding-right: 16px; }
-          .ticker-outer  { width: calc(100vw - 56px - 100px); } /* 56px hamburger + ~100px right actions */
-        }
-        @media (min-width: 768px) {
-          .client-header { padding-left: 24px; padding-right: 24px; }
-        }
-      `}</style>
-
-      <header
+<header
         className="flex items-center justify-between h-14 flex-shrink-0 border-b client-header"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
