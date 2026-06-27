@@ -180,7 +180,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
         {/* ── Ticker Band ─────────────────────────────── */}
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden mr-4">
+        <div className="flex items-center gap-2 overflow-hidden mr-2" style={{ flex: "0 1 auto", minWidth: 0, maxWidth: "calc(100% - 120px)" }}>
           <span
             className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden sm:block"
             style={{ color: '#5C5C5C' }}>
