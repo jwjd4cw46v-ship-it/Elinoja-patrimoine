@@ -27,6 +27,75 @@ const fmtPnl = (n: number) =>
 const fmtPct = (n: number) =>
   `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`
 
+
+/* ─── Palette donut ─────────────────────────────────────────────── */
+const DONUT_COLORS = ['#4CAF50', '#FFC107', '#2196F3', '#9C27B0', '#F44336', '#00BCD4', '#FF9800', '#E91E63']
+
+/* ─── Composant DonutChart SVG ──────────────────────────────────── */
+function DonutChart({ data }: { data: { ticker: string; pct: number }[] }) {
+  const size   = 140
+  const cx     = size / 2
+  const cy     = size / 2
+  const r      = 52
+  const rInner = 32
+  const gap    = 2 // gap entre segments en degrés
+
+  let cumul = 0
+  const segments = data.map((d, i) => {
+    const startDeg = cumul * 3.6
+    cumul += d.pct
+    const endDeg = cumul * 3.6
+    return { ...d, startDeg, endDeg, color: DONUT_COLORS[i % DONUT_COLORS.length] }
+  })
+
+  function polarToCartesian(deg: number, radius: number) {
+    const rad = ((deg - 90) * Math.PI) / 180
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) }
+  }
+
+  function arcPath(startDeg: number, endDeg: number) {
+    const s1 = polarToCartesian(startDeg + gap / 2, r)
+    const e1 = polarToCartesian(endDeg - gap / 2, r)
+    const s2 = polarToCartesian(endDeg - gap / 2, rInner)
+    const e2 = polarToCartesian(startDeg + gap / 2, rInner)
+    const large = endDeg - startDeg > 180 ? 1 : 0
+    return [
+      \`M \${s1.x} \${s1.y}\`,
+      \`A \${r} \${r} 0 \${large} 1 \${e1.x} \${e1.y}\`,
+      \`L \${s2.x} \${s2.y}\`,
+      \`A \${rInner} \${rInner} 0 \${large} 0 \${e2.x} \${e2.y}\`,
+      'Z',
+    ].join(' ')
+  }
+
+  // Label du plus grand segment au centre
+  const biggest = data.reduce((a, b) => a.pct > b.pct ? a : b, data[0])
+
+  return (
+    <svg width={size} height={size} viewBox={\`0 0 \${size} \${size}\`} style={{ flexShrink: 0 }}>
+      {segments.map((seg, i) => (
+        <path key={seg.ticker} d={arcPath(seg.startDeg, seg.endDeg)}
+          fill={seg.color}
+          style={{ filter: \`drop-shadow(0 2px 6px \${seg.color}55)\`, transition: 'opacity 0.2s' }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        />
+      ))}
+      {/* Label centre */}
+      {biggest && (
+        <>
+          <text x={cx} y={cy - 6} textAnchor="middle" fill="#F5F5F5" fontSize="13" fontWeight="700" fontFamily="monospace">
+            {biggest.pct.toFixed(0)}%
+          </text>
+          <text x={cx} y={cy + 10} textAnchor="middle" fill="#5C5C5C" fontSize="9">
+            {biggest.ticker}
+          </text>
+        </>
+      )}
+    </svg>
+  )
+}
+
 /* ─────────────── PositionCard — carte principale ──────────────── */
 function PositionCard({
   pos,
@@ -742,7 +811,17 @@ export default function PositionsDashboard() {
       return s + (prix ? (prix - p.prix_moyen) * p.quantite_restante : 0) + p.pnl_realise
     }, 0)
     const perf = capitalEngage > 0 ? (pnlGlobal / capitalEngage) * 100 : 0
-    return { capitalEngage, pnlGlobal, perf, alertes: alertes.length }
+    // Répartition par ticker
+    const repartition = positions.map(p => {
+      const valeur = p.prix_moyen * p.quantite_restante
+      return {
+        ticker: p.ticker,
+        valeur,
+        pct: capitalEngage > 0 ? (valeur / capitalEngage) * 100 : 0,
+      }
+    }).sort((a, b) => b.pct - a.pct)
+
+    return { capitalEngage, pnlGlobal, perf, alertes: alertes.length, repartition }
   }, [positions, cotations, alertes])
 
   return (
@@ -771,10 +850,10 @@ export default function PositionsDashboard() {
 
       {/* Résumé portefeuille */}
       <div className="card-premium p-5">
-        <div className="text-xs font-bold tracking-wider mb-3" style={{ color: '#5C5C5C' }}>
+        <div className="text-xs font-bold tracking-wider mb-4" style={{ color: '#5C5C5C' }}>
           RÉSUMÉ PORTEFEUILLE
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-4 pb-4 mb-4" style={{ borderBottom: '1px solid var(--noir-border)' }}>
           <div>
             <div className="text-xs mb-1" style={{ color: '#707070' }}>Capital engagé</div>
             <div className="text-xl font-bold font-mono" style={{ color: '#F5F5F5' }}>
@@ -796,11 +875,41 @@ export default function PositionsDashboard() {
             </div>
           </div>
         </div>
-        {/* Mini sparkline placeholder */}
-        {stats.pnlGlobal !== 0 && (
-          <div className="mt-3 h-8 rounded" style={{ background: 'rgba(0,200,83,0.04)' }}>
-            <div className="h-full flex items-center px-2">
-              <TrendingUp size={10} style={{ color: stats.pnlGlobal >= 0 ? '#00C853' : '#FF1744' }} />
+
+        {/* Répartition des positions */}
+        {stats.repartition.length > 0 && (
+          <div>
+            <div className="text-xs font-bold tracking-wider mb-4" style={{ color: '#5C5C5C' }}>
+              RÉPARTITION DES POSITIONS
+            </div>
+            <div className="flex items-center gap-6">
+              {/* Donut SVG */}
+              <DonutChart data={stats.repartition} />
+              {/* Légende */}
+              <div className="flex-1 space-y-2">
+                {stats.repartition.map((r, i) => (
+                  <div key={r.ticker}
+                    className="flex items-center justify-between py-2"
+                    style={{ borderBottom: i < stats.repartition.length - 1 ? '1px solid var(--noir-border)' : 'none' }}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                      <div>
+                        <div className="text-sm font-bold" style={{ color: '#F5F5F5' }}>{r.ticker}</div>
+                        <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                          {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DT
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm font-bold" style={{ color: DONUT_COLORS[i % DONUT_COLORS.length] }}>
+                        {r.pct.toFixed(0)}%
+                      </span>
+                      <ChevronRight size={12} style={{ color: '#3A3A3A' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
