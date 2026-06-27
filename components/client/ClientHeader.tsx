@@ -138,7 +138,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   ] as Market[]
 
   const tickerItems  = sorted.length > 0 ? [...sorted, ...sorted, ...sorted, ...sorted] : []
-  const animDuration = Math.max(15, sorted.length * 1.2)  // accéléré : ~24s pour 20 items
+  const animDuration = Math.max(30, sorted.length * 2.4)  // ~48s pour 20 items
   const totalAlerts  = countLow + countHigh
 
   return (
