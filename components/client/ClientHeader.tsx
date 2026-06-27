@@ -177,6 +177,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         /* Mobile : padding-left pour le bouton hamburger fixe du sidebar */
         @media (max-width: 767px) {
           .client-header { padding-left: 56px !important; padding-right: 16px; }
+          .ticker-outer  { width: calc(100vw - 56px - 100px); } /* 56px hamburger + ~100px right actions */
         }
         @media (min-width: 768px) {
           .client-header { padding-left: 24px; padding-right: 24px; }
@@ -189,9 +190,9 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
 
 
         {/* ── Ticker Band ─────────────────────────────── */}
-        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden mr-2">
+        <div className="flex-1 min-w-0 overflow-hidden ticker-outer">
           <span
-            className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden sm:block"
+            className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden"
             style={{ color: '#5C5C5C' }}>
             MARCHÉ
           </span>
@@ -237,7 +238,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         </div>
 
         {/* ── Right actions ────────────────────────────── */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-1">
 
           {/* ── Cloche avec badges ── */}
           <div className="relative">
