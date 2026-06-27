@@ -163,10 +163,9 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
               ))}
             </div>
           ) : (
-            <div className="overflow-hidden flex-1">
-              <div
-                className="ticker-track"
-                style={{ animationDuration: `${animDuration}s`, gap: '20px' }}>
+            <div
+              className="ticker-track"
+              style={{ animationDuration: `${animDuration}s`, gap: '20px' }}>
                 {tickerItems.map((m, i) => {
                   const color = m.change > 0 ? '#00C853' : m.change < 0 ? '#FF1744' : '#707070'
                   return (
@@ -191,7 +190,6 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
                     </span>
                   )
                 })}
-              </div>
             </div>
           )}
         </div>
