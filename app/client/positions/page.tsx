@@ -33,61 +33,61 @@ const DONUT_COLORS = ['#4CAF50', '#FFC107', '#2196F3', '#9C27B0', '#F44336', '#0
 
 /* ─── Composant DonutChart SVG ──────────────────────────────────── */
 function DonutChart({ data }: { data: { ticker: string; pct: number }[] }) {
-  const size   = 140
-  const cx     = size / 2
-  const cy     = size / 2
-  const r      = 52
-  const rInner = 32
-  const gap    = 2 // gap entre segments en degrés
+  const size = 140
+  const cx = size / 2
+  const cy = size / 2
+  const R = 52
+  const r = 30
+  const GAP = 0.04
 
-  let cumul = 0
-  const segments = data.map((d, i) => {
-    const startDeg = cumul * 3.6
-    cumul += d.pct
-    const endDeg = cumul * 3.6
-    return { ...d, startDeg, endDeg, color: DONUT_COLORS[i % DONUT_COLORS.length] }
+  const total = data.reduce((s, d) => s + d.pct, 0)
+  const norm  = data.map(d => ({ ...d, pct: total > 0 ? (d.pct / total) * 100 : 0 }))
+
+  function xy(angle: number, radius: number) {
+    return {
+      x: cx + radius * Math.cos(angle - Math.PI / 2),
+      y: cy + radius * Math.sin(angle - Math.PI / 2),
+    }
+  }
+
+  function seg(sa: number, ea: number): string {
+    const s = sa + GAP / 2
+    const e = ea - GAP / 2
+    if (e <= s) return ''
+    const lg = e - s > Math.PI ? 1 : 0
+    const a = xy(s, R), b = xy(e, R), c = xy(e, r), d = xy(s, r)
+    return `M${a.x.toFixed(2)} ${a.y.toFixed(2)} A${R} ${R} 0 ${lg} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)} L${c.x.toFixed(2)} ${c.y.toFixed(2)} A${r} ${r} 0 ${lg} 0 ${d.x.toFixed(2)} ${d.y.toFixed(2)}Z`
+  }
+
+  let cum = 0
+  const segs = norm.map((d, i) => {
+    const start = cum
+    const sweep = (d.pct / 100) * 2 * Math.PI
+    cum += sweep
+    return { ...d, start, end: cum, color: DONUT_COLORS[i % DONUT_COLORS.length] }
   })
 
-  function polarToCartesian(deg: number, radius: number) {
-    const rad = ((deg - 90) * Math.PI) / 180
-    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) }
-  }
-
-  function arcPath(startDeg: number, endDeg: number) {
-    const s1 = polarToCartesian(startDeg + gap / 2, r)
-    const e1 = polarToCartesian(endDeg - gap / 2, r)
-    const s2 = polarToCartesian(endDeg - gap / 2, rInner)
-    const e2 = polarToCartesian(startDeg + gap / 2, rInner)
-    const large = endDeg - startDeg > 180 ? 1 : 0
-    return [
-      `M \${s1.x} \${s1.y}`,
-      `A \${r} \${r} 0 \${large} 1 \${e1.x} \${e1.y}`,
-      `L \${s2.x} \${s2.y}`,
-      `A \${rInner} \${rInner} 0 \${large} 0 \${e2.x} \${e2.y}`,
-      'Z',
-    ].join(' ')
-  }
-
-  // Label du plus grand segment au centre
-  const biggest = data.reduce((a, b) => a.pct > b.pct ? a : b, data[0])
+  const biggest = norm.reduce((a, b) => a.pct > b.pct ? a : b, norm[0])
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 \${size} \${size}`} style={{ flexShrink: 0 }}>
-      {segments.map((seg, i) => (
-        <path key={seg.ticker} d={arcPath(seg.startDeg, seg.endDeg)}
-          fill={seg.color}
-          style={{ filter: `drop-shadow(0 2px 6px \${seg.color}55)`, transition: 'opacity 0.2s' }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.8')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
-        />
-      ))}
-      {/* Label centre */}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0, overflow: 'visible' }}>
+      {segs.map(s => {
+        const d = seg(s.start, s.end)
+        if (!d) return null
+        return (
+          <path key={s.ticker} d={d} fill={s.color}
+            style={{ filter: `drop-shadow(0 0 5px ${s.color}99)`, transition: 'opacity 0.15s' }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          />
+        )
+      })}
       {biggest && (
         <>
-          <text x={cx} y={cy - 6} textAnchor="middle" fill="#F5F5F5" fontSize="13" fontWeight="700" fontFamily="monospace">
+          <text x={cx} y={cy - 4} textAnchor="middle" fill="#FFFFFF" fontSize="14" fontWeight="700" fontFamily="monospace">
             {biggest.pct.toFixed(0)}%
           </text>
-          <text x={cx} y={cy + 10} textAnchor="middle" fill="#5C5C5C" fontSize="9">
+          <text x={cx} y={cy + 12} textAnchor="middle" fill="#5C5C5C" fontSize="9">
             {biggest.ticker}
           </text>
         </>
