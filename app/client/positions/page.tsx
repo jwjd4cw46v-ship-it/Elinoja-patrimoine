@@ -751,10 +751,9 @@ function ConcentrationRow({ r, i, total }: {
   const isLast = i === total - 1
 
   return (
-    <div>
-      <div
-        className="flex items-center justify-between py-2"
-        style={{ borderBottom: !isLast || (hasAlert && open) ? '1px solid var(--noir-border)' : 'none' }}>
+    <div style={{ borderBottom: !isLast ? '1px solid var(--noir-border)' : 'none' }}>
+      {/* Ligne ticker */}
+      <div className="flex items-center justify-between py-2">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
             style={{ background: color }} />
@@ -767,7 +766,7 @@ function ConcentrationRow({ r, i, total }: {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold" style={{ color }}>{r.pct.toFixed(0)}%</span>
-          {hasAlert && (
+          {hasAlert ? (
             <button
               onClick={() => setOpen(v => !v)}
               style={{
@@ -778,29 +777,28 @@ function ConcentrationRow({ r, i, total }: {
                 cursor: 'pointer', transition: 'background 0.2s',
               }}>
               <span style={{ fontSize: '11px' }}>⚠️</span>
-              <svg
-                width="10" height="10" viewBox="0 0 10 10"
-                style={{
-                  color: '#FF9800',
-                  transform: open ? 'rotate(180deg)' : 'none',
-                  transition: 'transform 0.2s',
-                }}>
+              <svg width="10" height="10" viewBox="0 0 10 10"
+                style={{ color: '#FF9800', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                 <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
               </svg>
             </button>
+          ) : (
+            <ChevronRight size={12} style={{ color: '#3A3A3A' }} />
           )}
-          {!hasAlert && <ChevronRight size={12} style={{ color: '#3A3A3A' }} />}
         </div>
       </div>
 
-      {/* Panel d'avertissement */}
+      {/* Panel pleine largeur — en dehors du flex row */}
       {hasAlert && open && (
-        <div className="rounded-lg p-2.5 mb-1"
+        <div className="rounded-lg p-2.5 mb-2"
           style={{
             background: 'rgba(255,152,0,0.07)',
             border: '1px solid rgba(255,152,0,0.3)',
+            marginLeft: '-14px',
+            marginRight: '-14px',
+            borderRadius: '0',
           }}>
-          <div className="flex items-start gap-2">
+          <div className="flex items-start gap-2" style={{ padding: '0 14px' }}>
             <span style={{ fontSize: '13px', flexShrink: 0 }}>⚠️</span>
             <div>
               <div className="text-xs font-bold" style={{ color: '#FF9800' }}>
