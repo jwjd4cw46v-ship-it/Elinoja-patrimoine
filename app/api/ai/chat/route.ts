@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const { messages, conversationId } = await req.json()
 
     const openaiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: SYSTEM_PROMPT + `\n\nContexte utilisateur:\n- userId: ${user.id}\n- email: ${user.email}` },
       ...messages.map((m: any) => ({
         role:    m.role,
         content: m.content,
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
                 try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
 
                 // Injection automatique du userId pour tous les tools qui en ont besoin
-                if (['getWatchlistAlerts', 'getPositions'].includes(tc.function.name) && !args.userId) {
+                if (['getWatchlistAlerts', 'getPositions', 'getPositionDetail', 'getPositionAlerts', 'getPortfolioSummary'].includes(tc.function.name) && !args.userId) {
                   args.userId = user.id
                 }
 
