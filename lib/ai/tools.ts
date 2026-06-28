@@ -1,9 +1,13 @@
 // ─── Elinoja AI — Tool Executor ───────────────────────────────────────────────
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export async function executeTool(name: string, args: Record<string, any>): Promise<any> {
   const supabase = createClient()
-  const serviceSupabase = createServiceClient()
+  const serviceSupabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
   const { data: { user } } = await supabase.auth.getUser()
 
   switch (name) {
