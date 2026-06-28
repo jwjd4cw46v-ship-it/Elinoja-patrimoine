@@ -754,6 +754,7 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
           return (
             <div key={r.ticker}
               style={{ borderBottom: i < repartition.length - 1 ? '1px solid var(--noir-border)' : 'none' }}>
+
               {/* Ligne ticker */}
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2">
@@ -765,46 +766,57 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Pourcentage + bouton sous le % */}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <span className="text-sm font-bold" style={{ color }}>{r.pct.toFixed(0)}%</span>
                   {hasAlert ? (
-                    <button
-                      onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '2px',
-                        background: isOpen ? 'rgba(255,152,0,0.15)' : 'rgba(255,152,0,0.08)',
-                        border: '1px solid rgba(255,152,0,0.35)',
-                        borderRadius: '6px', padding: '2px 6px',
-                        cursor: 'pointer', transition: 'background 0.2s',
-                      }}>
-                      <span style={{ fontSize: '11px' }}>⚠️</span>
-                      <svg width="10" height="10" viewBox="0 0 10 10"
-                        style={{ color: '#FF9800', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                        <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-                      </svg>
-                    </button>
+                    <div style={{ marginTop: '3px' }}>
+                      <button
+                        onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '2px',
+                          background: isOpen ? 'rgba(255,152,0,0.15)' : 'rgba(255,152,0,0.08)',
+                          border: '1px solid rgba(255,152,0,0.35)',
+                          borderRadius: '6px', padding: '2px 5px',
+                          cursor: 'pointer', transition: 'background 0.2s',
+                        }}>
+                        <span style={{ fontSize: '10px' }}>⚠️</span>
+                        <svg width="9" height="9" viewBox="0 0 10 10"
+                          style={{ color: '#FF9800', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </div>
                   ) : (
-                    <ChevronRight size={12} style={{ color: '#3A3A3A' }} />
+                    <div style={{ marginTop: '3px' }}>
+                      <ChevronRight size={11} style={{ color: '#3A3A3A' }} />
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Panneau inline — sous la ligne, dans la même colonne */}
+              {/* Panneau pleine largeur de la colonne */}
               {hasAlert && isOpen && (
-                <div className="rounded-lg p-2.5 mb-2"
+                <div className="rounded-lg mb-2"
                   style={{
                     background: 'rgba(255,152,0,0.07)',
                     border: '1px solid rgba(255,152,0,0.3)',
+                    overflow: 'hidden',
                   }}>
-                  <div className="flex items-start gap-1.5">
-                    <span style={{ fontSize: '12px', flexShrink: 0 }}>⚠️</span>
-                    <div>
-                      <div className="text-xs font-bold" style={{ color: '#FF9800' }}>
-                        Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
-                      </div>
-                      <div className="text-xs mt-0.5" style={{ color: '#A07040' }}>
-                        Risque de concentration. Diversification recommandée.
-                      </div>
+                  {/* Titre centré avec icône */}
+                  <div style={{
+                    textAlign: 'center', padding: '8px 10px 4px',
+                    borderBottom: '1px solid rgba(255,152,0,0.15)',
+                  }}>
+                    <span style={{ fontSize: '14px' }}>⚠️</span>
+                  </div>
+                  {/* Texte sur une colonne */}
+                  <div style={{ padding: '8px 10px' }}>
+                    <div className="text-xs font-bold" style={{ color: '#FF9800', marginBottom: '3px' }}>
+                      Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
+                    </div>
+                    <div className="text-xs" style={{ color: '#A07040', lineHeight: 1.4 }}>
+                      Risque de concentration. Diversification recommandée.
                     </div>
                   </div>
                 </div>
