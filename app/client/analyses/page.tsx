@@ -242,12 +242,12 @@ function AnalysisDetailModal({ analysis: a, onClose }: { analysis: TechnicalAnal
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 pb-4 overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.8)' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
 
       <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95 }}
-        className="w-full max-w-2xl rounded-2xl border my-8 overflow-hidden"
+        className="w-full max-w-2xl rounded-2xl border mb-8 overflow-hidden"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
         {/* Header */}
