@@ -321,8 +321,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const userId = args.userId || user?.id
       if (!userId) return { error: 'Utilisateur non connecté' }
 
-      let query = supabase
-        serviceSupabase
+      let query = serviceSupabase
         .from('positions')
         .select('*')
         .eq('user_id', userId)
@@ -371,8 +370,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const userId = args.userId || user?.id
       if (!userId) return { error: 'Utilisateur non connecté' }
 
-      const { data: pos } = await supabase
-        serviceSupabase
+      const { data: pos } = await serviceSupabase
         .from('positions')
         .select('*')
         .eq('user_id', userId)
@@ -444,8 +442,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const userId = args.userId || user?.id
       if (!userId) return { error: 'Utilisateur non connecté' }
 
-      const { data: alertes } = await supabase
-        serviceSupabase
+      const { data: alertes } = await serviceSupabase
         .from('position_alertes')
         .select('type, prix_trigger, prix_marche, is_acted, created_at, positions(ticker, stop_actuel, quantite_restante)')
         .eq('user_id', userId)
@@ -483,8 +480,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const userId = args.userId || user?.id
       if (!userId) return { error: 'Utilisateur non connecté' }
 
-      const { data: positions } = await supabase
-        serviceSupabase
+      const { data: positions } = await serviceSupabase
         .from('positions')
         .select('ticker, state, prix_moyen, quantite_restante, quantite_totale, pnl_realise')
         .eq('user_id', userId)
