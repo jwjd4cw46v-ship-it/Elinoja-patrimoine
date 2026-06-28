@@ -296,6 +296,63 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
     }
 
 
+
+    // ── Avis des experts ────────────────────────────────────────────────────
+    case 'getExpertOpinions': {
+      const { ticker } = args
+
+      let query = serviceSupabase
+        .from('expert_opinions')
+        .select(`
+          ticker, company_name, market, signal, target_price,
+          cours_creation, comment, created_at, expires_at,
+          profiles(full_name)
+        `)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+
+      if (ticker) query = query.ilike('ticker', ticker)
+      else query = query.limit(10)
+
+      const { data, error } = await query
+
+      if (error) return { error: error.message }
+      if (!data?.length) return {
+        message: ticker
+          ? `Aucun avis d'expert disponible pour ${ticker}`
+          : 'Aucun avis d'expert disponible',
+        opinions: [],
+      }
+
+      const signalLabels: Record<string, string> = {
+        buy:        '🟢 ACHAT',
+        accumulate: '🔵 ACCUMULER',
+        hold:       '🟡 CONSERVER',
+        reduce:     '🟠 ALLÉGER',
+        sell:       '🔴 VENDRE',
+      }
+
+      return {
+        total: data.length,
+        opinions: data.map((o: any) => ({
+          ticker:          o.ticker,
+          société:         o.company_name ?? o.ticker,
+          marché:          o.market ?? 'BVMT',
+          signal:          signalLabels[o.signal] ?? o.signal.toUpperCase(),
+          objectif:        o.target_price ? `${o.target_price} DT` : null,
+          cours_création:  o.cours_creation ? `${o.cours_creation} DT` : null,
+          potentiel:       o.target_price && o.cours_creation
+            ? `${(((o.target_price - o.cours_creation) / o.cours_creation) * 100).toFixed(1)}%`
+            : null,
+          commentaire:     o.comment ?? null,
+          expert:          (o.profiles as any)?.full_name ?? 'Expert Elinoja',
+          publié_le:       new Date(o.created_at).toLocaleDateString('fr-FR'),
+          expire_le:       new Date(o.expires_at).toLocaleDateString('fr-FR'),
+        })),
+        source: 'Elinoja Patrimoine — Avis Experts',
+      }
+    }
+
     // ── Navigation ──────────────────────────────────────────────────────────
     case 'navigateTo': {
       const routes: Record<string, string> = {
