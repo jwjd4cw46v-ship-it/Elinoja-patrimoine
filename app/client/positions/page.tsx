@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Bell, TrendingUp, TrendingDown, Shield,
@@ -739,6 +739,84 @@ function VenteModal({
 }
 
 /* ─────────────────────── Page principale ──────────────────────── */
+// ─── ConcentrationRow ────────────────────────────────────────────────────────
+function ConcentrationRow({ r, i, total }: {
+  r: { ticker: string; valeur: number; pct: number }
+  i: number
+  total: number
+}) {
+  const [open, setOpen] = React.useState(false)
+  const hasAlert = r.pct > 20
+  const color = DONUT_COLORS[i % DONUT_COLORS.length]
+  const isLast = i === total - 1
+
+  return (
+    <div>
+      <div
+        className="flex items-center justify-between py-2"
+        style={{ borderBottom: !isLast || (hasAlert && open) ? '1px solid var(--noir-border)' : 'none' }}>
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ background: color }} />
+          <div>
+            <div className="text-sm font-bold" style={{ color: '#F5F5F5' }}>{r.ticker}</div>
+            <div className="text-xs" style={{ color: '#5C5C5C' }}>
+              {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DT
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold" style={{ color }}>{r.pct.toFixed(0)}%</span>
+          {hasAlert && (
+            <button
+              onClick={() => setOpen(v => !v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '2px',
+                background: open ? 'rgba(255,152,0,0.15)' : 'rgba(255,152,0,0.08)',
+                border: '1px solid rgba(255,152,0,0.35)',
+                borderRadius: '6px', padding: '2px 6px',
+                cursor: 'pointer', transition: 'background 0.2s',
+              }}>
+              <span style={{ fontSize: '11px' }}>⚠️</span>
+              <svg
+                width="10" height="10" viewBox="0 0 10 10"
+                style={{
+                  color: '#FF9800',
+                  transform: open ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s',
+                }}>
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+              </svg>
+            </button>
+          )}
+          {!hasAlert && <ChevronRight size={12} style={{ color: '#3A3A3A' }} />}
+        </div>
+      </div>
+
+      {/* Panel d'avertissement */}
+      {hasAlert && open && (
+        <div className="rounded-lg p-2.5 mb-1"
+          style={{
+            background: 'rgba(255,152,0,0.07)',
+            border: '1px solid rgba(255,152,0,0.3)',
+          }}>
+          <div className="flex items-start gap-2">
+            <span style={{ fontSize: '13px', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div className="text-xs font-bold" style={{ color: '#FF9800' }}>
+                Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: '#A07040' }}>
+                Risque de concentration. Diversification recommandée.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PositionsDashboard() {
   const [positions,  setPositions]  = useState<Position[]>([])
   const [alertes,    setAlertes]    = useState<AlertePosition[]>([])
@@ -924,50 +1002,12 @@ export default function PositionsDashboard() {
               {/* Légende */}
               <div className="flex-1 space-y-2">
                 {stats.repartition.map((r, i) => (
-                  <div key={r.ticker}>
-                    <div
-                      className="flex items-center justify-between py-2"
-                      style={{ borderBottom: !r.pct || r.pct <= 20 && i < stats.repartition.length - 1 ? '1px solid var(--noir-border)' : 'none' }}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
-                        <div>
-                          <div className="text-sm font-bold" style={{ color: '#F5F5F5' }}>{r.ticker}</div>
-                          <div className="text-xs" style={{ color: '#5C5C5C' }}>
-                            {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DT
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm font-bold" style={{ color: DONUT_COLORS[i % DONUT_COLORS.length] }}>
-                          {r.pct.toFixed(0)}%
-                        </span>
-                        <ChevronRight size={12} style={{ color: '#3A3A3A' }} />
-                      </div>
-                    </div>
-
-                    {/* Alerte concentration > 20% */}
-                    {r.pct > 20 && (
-                      <div className="rounded-lg p-2.5 mb-1"
-                        style={{
-                          background: 'rgba(255,152,0,0.07)',
-                          border: '1px solid rgba(255,152,0,0.3)',
-                          borderBottom: i < stats.repartition.length - 1 ? undefined : 'none',
-                        }}>
-                        <div className="flex items-start gap-2">
-                          <span style={{ fontSize: '13px', flexShrink: 0 }}>⚠️</span>
-                          <div>
-                            <div className="text-xs font-bold" style={{ color: '#FF9800' }}>
-                              Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
-                            </div>
-                            <div className="text-xs mt-0.5" style={{ color: '#A07040' }}>
-                              Risque de concentration. Diversification recommandée.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <ConcentrationRow
+                    key={r.ticker}
+                    r={r}
+                    i={i}
+                    total={stats.repartition.length}
+                  />
                 ))}
               </div>
             </div>
