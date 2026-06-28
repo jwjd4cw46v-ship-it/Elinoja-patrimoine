@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, BarChart2,
   FileText, MessageSquare, Bell, Star, ChevronRight,
   Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
-  Menu, X, Globe, Target, BookOpen,
+  Menu, X, Globe, Target, BookOpen, Users,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -60,8 +60,9 @@ const navSections = [
   {
     label: 'MES OUTILS',
     items: [
-      { href: '/client/watchlist', icon: Star,   label: 'Mes Opportunités' },
-      { href: '/client/positions', icon: Target, label: 'Opportunités Elinoja', premium: true },
+      { href: '/client/watchlist',     icon: Star,   label: 'Mes Opportunités' },
+      { href: '/client/positions',     icon: Target, label: 'Opportunités Elinoja', premium: true },
+      { href: '/client/avis-experts',  icon: Users,  label: 'Avis d'Experts' },
     ],
   },
 ]
@@ -80,6 +81,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/calendrier':    'Calendrier AGO',
   '/client/figures-chartistes': 'Figures Chartistes',
   '/client/positions':     'Elinoja Stratégie',
+  '/client/avis-experts':  'Avis d\'Experts',
 }
 
 function getLabel(pathname: string) {
