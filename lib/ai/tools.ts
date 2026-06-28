@@ -1,8 +1,9 @@
 // ─── Elinoja AI — Tool Executor ───────────────────────────────────────────────
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function executeTool(name: string, args: Record<string, any>): Promise<any> {
   const supabase = createClient()
+  const serviceSupabase = createServiceClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   switch (name) {
@@ -321,6 +322,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       if (!userId) return { error: 'Utilisateur non connecté' }
 
       let query = supabase
+        serviceSupabase
         .from('positions')
         .select('*')
         .eq('user_id', userId)
@@ -370,6 +372,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       if (!userId) return { error: 'Utilisateur non connecté' }
 
       const { data: pos } = await supabase
+        serviceSupabase
         .from('positions')
         .select('*')
         .eq('user_id', userId)
@@ -380,11 +383,11 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       if (!pos) return { error: `Aucune position active sur ${ticker}` }
 
       const [{ data: ventes }, { data: alertes }] = await Promise.all([
-        supabase.from('position_ventes')
+        serviceSupabase.from('position_ventes')
           .select('niveau, prix_vente, quantite, pnl, created_at')
           .eq('position_id', pos.id)
           .order('created_at', { ascending: true }),
-        supabase.from('position_alertes')
+        serviceSupabase.from('position_alertes')
           .select('type, prix_trigger, prix_marche, is_acted, created_at')
           .eq('position_id', pos.id)
           .order('created_at', { ascending: false })
@@ -442,6 +445,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       if (!userId) return { error: 'Utilisateur non connecté' }
 
       const { data: alertes } = await supabase
+        serviceSupabase
         .from('position_alertes')
         .select('type, prix_trigger, prix_marche, is_acted, created_at, positions(ticker, stop_actuel, quantite_restante)')
         .eq('user_id', userId)
@@ -480,6 +484,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       if (!userId) return { error: 'Utilisateur non connecté' }
 
       const { data: positions } = await supabase
+        serviceSupabase
         .from('positions')
         .select('ticker, state, prix_moyen, quantite_restante, quantite_totale, pnl_realise')
         .eq('user_id', userId)
