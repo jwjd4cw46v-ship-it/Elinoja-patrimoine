@@ -739,6 +739,87 @@ function VenteModal({
 }
 
 /* ─────────────────────── Page principale ──────────────────────── */
+// ─── RepartitionBlock ────────────────────────────────────────────────────────
+function RepartitionBlock({ repartition }: { repartition: { ticker: string; valeur: number; pct: number }[] }) {
+  const [openTicker, setOpenTicker] = React.useState<string | null>(null)
+
+  return (
+    <div>
+      {/* Donut + légende dans le flex */}
+      <div className="flex items-center gap-6">
+        <DonutChart data={repartition} />
+        <div className="flex-1 min-w-0">
+          {repartition.map((r, i) => {
+            const hasAlert = r.pct > 20
+            const color = DONUT_COLORS[i % DONUT_COLORS.length]
+            const isOpen = openTicker === r.ticker
+            return (
+              <div key={r.ticker}
+                style={{ borderBottom: i < repartition.length - 1 ? '1px solid var(--noir-border)' : 'none' }}>
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                    <div>
+                      <div className="text-sm font-bold" style={{ color: '#F5F5F5' }}>{r.ticker}</div>
+                      <div className="text-xs" style={{ color: '#5C5C5C' }}>
+                        {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DT
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-sm font-bold" style={{ color }}>{r.pct.toFixed(0)}%</span>
+                    {hasAlert ? (
+                      <button
+                        onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '2px',
+                          background: isOpen ? 'rgba(255,152,0,0.15)' : 'rgba(255,152,0,0.08)',
+                          border: '1px solid rgba(255,152,0,0.35)',
+                          borderRadius: '6px', padding: '2px 6px',
+                          cursor: 'pointer', transition: 'background 0.2s',
+                        }}>
+                        <span style={{ fontSize: '11px' }}>⚠️</span>
+                        <svg width="10" height="10" viewBox="0 0 10 10"
+                          style={{ color: '#FF9800', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    ) : (
+                      <ChevronRight size={12} style={{ color: '#3A3A3A' }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Panneaux d'avertissement — EN DEHORS du flex, pleine largeur */}
+      {repartition.filter(r => r.pct > 20 && openTicker === r.ticker).map(r => (
+        <div key={r.ticker + '-alert'}
+          className="rounded-lg p-3 mt-2"
+          style={{
+            background: 'rgba(255,152,0,0.07)',
+            border: '1px solid rgba(255,152,0,0.3)',
+          }}>
+          <div className="flex items-start gap-2">
+            <span style={{ fontSize: '13px', flexShrink: 0 }}>⚠️</span>
+            <div>
+              <div className="text-xs font-bold" style={{ color: '#FF9800' }}>
+                Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: '#A07040' }}>
+                Risque de concentration. Diversification recommandée.
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── ConcentrationRow ────────────────────────────────────────────────────────
 function ConcentrationRow({ r, i, total }: {
   r: { ticker: string; valeur: number; pct: number }
@@ -994,21 +1075,7 @@ export default function PositionsDashboard() {
             <div className="text-xs font-bold tracking-wider mb-4" style={{ color: '#5C5C5C' }}>
               RÉPARTITION DES POSITIONS
             </div>
-            <div className="flex items-center gap-6">
-              {/* Donut SVG */}
-              <DonutChart data={stats.repartition} />
-              {/* Légende */}
-              <div className="flex-1 space-y-2">
-                {stats.repartition.map((r, i) => (
-                  <ConcentrationRow
-                    key={r.ticker}
-                    r={r}
-                    i={i}
-                    total={stats.repartition.length}
-                  />
-                ))}
-              </div>
-            </div>
+            <RepartitionBlock repartition={stats.repartition} />
           </div>
         )}
       </div>
