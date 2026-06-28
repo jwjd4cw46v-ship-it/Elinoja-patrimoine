@@ -795,13 +795,18 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
         </div>
       </div>
 
-      {/* Panneaux d'avertissement — EN DEHORS du flex, pleine largeur */}
+      {/* Panneaux d'avertissement — pleine largeur, marges négatives pour contrer le padding p-5 de la card */}
       {repartition.filter(r => r.pct > 20 && openTicker === r.ticker).map(r => (
         <div key={r.ticker + '-alert'}
-          className="rounded-lg p-3 mt-2"
           style={{
             background: 'rgba(255,152,0,0.07)',
             border: '1px solid rgba(255,152,0,0.3)',
+            borderRadius: '10px',
+            padding: '12px 20px',
+            marginTop: '8px',
+            marginLeft: '-20px',
+            marginRight: '-20px',
+            marginBottom: '-4px',
           }}>
           <div className="flex items-start gap-2">
             <span style={{ fontSize: '13px', flexShrink: 0 }}>⚠️</span>
