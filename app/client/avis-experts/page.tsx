@@ -209,28 +209,31 @@ export default function AvisExpertsPage() {
                 </div>
               </div>
 
-              {/* Barre consensus */}
-              <div className="space-y-2">
-                {(Object.entries(consensus.counts) as [string, number][])
-                  .filter(([, count]) => count > 0)
-                  .map(([signal, count]) => {
-                    const cfg = SIGNALS[signal as keyof typeof SIGNALS]
-                    const pct = (count / consensus.total) * 100
+              {/* Donut + légende */}
+              <div className="flex items-center gap-5">
+                {/* Donut SVG */}
+                <DonutChart counts={consensus.counts} total={consensus.total} />
+
+                {/* Légende */}
+                <div className="flex-1 space-y-2">
+                  {(Object.entries(SIGNALS) as [string, typeof SIGNALS[keyof typeof SIGNALS]][]).map(([key, cfg]) => {
+                    const count = consensus.counts[key as keyof typeof consensus.counts]
                     return (
-                      <div key={signal} className="flex items-center gap-3">
-                        <span className="text-xs w-20 flex-shrink-0" style={{ color: cfg.color }}>
-                          {cfg.label}
-                        </span>
-                        <div className="flex-1 h-2 rounded-full" style={{ background: 'var(--noir-border)' }}>
-                          <div className="h-full rounded-full transition-all duration-700"
-                            style={{ width: `${pct}%`, background: cfg.color }} />
+                      <div key={key} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ background: cfg.color }} />
+                          <span className="text-xs" style={{ color: count > 0 ? '#C0C0C0' : '#3A3A3A' }}>
+                            {cfg.label}
+                          </span>
                         </div>
-                        <span className="text-xs font-bold w-4 text-right" style={{ color: cfg.color }}>
+                        <span className="text-xs font-bold" style={{ color: count > 0 ? cfg.color : '#3A3A3A' }}>
                           {count}
                         </span>
                       </div>
                     )
                   })}
+                </div>
               </div>
 
               {/* Objectif moyen */}
@@ -263,6 +266,38 @@ export default function AvisExpertsPage() {
               })()}
             </div>
           )}
+
+          {/* ── Jauge de cours ── */}
+          {(() => {
+            const cours = selectedMarket?.last
+            if (!cours) return null
+            // Premier avis (le plus ancien)
+            const oldest = [...opinions].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            )[0]
+            if (!oldest) return null
+            const firstPrice = oldest.cours_creation ?? cours
+
+            // Objectifs uniques des experts (dédoublonnés par prix)
+            const targets = opinions
+              .filter(o => o.target_price)
+              .map((o, i) => ({
+                price: o.target_price!,
+                label: o.profiles?.full_name?.split(' ')[0] ?? `Expert ${i + 1}`,
+                color: ['#8B4513', '#1B5E8A', '#6A1B9A', '#E65100', '#2E7D32'][i % 5],
+              }))
+
+            if (!targets.length && firstPrice === cours) return null
+
+            return (
+              <PriceRangeChart
+                current={cours}
+                firstOpinionPrice={firstPrice}
+                targets={targets}
+                fmt={fmt}
+              />
+            )
+          })()}
 
           {/* ── Avis individuels ── */}
           <div className="space-y-3">
@@ -367,6 +402,198 @@ export default function AvisExpertsPage() {
   )
 }
 
+
+
+// ─── Price Range Chart ────────────────────────────────────────────────────────
+function PriceRangeChart({ current, firstOpinionPrice, targets, fmt }: {
+  current:          number
+  firstOpinionPrice: number
+  targets:          { price: number; label: string; color: string }[]
+  fmt:              (v: number) => string
+}) {
+  // Collect all prices to define the scale
+  const allPrices = [current, firstOpinionPrice, ...targets.map(t => t.price)].filter(Boolean)
+  const minPrice  = Math.min(...allPrices) * 0.97
+  const maxPrice  = Math.max(...allPrices) * 1.03
+  const range     = maxPrice - minPrice || 1
+
+  const pct = (price: number) =>
+    Math.max(2, Math.min(98, ((price - minPrice) / range) * 100))
+
+  const currentPct      = pct(current)
+  const firstOpinionPct = pct(firstOpinionPrice)
+
+  return (
+    <div className="card-premium p-5 space-y-4">
+      <h2 className="text-sm font-semibold tracking-wider" style={{ color: '#5C5C5C' }}>
+        RÉPARTITION DES COURS
+      </h2>
+
+      {/* Chart area */}
+      <div style={{ position: 'relative', paddingTop: '56px', paddingBottom: '40px' }}>
+
+        {/* Labels au-dessus */}
+        {/* Cours actuel */}
+        <div style={{
+          position: 'absolute', top: 0,
+          left: `${currentPct}%`, transform: 'translateX(-50%)',
+          background: '#1A6B42', borderRadius: '6px',
+          padding: '4px 10px', whiteSpace: 'nowrap', zIndex: 3,
+        }}>
+          <span style={{ fontSize: '11px', color: '#FFFFFF' }}>
+            Actuel <strong>{fmt(current)}</strong>
+          </span>
+        </div>
+
+        {/* Objectifs experts */}
+        {targets.map((t, i) => (
+          <div key={i} style={{
+            position: 'absolute', top: i === 0 ? 0 : 26,
+            left: `${pct(t.price)}%`, transform: 'translateX(-50%)',
+            background: t.color, borderRadius: '6px',
+            padding: '4px 10px', whiteSpace: 'nowrap', zIndex: 2,
+          }}>
+            <span style={{ fontSize: '11px', color: '#FFFFFF' }}>
+              {t.label} <strong>{fmt(t.price)}</strong>
+            </span>
+          </div>
+        ))}
+
+        {/* Ligne horizontale */}
+        <div style={{
+          position: 'relative', height: '4px',
+          background: 'var(--noir-border)', borderRadius: '2px',
+        }}>
+          {/* Point cours actuel */}
+          <div style={{
+            position: 'absolute', top: '50%', left: `${currentPct}%`,
+            transform: 'translate(-50%, -50%)',
+            width: 14, height: 14, borderRadius: '50%',
+            background: '#00C853',
+            border: '2px solid var(--noir-surface)',
+            zIndex: 3, boxShadow: '0 0 6px rgba(0,200,83,0.6)',
+          }} />
+
+          {/* Point premier avis */}
+          <div style={{
+            position: 'absolute', top: '50%', left: `${firstOpinionPct}%`,
+            transform: 'translate(-50%, -50%)',
+            width: 10, height: 10, borderRadius: '50%',
+            background: '#5C5C5C',
+            border: '2px solid var(--noir-surface)',
+            zIndex: 2,
+          }} />
+
+          {/* Points objectifs */}
+          {targets.map((t, i) => (
+            <div key={i} style={{
+              position: 'absolute', top: '50%', left: `${pct(t.price)}%`,
+              transform: 'translate(-50%, -50%)',
+              width: 12, height: 12, borderRadius: '50%',
+              background: t.color,
+              border: '2px solid var(--noir-surface)',
+              zIndex: 2,
+            }} />
+          ))}
+        </div>
+
+        {/* Labels en bas */}
+        {/* Premier avis */}
+        <div style={{
+          position: 'absolute', bottom: 0,
+          left: `${firstOpinionPct}%`, transform: 'translateX(-50%)',
+          textAlign: 'center', whiteSpace: 'nowrap',
+        }}>
+          <div style={{ fontSize: '9px', color: '#5C5C5C' }}>1er avis</div>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#A0A0A0', fontFamily: 'monospace' }}>
+            {fmt(firstOpinionPrice)}
+          </div>
+        </div>
+
+        {/* Cours actuel label bas */}
+        <div style={{
+          position: 'absolute', bottom: 0,
+          left: `${currentPct}%`, transform: 'translateX(-50%)',
+          textAlign: 'center', whiteSpace: 'nowrap',
+        }}>
+          <div style={{ fontSize: '9px', color: '#5C5C5C' }}>Actuel</div>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: '#00C853', fontFamily: 'monospace' }}>
+            {fmt(current)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Donut Chart ──────────────────────────────────────────────────────────────
+function DonutChart({ counts, total }: {
+  counts: Record<string, number>
+  total:  number
+}) {
+  const SIGNAL_COLORS: Record<string, string> = {
+    buy:       '#00C853',
+    accumulate:'#69F0AE',
+    hold:      '#D4AF37',
+    reduce:    '#FF9800',
+    sell:      '#FF1744',
+  }
+
+  const SIZE    = 120
+  const STROKE  = 18
+  const R       = (SIZE - STROKE) / 2
+  const CIRC    = 2 * Math.PI * R
+  const CX      = SIZE / 2
+  const CY      = SIZE / 2
+
+  // Build segments
+  const segments: { color: string; dash: number; offset: number }[] = []
+  let cumulative = 0
+  const GAP = total > 1 ? 2 : 0 // small gap between segments
+
+  Object.entries(counts).forEach(([key, count]) => {
+    if (count === 0) return
+    const pct   = count / total
+    const dash  = pct * CIRC - GAP
+    const offset = CIRC - cumulative * CIRC
+    segments.push({ color: SIGNAL_COLORS[key], dash, offset })
+    cumulative += pct
+  })
+
+  return (
+    <div style={{ position: 'relative', width: SIZE, height: SIZE, flexShrink: 0 }}>
+      <svg width={SIZE} height={SIZE} style={{ transform: 'rotate(-90deg)' }}>
+        {/* Track */}
+        <circle cx={CX} cy={CY} r={R}
+          fill="none" stroke="var(--noir-border)" strokeWidth={STROKE} />
+        {/* Segments */}
+        {segments.map((seg, i) => (
+          <circle key={i} cx={CX} cy={CY} r={R}
+            fill="none"
+            stroke={seg.color}
+            strokeWidth={STROKE}
+            strokeDasharray={`${seg.dash} ${CIRC - seg.dash}`}
+            strokeDashoffset={seg.offset}
+            strokeLinecap={total === 1 ? 'butt' : 'butt'}
+            style={{ transition: 'stroke-dasharray 0.6s ease' }}
+          />
+        ))}
+      </svg>
+      {/* Centre */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{ fontSize: '20px', fontWeight: 700, color: '#FFFFFF', lineHeight: 1 }}>{total}</span>
+        <span style={{ fontSize: '9px', color: '#5C5C5C', marginTop: '2px', letterSpacing: '0.08em' }}>
+          EXPERT{total > 1 ? 'S' : ''}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Formulaire expert ────────────────────────────────────────────────────────
 function ExpertForm({ ticker, companyName, market, userId, existing, onClose, onSaved }: {
   ticker: string
@@ -386,14 +613,26 @@ function ExpertForm({ ticker, companyName, market, userId, existing, onClose, on
   async function handleSubmit() {
     if (!signal) return
     setLoading(true)
+    // Récupérer le cours actuel pour le stocker à la création
+    let coursCreation: number | null = null
+    try {
+      const res = await fetch('/api/cotations', { cache: 'no-store' })
+      const data = res.ok ? await res.json() : {}
+      const market_data = (data.markets ?? []).find((m: any) =>
+        m.referentiel?.ticker?.toUpperCase() === ticker.toUpperCase()
+      )
+      coursCreation = market_data?.last ?? null
+    } catch {}
+
     const payload = {
-      user_id:      userId,
+      user_id:         userId,
       ticker,
-      company_name: companyName,
+      company_name:    companyName,
       market,
       signal,
-      target_price: targetPrice ? parseFloat(targetPrice) : null,
-      comment:      comment.trim() || null,
+      target_price:    targetPrice ? parseFloat(targetPrice) : null,
+      comment:         comment.trim() || null,
+      cours_creation:  existing ? undefined : coursCreation, // seulement à la création
     }
 
     let error
