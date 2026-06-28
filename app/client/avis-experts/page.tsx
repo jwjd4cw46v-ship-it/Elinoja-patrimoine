@@ -10,18 +10,19 @@ import { fr } from 'date-fns/locale'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ExpertOpinion {
-  id:           string
-  user_id:      string
-  ticker:       string
-  company_name: string | null
-  market:       string | null
-  signal:       'buy' | 'accumulate' | 'hold' | 'reduce' | 'sell'
-  target_price: number | null
-  comment:      string | null
-  created_at:   string
-  updated_at:   string
-  expires_at:   string
-  profiles:     { full_name: string; avatar_url?: string } | null
+  id:              string
+  user_id:         string
+  ticker:          string
+  company_name:    string | null
+  market:          string | null
+  signal:          'buy' | 'accumulate' | 'hold' | 'reduce' | 'sell'
+  target_price:    number | null
+  comment:         string | null
+  cours_creation:  number | null
+  created_at:      string
+  updated_at:      string
+  expires_at:      string
+  profiles:        { full_name: string; avatar_url?: string } | null
 }
 
 interface Market {
