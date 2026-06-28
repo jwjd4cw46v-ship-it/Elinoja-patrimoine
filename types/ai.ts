@@ -30,18 +30,16 @@ export interface Conversation {
   updatedAt: Date
 }
 
-// ─── Tool definitions (OpenAI function calling) ───────────────────────────────
+// ─── Tool definitions ─────────────────────────────────────────────────────────
 export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
       name: 'getStockData',
-      description: 'Récupère les données boursières en temps réel d\'une action BVMT : cours actuel, variation, volume, capitalisation boursière.',
+      description: 'Récupère les données boursières en temps réel d\'une action BVMT : cours actuel, variation, capitalisation boursière.',
       parameters: {
         type: 'object',
-        properties: {
-          symbol: { type: 'string', description: 'Le ticker/mnémonique de l\'action (ex: BIAT, SFBT, TGH)' },
-        },
+        properties: { symbol: { type: 'string', description: 'Le ticker de l\'action (ex: BIAT, SFBT, TGH)' } },
         required: ['symbol'],
       },
     },
@@ -50,12 +48,10 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getTechnicalAnalysis',
-      description: 'Récupère l\'analyse technique publiée pour une action : signal (achat/vente/neutre), objectif de cours, stop loss, point d\'entrée, description.',
+      description: 'Récupère l\'analyse technique publiée pour une action : signal, objectif, stop loss, point d\'entrée.',
       parameters: {
         type: 'object',
-        properties: {
-          symbol: { type: 'string', description: 'Le ticker de l\'action' },
-        },
+        properties: { symbol: { type: 'string', description: 'Le ticker de l\'action' } },
         required: ['symbol'],
       },
     },
@@ -64,12 +60,22 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getFundamentalAnalysis',
-      description: 'Récupère l\'analyse fondamentale d\'une action : PER, PER forward, ROE, ROA, D/E ratio, BPA, objectif de cours, recommandation.',
+      description: 'Récupère l\'analyse fondamentale d\'une action : PER, ROE, ROA, BPA, objectif de cours, recommandation.',
       parameters: {
         type: 'object',
-        properties: {
-          symbol: { type: 'string', description: 'Le ticker de l\'action' },
-        },
+        properties: { symbol: { type: 'string', description: 'Le ticker de l\'action' } },
+        required: ['symbol'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getExpertOpinions',
+      description: 'Récupère les avis d\'experts certifiés Elinoja sur un titre : recommandation (acheter/accumuler/conserver/alléger/vendre), cours cible, commentaire, consensus global et objectif moyen. Utilise ce tool quand l\'utilisateur demande l\'avis des experts, le consensus, ou les recommandations sur un titre.',
+      parameters: {
+        type: 'object',
+        properties: { symbol: { type: 'string', description: 'Le ticker de l\'action (ex: BIAT, TGH, SFBT)' } },
         required: ['symbol'],
       },
     },
@@ -81,9 +87,7 @@ export const AI_TOOLS = [
       description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté.',
       parameters: {
         type: 'object',
-        properties: {
-          userId: { type: 'string', description: 'L\'ID de l\'utilisateur' },
-        },
+        properties: { userId: { type: 'string', description: 'L\'ID de l\'utilisateur' } },
         required: ['userId'],
       },
     },
@@ -92,19 +96,12 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getPositions',
-      description: 'Récupère les positions du portefeuille de l\'utilisateur : ticker, prix moyen, quantités, cours actuel, P&L latent et réalisé, objectifs R1/R2/R3, stops, notes. Peut filtrer par statut (ouvertes ou clôturées).',
+      description: 'Récupère les positions du portefeuille : ticker, prix moyen, quantités, cours actuel, P&L latent/réalisé, objectifs R1/R2/R3, stops.',
       parameters: {
         type: 'object',
         properties: {
-          userId: {
-            type: 'string',
-            description: 'L\'ID de l\'utilisateur',
-          },
-          state: {
-            type: 'string',
-            enum: ['open', 'closed'],
-            description: 'Filtrer par statut : "open" pour les positions ouvertes, "closed" pour les clôturées. Omis = toutes les positions.',
-          },
+          userId: { type: 'string', description: 'L\'ID de l\'utilisateur' },
+          state:  { type: 'string', enum: ['open', 'closed'], description: '"open" = ouvertes, "closed" = clôturées. Omis = toutes.' },
         },
         required: ['userId'],
       },
@@ -117,9 +114,7 @@ export const AI_TOOLS = [
       description: 'Récupère les derniers articles et publications financières de la plateforme.',
       parameters: {
         type: 'object',
-        properties: {
-          limit: { type: 'number', description: 'Nombre d\'articles à retourner (défaut: 5)' },
-        },
+        properties: { limit: { type: 'number', description: 'Nombre d\'articles (défaut: 5)' } },
       },
     },
   },
@@ -130,9 +125,7 @@ export const AI_TOOLS = [
       description: 'Recherche dans les articles publiés sur la plateforme.',
       parameters: {
         type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Termes de recherche' },
-        },
+        properties: { query: { type: 'string', description: 'Termes de recherche' } },
         required: ['query'],
       },
     },
@@ -144,9 +137,7 @@ export const AI_TOOLS = [
       description: 'Récupère les dernières discussions du forum investisseurs.',
       parameters: {
         type: 'object',
-        properties: {
-          limit: { type: 'number', description: 'Nombre de posts à retourner (défaut: 5)' },
-        },
+        properties: { limit: { type: 'number', description: 'Nombre de posts (défaut: 5)' } },
       },
     },
   },
@@ -157,9 +148,7 @@ export const AI_TOOLS = [
       description: 'Recherche dans les discussions du forum.',
       parameters: {
         type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Termes de recherche' },
-        },
+        properties: { query: { type: 'string', description: 'Termes de recherche' } },
         required: ['query'],
       },
     },
@@ -168,28 +157,12 @@ export const AI_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'getCMFAnnouncements',
-      description: 'Récupère les publications officielles du CMF (Conseil du Marché Financier) : rapports annuels, prospectus, communiqués. Peut filtrer par ticker/société.',
+      description: 'Récupère les publications officielles du CMF : rapports annuels, prospectus, communiqués.',
       parameters: {
         type: 'object',
         properties: {
-          ticker: { type: 'string', description: 'Ticker de la société (optionnel, ex: TPR, BIAT)' },
+          ticker: { type: 'string', description: 'Ticker de la société (optionnel)' },
           limit:  { type: 'number', description: 'Nombre de publications (défaut: 5)' },
-        },
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'getExpertOpinions',
-      description: 'Récupère les avis et recommandations des experts Elinoja sur les actions : signal (achat/accumuler/conserver/alléger/vendre), objectif de cours, potentiel de hausse/baisse, commentaire expert. Peut filtrer par ticker.',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticker: {
-            type: 'string',
-            description: 'Ticker de l'action (optionnel, ex: TGH, BIAT). Si omis, retourne tous les avis récents.',
-          },
         },
       },
     },
@@ -204,7 +177,7 @@ export const AI_TOOLS = [
         properties: {
           page: {
             type: 'string',
-            enum: ['dashboard', 'analyses', 'fondamentales', 'watchlist', 'portefeuille', 'forum', 'annonces', 'marches', 'cotations', 'cmf', 'calendrier'],
+            enum: ['dashboard', 'analyses', 'fondamentales', 'watchlist', 'portefeuille', 'avis-experts', 'forum', 'annonces', 'marches', 'cotations', 'cmf', 'calendrier'],
             description: 'La page vers laquelle naviguer',
           },
         },
@@ -237,13 +210,13 @@ Quand tu utilises les données :
 - Mentionne les risques associés
 - Ne donne jamais de conseil d'investissement direct, mais aide à comprendre les données
 
-Avis experts :
-- Pour toute question sur les recommandations ou avis d'experts, utilise getExpertOpinions
-- Le signal peut être : achat, accumuler, conserver, alléger, vendre
-- Le potentiel est calculé entre le cours de création et l'objectif
-
 Portefeuille :
-- Pour toute question sur les positions, le P&L ou le portefeuille, utilise getPositions
+- Pour toute question sur les positions, le P&L ou le portefeuille, appelle IMMÉDIATEMENT getPositions
 - Le P&L latent est calculé sur la quantité restante au cours actuel
 - Les objectifs R1/R2/R3 sont les résistances cibles de la position
-- Le stop actuel est le niveau de protection en vigueur`
+- Le stop actuel est le niveau de protection en vigueur
+
+Avis d'experts :
+- Pour toute question sur les recommandations, le consensus ou l'avis des experts sur un titre, appelle IMMÉDIATEMENT getExpertOpinions
+- Présente le consensus en premier, puis les avis individuels avec le nom de l'expert
+- Mentionne toujours que ces avis sont valables 6 mois et ne constituent pas un conseil d'investissement`
