@@ -114,9 +114,10 @@ export async function POST(req: NextRequest) {
                 try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
 
                 // Injection automatique du userId pour tous les tools qui en ont besoin
-                if (['getWatchlistAlerts', 'getPositions', 'getPositionDetail', 'getPositionAlerts', 'getPortfolioSummary'].includes(tc.function.name) && !args.userId) {
-                  args.userId = user.id
+                if (['getWatchlistAlerts', 'getPositions', 'getPositionDetail', 'getPositionAlerts', 'getPortfolioSummary'].includes(tc.function.name)) {
+                  args.userId = user.id  // forcer même si déjà présent
                 }
+                console.log('[AI Tool]', tc.function.name, 'userId:', user.id)
 
                 const result = await executeTool(tc.function.name, args)
 
