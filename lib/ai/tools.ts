@@ -324,6 +324,9 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       const { state } = args
       const userId = args.userId || user?.id
       console.log('[getPositions args]', JSON.stringify({ userId, state, argsUserId: args.userId, userIdFromAuth: user?.id }))
+      // Test direct sans filtre user_id
+      const { data: allPositions } = await serviceSupabase.from('positions').select('id, user_id, ticker, state').limit(5)
+      console.log('[getPositions all]', JSON.stringify(allPositions))
       if (!userId) return { error: 'Utilisateur non connecté' }
 
       let query = serviceSupabase
