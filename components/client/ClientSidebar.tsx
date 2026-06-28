@@ -62,7 +62,7 @@ const navSections = [
     items: [
       { href: '/client/watchlist',     icon: Star,   label: 'Mes Opportunités' },
       { href: '/client/positions',     icon: Target, label: 'Opportunités Elinoja', premium: true },
-      { href: '/client/avis-experts',  icon: Users,  label: 'Avis d'Experts' },
+      { href: '/client/avis-experts',  icon: Users,  label: "Avis d'Experts" },
     ],
   },
 ]
@@ -81,7 +81,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/calendrier':    'Calendrier AGO',
   '/client/figures-chartistes': 'Figures Chartistes',
   '/client/positions':     'Elinoja Stratégie',
-  '/client/avis-experts':  'Avis d\'Experts',
+  '/client/avis-experts':  "Avis d'Experts",
 }
 
 function getLabel(pathname: string) {
