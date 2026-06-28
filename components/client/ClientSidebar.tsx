@@ -40,29 +40,35 @@ const navSections = [
   {
     label: 'MARCHÉS',
     items: [
-      { href: '/client/cotations',     icon: LineChart,  label: 'Cotations BVMT' },
-      { href: '/client/analyses',      icon: TrendingUp, label: 'Analyses Techniques' },
-      { href: '/client/fondamentales', icon: BarChart2,  label: 'Analyses Fondamentales' },
-      { href: '/client/marches',       icon: Globe,      label: 'Devises & Matières' },
-      { href: '/client/calendrier',    icon: Calendar,   label: 'Calendrier AGO' },
-      { href: '/client/figures-chartistes', icon: BookOpen, label: 'Figures Chartistes' },
+      { href: '/client/cotations',    icon: LineChart,  label: 'Cotations BVMT' },
+      { href: '/client/watchlist',  icon: Star,       label: 'Mes Opportunités' },
+      { href: '/client/positions',   icon: Target,     label: 'Mes Positions' },
+      { href: '/client/positions',   icon: TrendingUp, label: 'Opportunités Elinoja', premium: true },
+    ],
+  },
+  {
+    label: 'ANALYSES',
+    items: [
+      { href: '/client/analyses',           icon: TrendingUp, label: 'Analyses Techniques' },
+      { href: '/client/fondamentales',      icon: BarChart2,  label: 'Analyses Fondamentales' },
+      { href: '/client/avis-experts',       icon: Users,      label: "Avis d'Experts" },
+      { href: '/client/figures-chartistes', icon: BookOpen,   label: 'Figures Chartistes' },
     ],
   },
   {
     label: 'INFORMATIONS',
     items: [
-      { href: '/client/cmf',      icon: FileText,      label: 'Publications CMF' },
-      { href: '/client/news',     icon: Newspaper,     label: 'Actualités' },
-      { href: '/client/forum',    icon: MessageSquare, label: 'Communauté Elinoja' },
-      { href: '/client/annonces', icon: Bell,          label: 'Annonces' },
+      { href: '/client/news',       icon: Newspaper,     label: 'Actualités' },
+      { href: '/client/cmf',        icon: FileText,      label: 'Publications CMF' },
+      { href: '/client/calendrier', icon: Calendar,      label: 'Calendrier AGO' },
+      { href: '/client/annonces',   icon: Bell,          label: 'Annonces' },
     ],
   },
   {
-    label: 'MES OUTILS',
+    label: 'OUTILS',
     items: [
-      { href: '/client/watchlist',     icon: Star,   label: 'Mes Opportunités' },
-      { href: '/client/positions',     icon: Target, label: 'Opportunités Elinoja', premium: true },
-      { href: '/client/avis-experts',  icon: Users,  label: "Avis d'Experts" },
+      { href: '/client/marches', icon: Globe,         label: 'Devises & Matières' },
+      { href: '/client/forum',   icon: MessageSquare, label: 'Communauté Elinoja' },
     ],
   },
 ]
