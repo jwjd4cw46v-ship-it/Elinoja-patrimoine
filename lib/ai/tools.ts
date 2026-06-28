@@ -331,6 +331,7 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       else        query = query.neq('state', 'CLOSED')
 
       const { data, error } = await query
+      console.log('[getPositions] userId:', userId, 'error:', error?.message, 'count:', data?.length ?? 0)
       if (error || !data?.length) return { message: 'Aucune position ouverte', positions: [] }
 
       const res     = await fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://elinoja-patrimoine-app-v02-286iv7tg6-iteb-ouerghi-s-projects.vercel.app'}/api/cotations`, { cache: 'no-store' })
