@@ -117,8 +117,6 @@ export async function POST(req: NextRequest) {
                 if (['getWatchlistAlerts', 'getPositions', 'getPositionDetail', 'getPositionAlerts', 'getPortfolioSummary'].includes(tc.function.name)) {
                   args.userId = user.id  // forcer même si déjà présent
                 }
-                console.log('[AI Tool]', tc.function.name, 'userId:', user.id)
-
                 const result = await executeTool(tc.function.name, args)
 
                 if (tc.function.name === 'navigateTo' && result.url) {
