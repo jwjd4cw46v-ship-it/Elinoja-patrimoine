@@ -181,6 +181,22 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getExpertOpinions',
+      description: 'Récupère les avis et recommandations des experts Elinoja sur les actions : signal (achat/accumuler/conserver/alléger/vendre), objectif de cours, potentiel de hausse/baisse, commentaire expert. Peut filtrer par ticker.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticker: {
+            type: 'string',
+            description: 'Ticker de l'action (optionnel, ex: TGH, BIAT). Si omis, retourne tous les avis récents.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'navigateTo',
       description: 'Navigue vers une page de l\'application.',
       parameters: {
@@ -220,6 +236,11 @@ Quand tu utilises les données :
 - Indique la date si disponible
 - Mentionne les risques associés
 - Ne donne jamais de conseil d'investissement direct, mais aide à comprendre les données
+
+Avis experts :
+- Pour toute question sur les recommandations ou avis d'experts, utilise getExpertOpinions
+- Le signal peut être : achat, accumuler, conserver, alléger, vendre
+- Le potentiel est calculé entre le cours de création et l'objectif
 
 Portefeuille :
 - Pour toute question sur les positions, le P&L ou le portefeuille, utilise getPositions
