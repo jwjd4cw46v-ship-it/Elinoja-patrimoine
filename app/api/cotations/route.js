@@ -51,6 +51,27 @@ async function getFromBase(today) {
   return data || []
 }
 
+// Récupère les cotations de la dernière date disponible en base, toute date confondue
+async function getLatestFromBase() {
+  const { data: lastRow } = await getSupabase()
+    .from('cotations')
+    .select('date')
+    .order('date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (!lastRow?.date) return { rows: [], date: null }
+
+  const { data, error } = await getSupabase()
+    .from('cotations')
+    .select('*')
+    .eq('date', lastRow.date)
+    .order('nom')
+
+  if (error) throw error
+  return { rows: data || [], date: lastRow.date }
+}
+
 async function getAgeSecondes(today) {
   const { data } = await getSupabase()
     .from('cotations')
@@ -150,11 +171,11 @@ export async function GET() {
   const today = getToday()
 
   try {
-    // Étape 1 : lire la base
+    // Étape 1 : lire la base pour aujourd'hui
     const baseData = await getFromBase(today)
     const baseVide = baseData.length === 0
 
-    // Étape 2 : si base vide → API obligatoire
+    // Étape 2 : si base vide → appel API obligatoire
     if (baseVide) {
       try {
         const markets = await fetchBvmt()
@@ -165,9 +186,18 @@ export async function GET() {
           { headers: { 'Cache-Control': 'no-store' } }
         )
       } catch (apiErr) {
-        // API morte ET base vide → retourner vide
+        // API morte ET pas de données aujourd'hui
+        // → fallback sur la dernière séance disponible en base (ex : vendredi)
+        const { rows: latestData, date: latestDate } = await getLatestFromBase()
         return NextResponse.json(
-          { source: 'fallback_base', bvmt_error: apiErr.message, count: 0, markets: [] },
+          {
+            source:      'fallback_base',
+            bvmt_error:  apiErr.message,
+            bvmt_ouverte: isBvmtOuverte(),
+            fallback_date: latestDate,
+            count:       latestData.length,
+            markets:     dbToMarkets(latestData),
+          },
           { headers: { 'Cache-Control': 'no-store' } }
         )
       }
@@ -200,7 +230,7 @@ export async function GET() {
         { headers: { 'Cache-Control': 'public, max-age=30' } }
       )
     } catch (apiErr) {
-      // API morte → fallback sur la base existante
+      // API morte → fallback sur les données du jour en base
       return NextResponse.json(
         { source: 'fallback_base', bvmt_error: apiErr.message, count: baseData.length, markets: dbToMarkets(baseData) },
         { headers: { 'Cache-Control': 'no-store' } }
