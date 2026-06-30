@@ -69,14 +69,17 @@ function _rgba(hex: string, a: number) {
 }
 
 /* ─── Composant DonutChart 3D Premium ──────────────────────────── */
-function DonutChart({ data }: { data: { ticker: string; pct: number; valeur?: number }[] }) {
-  const [hov, setHov] = React.useState<string | null>(null)
-
-  const W = 260, H = 190, DEPTH = 26
-  const cx = W / 2, cy = 76
-  const RX = 94, RY = 42
-  const rx = 40, ry = 18
-  const GAP = 0.03, EXPLODE = 5
+function DonutChart({ data, hovTicker, onHov }: {
+  data: { ticker: string; pct: number; valeur?: number }[]
+  hovTicker: string | null
+  onHov: (t: string | null) => void
+}) {
+  // Dimensions calibrées pour tenir dans la card mobile sans déborder
+  const VW = 220, VH = 160, DEPTH = 22
+  const cx = VW / 2, cy = 62
+  const RX = 80, RY = 34
+  const rx = 34, ry = 14
+  const GAP = 0.03, EXPLODE = 4
 
   const total = data.reduce((s, d) => s + d.pct, 0)
   let cum = -Math.PI / 2
@@ -96,8 +99,12 @@ function DonutChart({ data }: { data: { ticker: string; pct: number; valeur?: nu
     }
   })
 
+  const svgH = VH + DEPTH + 10
+
   return (
-    <svg width={W} height={H + DEPTH + 14} viewBox={`0 0 ${W} ${H + DEPTH + 14}`} style={{ overflow: 'visible', flexShrink: 0 }}>
+    <svg
+      width="100%" viewBox={`0 0 ${VW} ${svgH}`}
+      style={{ display: 'block', overflow: 'visible' }}>
       <defs>
         {segs.map(s => (
           <radialGradient key={s.ticker} id={`dg-${s.ticker}`} cx="50%" cy="25%" r="75%">
@@ -106,60 +113,61 @@ function DonutChart({ data }: { data: { ticker: string; pct: number; valeur?: nu
           </radialGradient>
         ))}
         <radialGradient id="dg-gloss" cx="50%" cy="0%" r="80%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.20)" />
-          <stop offset="55%" stopColor="rgba(255,255,255,0.05)" />
+          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+          <stop offset="55%" stopColor="rgba(255,255,255,0.04)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </radialGradient>
       </defs>
 
       {/* Glow sol */}
       {segs.map(s => {
-        const isH = hov === s.ticker
+        const isH = hovTicker === s.ticker
         return (
           <ellipse key={`gw-${s.ticker}`}
-            cx={cx + (isH ? s.ex * 1.6 : s.ex)}
-            cy={cy + (isH ? s.ey * 1.6 : s.ey) + DEPTH + 10}
-            rx={RX * s.pct / 100 * 2.2 + 18} ry={7}
-            fill={s.color} opacity={isH ? 0.25 : 0.10}
-            style={{ filter: 'blur(5px)', transition: 'all 0.3s ease' }}
+            cx={cx + (isH ? s.ex * 1.5 : s.ex)}
+            cy={cy + (isH ? s.ey * 1.5 : s.ey) + DEPTH + 8}
+            rx={RX * s.pct / 100 * 2 + 14} ry={6}
+            fill={s.color} opacity={isH ? 0.22 : 0.09}
+            style={{ filter: 'blur(4px)', transition: 'all 0.3s ease' }}
           />
         )
       })}
 
       {/* Parois extérieures */}
       {segs.map(s => {
-        const isH = hov === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex, ey = isH ? s.ey * 1.6 : s.ey
+        const isH = hovTicker === s.ticker
+        const ex = isH ? s.ex * 1.5 : s.ex, ey = isH ? s.ey * 1.5 : s.ey
         const d = _wallPath(cx + ex, cy + ey, RX, RY, s.start, s.end, DEPTH)
         return d ? <path key={`ow-${s.ticker}`} d={d} fill={_darken(s.color, 0.32)} style={{ transition: 'all 0.3s ease' }} /> : null
       })}
 
       {/* Parois intérieures */}
       {segs.map(s => {
-        const isH = hov === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex, ey = isH ? s.ey * 1.6 : s.ey
+        const isH = hovTicker === s.ticker
+        const ex = isH ? s.ex * 1.5 : s.ex, ey = isH ? s.ey * 1.5 : s.ey
         const d = _innerWall(cx + ex, cy + ey, rx, ry, s.start, s.end, DEPTH)
         return d ? <path key={`iw-${s.ticker}`} d={d} fill={_darken(s.color, 0.20)} opacity={0.65} style={{ transition: 'all 0.3s ease' }} /> : null
       })}
 
       {/* Faces du dessus */}
       {segs.map(s => {
-        const isH = hov === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex, ey = isH ? s.ey * 1.6 : s.ey
-        const sc = isH ? 1.045 : 1
+        const isH = hovTicker === s.ticker
+        const ex = isH ? s.ex * 1.5 : s.ex, ey = isH ? s.ey * 1.5 : s.ey
+        const sc = isH ? 1.04 : 1
         const topD = _arcPath(cx + ex, cy + ey, RX, RY, rx, ry, s.start, s.end)
-        const lx = cx + ex + (RX + rx) / 2 * 0.57 * Math.cos(s.mid)
-        const ly = cy + ey + (RY + ry) / 2 * 0.57 * Math.sin(s.mid)
+        const lx = cx + ex + (RX + rx) / 2 * 0.56 * Math.cos(s.mid)
+        const ly = cy + ey + (RY + ry) / 2 * 0.56 * Math.sin(s.mid)
         return (
           <g key={`top-${s.ticker}`}
-            style={{ cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)', transform: `scale(${sc})`, transformOrigin: `${(cx+ex).toFixed(1)}px ${(cy+ey).toFixed(1)}px` }}
-            onMouseEnter={() => setHov(s.ticker)} onMouseLeave={() => setHov(null)}>
+            style={{ cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)', transform: `scale(${sc})`, transformOrigin: `${(cx+ex).toFixed(1)}px ${(cy+ey).toFixed(1)}px` }}
+            onMouseEnter={() => onHov(s.ticker)} onMouseLeave={() => onHov(null)}
+            onTouchStart={() => onHov(s.ticker)} onTouchEnd={() => onHov(null)}>
             <path d={topD} fill={`url(#dg-${s.ticker})`} />
             <path d={topD} fill="url(#dg-gloss)" />
-            {isH && <path d={topD} fill="none" stroke={s.color} strokeWidth={1.5} opacity={0.55} style={{ filter: `drop-shadow(0 0 7px ${s.color})` }} />}
-            {s.pct >= 9 && (
+            {isH && <path d={topD} fill="none" stroke={s.color} strokeWidth={1.5} opacity={0.5} style={{ filter: `drop-shadow(0 0 6px ${s.color})` }} />}
+            {s.pct >= 8 && (
               <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-                fill="#fff" fontSize={10} fontWeight={800} fontFamily="monospace"
+                fill="#fff" fontSize={9} fontWeight={800} fontFamily="monospace"
                 style={{ pointerEvents: 'none' }}>
                 {s.pct.toFixed(0)}%
               </text>
@@ -171,8 +179,8 @@ function DonutChart({ data }: { data: { ticker: string; pct: number; valeur?: nu
       {/* Trou central */}
       <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#060606" stroke="#1C1C1C" strokeWidth={1} />
       <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 1} ry={ry - 0.5} fill="#040404" />
-      <text x={cx} y={cy - 5} textAnchor="middle" fill="#303030" fontSize={8} fontWeight={700} letterSpacing="0.12em">PORTEF.</text>
-      <text x={cx} y={cy + 6} textAnchor="middle" fill="#606060" fontSize={11} fontWeight={800} fontFamily="monospace">{segs.length}</text>
+      <text x={cx} y={cy - 4} textAnchor="middle" fill="#2E2E2E" fontSize={7} fontWeight={700} letterSpacing="0.1em">PORTEF.</text>
+      <text x={cx} y={cy + 5} textAnchor="middle" fill="#585858" fontSize={10} fontWeight={800} fontFamily="monospace">{segs.length}</text>
     </svg>
   )
 }
@@ -789,141 +797,142 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
   const [hov, setHov] = React.useState<string | null>(null)
   const [openTicker, setOpenTicker] = React.useState<string | null>(null)
 
-  const donutData = repartition.map(r => ({ ticker: r.ticker, pct: r.pct, valeur: r.valeur }))
   const totalInvesti = repartition.reduce((s, r) => s + r.valeur, 0)
+  const donutData = repartition.map(r => ({ ticker: r.ticker, pct: r.pct, valeur: r.valeur }))
 
   return (
     <div>
-      {/* Header total */}
-      <div style={{ marginBottom: 14, paddingLeft: 2 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#F0F0F0', letterSpacing: '-0.02em', fontFamily: 'monospace' }}>
-            {totalInvesti.toLocaleString('fr-TN', { minimumFractionDigits: 0 })}
-          </span>
-          <span style={{ fontSize: 12, color: '#4A4A4A', fontWeight: 500 }}>DT engagés</span>
-        </div>
+      {/* Donut centré pleine largeur */}
+      <div style={{ width: '100%', maxWidth: 240, margin: '0 auto' }}>
+        <DonutChart data={donutData} hovTicker={hov} onHov={setHov} />
       </div>
 
-      {/* Donut + légende */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-
-        {/* SVG donut 3D */}
-        <DonutChart data={donutData} />
-
-        {/* Légende */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {repartition.map((r, i) => {
-            const color   = DONUT_COLORS[i % DONUT_COLORS.length]
-            const isHov   = hov === r.ticker
-            const hasAlert = r.pct > 20
-            const isOpen  = openTicker === r.ticker
-            return (
-              <div key={r.ticker}>
-                <div
-                  onMouseEnter={() => setHov(r.ticker)}
-                  onMouseLeave={() => setHov(null)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    padding: '6px 8px', borderRadius: 10,
-                    background: isHov ? `rgba(${parseInt(color.slice(1,3),16)},${parseInt(color.slice(3,5),16)},${parseInt(color.slice(5,7),16)},0.08)` : 'transparent',
-                    border: `1px solid ${isHov ? color + '40' : 'transparent'}`,
-                    transition: 'all 0.2s ease', cursor: 'default',
-                  }}>
-                  {/* Pastille */}
-                  <div style={{
-                    width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
-                    background: color,
-                    boxShadow: isHov ? `0 0 7px ${color}` : 'none',
-                    transition: 'box-shadow 0.2s',
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: isHov ? color : '#E0E0E0', transition: 'color 0.2s', letterSpacing: '0.05em' }}>
-                        {r.ticker}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {hasAlert && (
-                          <button
-                            onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 2,
-                              background: isOpen ? 'rgba(255,152,0,0.18)' : 'rgba(255,152,0,0.08)',
-                              border: '1px solid rgba(255,152,0,0.35)',
-                              borderRadius: 5, padding: '1px 4px', cursor: 'pointer',
-                            }}>
-                            <span style={{ fontSize: 9 }}>⚠️</span>
-                          </button>
-                        )}
-                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: isHov ? color : '#888', transition: 'color 0.2s' }}>
-                          {r.pct.toFixed(1)}%
-                        </span>
-                      </div>
+      {/* Légende en grille 2 colonnes */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '3px 8px',
+        marginTop: 10,
+      }}>
+        {repartition.map((r, i) => {
+          const color    = DONUT_COLORS[i % DONUT_COLORS.length]
+          const isHov    = hov === r.ticker
+          const hasAlert = r.pct > 20
+          const isOpen   = openTicker === r.ticker
+          return (
+            <div key={r.ticker}>
+              <div
+                onMouseEnter={() => setHov(r.ticker)}
+                onMouseLeave={() => setHov(null)}
+                onTouchStart={() => setHov(r.ticker)}
+                onTouchEnd={() => setHov(null)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '5px 7px', borderRadius: 9,
+                  background: isHov ? `rgba(${parseInt(color.slice(1,3),16)},${parseInt(color.slice(3,5),16)},${parseInt(color.slice(5,7),16)},0.09)` : 'transparent',
+                  border: `1px solid ${isHov ? color + '44' : 'transparent'}`,
+                  transition: 'all 0.18s ease', cursor: 'default',
+                }}>
+                {/* Pastille */}
+                <div style={{
+                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  background: color,
+                  boxShadow: isHov ? `0 0 6px ${color}` : 'none',
+                  transition: 'box-shadow 0.2s',
+                }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                    <span style={{
+                      fontFamily: 'monospace', fontWeight: 700, fontSize: 10,
+                      color: isHov ? color : '#D8D8D8',
+                      transition: 'color 0.18s',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{r.ticker}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                      {hasAlert && (
+                        <button
+                          onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center',
+                            background: isOpen ? 'rgba(255,152,0,0.18)' : 'rgba(255,152,0,0.08)',
+                            border: '1px solid rgba(255,152,0,0.35)',
+                            borderRadius: 4, padding: '0px 3px', cursor: 'pointer', lineHeight: 1,
+                          }}>
+                          <span style={{ fontSize: 8 }}>⚠️</span>
+                        </button>
+                      )}
+                      <span style={{
+                        fontFamily: 'monospace', fontWeight: 700, fontSize: 10,
+                        color: isHov ? color : '#707070',
+                        transition: 'color 0.18s',
+                      }}>{r.pct.toFixed(1)}%</span>
                     </div>
-                    <div style={{ fontSize: 10, color: '#484848', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                      {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0 })} DT
-                    </div>
+                  </div>
+                  <div style={{ fontSize: 9, color: '#404040', marginTop: 1, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {r.valeur.toLocaleString('fr-FR', { minimumFractionDigits: 0 })} DT
                   </div>
                 </div>
-
-                {/* Alerte concentration */}
-                {hasAlert && isOpen && (
-                  <div style={{
-                    margin: '3px 8px 4px',
-                    padding: '6px 10px',
-                    borderRadius: 8,
-                    background: 'rgba(255,152,0,0.07)',
-                    border: '1px solid rgba(255,152,0,0.28)',
-                  }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#FF9800', marginBottom: 2 }}>
-                      Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
-                    </div>
-                    <div style={{ fontSize: 10, color: '#9A6030', lineHeight: 1.4 }}>
-                      Risque de concentration. Diversification recommandée.
-                    </div>
-                  </div>
-                )}
               </div>
-            )
-          })}
-        </div>
+
+              {/* Alerte concentration — pleine largeur sous la cellule */}
+              {hasAlert && isOpen && (
+                <div style={{
+                  gridColumn: '1 / -1',
+                  margin: '2px 0 4px',
+                  padding: '5px 8px',
+                  borderRadius: 7,
+                  background: 'rgba(255,152,0,0.07)',
+                  border: '1px solid rgba(255,152,0,0.25)',
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#FF9800' }}>
+                    Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
+                  </div>
+                  <div style={{ fontSize: 9, color: '#8A5A20', lineHeight: 1.4, marginTop: 1 }}>
+                    Risque de concentration. Diversification recommandée.
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
-      {/* Footer positions ouvertes */}
+      {/* Footer — positions ouvertes + mini barres */}
       <div style={{
-        marginTop: 14, paddingTop: 12,
+        marginTop: 12, paddingTop: 10,
         borderTop: '1px solid #141414',
-        display: 'flex', alignItems: 'center', gap: 8,
+        display: 'flex', alignItems: 'center', gap: 7,
       }}>
         <div style={{
-          width: 28, height: 28, borderRadius: 8,
+          width: 26, height: 26, borderRadius: 7, flexShrink: 0,
           background: 'linear-gradient(135deg, #1A1A1A, #111)',
           border: '1px solid #222',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-            <rect x={2} y={5} width={20} height={15} rx={3} stroke="#555" strokeWidth={1.8} />
-            <path d="M2 9h20" stroke="#555" strokeWidth={1.8} />
-            <circle cx={17} cy={14} r={1.5} fill="#555" />
+          <svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+            <rect x={2} y={5} width={20} height={15} rx={3} stroke="#505050" strokeWidth={1.8} />
+            <path d="M2 9h20" stroke="#505050" strokeWidth={1.8} />
+            <circle cx={17} cy={14} r={1.5} fill="#505050" />
           </svg>
         </div>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#C8C8C8' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#C0C0C0' }}>
             {repartition.length} position{repartition.length > 1 ? 's' : ''} ouverte{repartition.length > 1 ? 's' : ''}
           </div>
-          <div style={{ fontSize: 10, color: '#333', marginTop: 1 }}>Bourse de Tunis · Portefeuille actif</div>
+          <div style={{ fontSize: 9, color: '#2E2E2E', marginTop: 1 }}>Bourse de Tunis · Portefeuille actif</div>
         </div>
-        {/* Mini barres */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-end', gap: 2, height: 20 }}>
+        {/* Mini barres sparkline */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-end', gap: 2, height: 18 }}>
           {repartition.map((r, i) => {
             const color = DONUT_COLORS[i % DONUT_COLORS.length]
             return (
               <div key={r.ticker} style={{
                 width: 4, borderRadius: 2,
-                height: `${Math.max(25, r.pct * 4)}%`,
+                height: `${Math.max(20, r.pct * 4)}%`,
                 background: color,
                 opacity: hov === null || hov === r.ticker ? 0.85 : 0.2,
-                transition: 'opacity 0.2s, height 0.3s',
-                boxShadow: hov === r.ticker ? `0 0 5px ${color}` : 'none',
+                transition: 'opacity 0.2s',
+                boxShadow: hov === r.ticker ? `0 0 4px ${color}` : 'none',
               }} />
             )
           })}
@@ -1155,27 +1164,25 @@ export default function PositionsDashboard() {
       </div>
 
       {/* Résumé portefeuille */}
-      <div className="card-premium p-5">
-        <div className="text-xs font-bold tracking-wider mb-4" style={{ color: '#5C5C5C' }}>
-          RÉSUMÉ PORTEFEUILLE
-        </div>
-        <div className="grid grid-cols-3 gap-4 pb-4 mb-4" style={{ borderBottom: '1px solid var(--noir-border)' }}>
+      <div className="card-premium p-4">
+        {/* Stats compactes sur une ligne */}
+        <div className="grid grid-cols-3 gap-3 pb-4 mb-4" style={{ borderBottom: '1px solid var(--noir-border)' }}>
           <div>
-            <div className="text-xs mb-1" style={{ color: '#707070' }}>Capital engagé</div>
-            <div className="text-xl font-bold font-mono" style={{ color: '#F5F5F5' }}>
+            <div className="text-[10px] mb-0.5" style={{ color: '#5C5C5C' }}>Capital</div>
+            <div className="text-base font-bold font-mono" style={{ color: '#F5F5F5' }}>
               {(stats.capitalEngage/1000).toFixed(1)}k DT
             </div>
           </div>
           <div>
-            <div className="text-xs mb-1" style={{ color: '#707070' }}>P&L global</div>
-            <div className="text-xl font-bold font-mono"
+            <div className="text-[10px] mb-0.5" style={{ color: '#5C5C5C' }}>P&L</div>
+            <div className="text-base font-bold font-mono"
               style={{ color: stats.pnlGlobal >= 0 ? '#00C853' : '#FF1744' }}>
               {fmtPnl(stats.pnlGlobal)}
             </div>
           </div>
           <div>
-            <div className="text-xs mb-1" style={{ color: '#707070' }}>Performance</div>
-            <div className="text-xl font-bold font-mono"
+            <div className="text-[10px] mb-0.5" style={{ color: '#5C5C5C' }}>Perf.</div>
+            <div className="text-base font-bold font-mono"
               style={{ color: stats.perf >= 0 ? '#00C853' : '#FF1744' }}>
               {fmtPct(stats.perf)}
             </div>
@@ -1184,12 +1191,7 @@ export default function PositionsDashboard() {
 
         {/* Répartition des positions */}
         {stats.repartition.length > 0 && (
-          <div>
-            <div className="text-xs font-bold tracking-wider mb-3" style={{ color: '#5C5C5C' }}>
-              RÉPARTITION DES POSITIONS
-            </div>
-            <RepartitionBlock repartition={stats.repartition} />
-          </div>
+          <RepartitionBlock repartition={stats.repartition} />
         )}
       </div>
 
