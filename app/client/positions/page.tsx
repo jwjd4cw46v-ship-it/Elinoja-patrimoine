@@ -29,105 +29,150 @@ const fmtPct = (n: number) =>
 
 
 /* ─── Palette donut ─────────────────────────────────────────────── */
-const DONUT_COLORS = ['#4CAF50', '#FFC107', '#2196F3', '#9C27B0', '#F44336', '#00BCD4', '#FF9800', '#E91E63']
+const DONUT_COLORS = ['#22C55E', '#EAB308', '#3B82F6', '#A855F7', '#EF4444', '#06B6D4', '#F97316', '#EC4899']
 
-/* ─── Composant DonutChart 3D ───────────────────────────────────── */
-function DonutChart({ data }: { data: { ticker: string; pct: number }[] }) {
-  const W = 180, H = 200
-  const cx = W / 2, cy = 95
-  const RX = 78, RY = 48   // ellipse extérieure
-  const rx = 36, ry = 22   // ellipse intérieure (trou)
-  const DEPTH = 22          // hauteur 3D
-  const GAP = 0.025
+/* ─── Helpers géométrie 3D ──────────────────────────────────────── */
+function _ellPt(cx: number, cy: number, rx: number, ry: number, a: number) {
+  return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) }
+}
+function _arcPath(cx: number, cy: number, RX: number, RY: number, rx: number, ry: number, s: number, e: number, dy = 0) {
+  const large = e - s > Math.PI ? 1 : 0
+  const o1 = _ellPt(cx, cy + dy, RX, RY, s), o2 = _ellPt(cx, cy + dy, RX, RY, e)
+  const i2 = _ellPt(cx, cy + dy, rx, ry, e), i1 = _ellPt(cx, cy + dy, rx, ry, s)
+  return `M ${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A ${RX} ${RY} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L ${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A ${rx} ${ry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
+}
+function _wallPath(cx: number, cy: number, RX: number, RY: number, s: number, e: number, depth: number, inner = false) {
+  const _rx = inner ? RX * 0 + (inner ? 0 : RX) : RX // unused, just routing
+  const ws = Math.max(s, 0), we = Math.min(e, Math.PI)
+  if (ws >= we) return ''
+  const large = we - ws > Math.PI ? 1 : 0
+  const [ERX, ERY] = inner ? [0, 0] : [RX, RY] // not used this way — see below
+  const t1 = _ellPt(cx, cy, RX, RY, ws), t2 = _ellPt(cx, cy, RX, RY, we)
+  const b2 = _ellPt(cx, cy + depth, RX, RY, we), b1 = _ellPt(cx, cy + depth, RX, RY, ws)
+  return `M ${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A ${RX} ${RY} 0 ${large} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L ${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A ${RX} ${RY} 0 ${large} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)} Z`
+}
+function _innerWall(cx: number, cy: number, rx: number, ry: number, s: number, e: number, depth: number) {
+  const ws = Math.max(s, 0), we = Math.min(e, Math.PI)
+  if (ws >= we) return ''
+  const large = we - ws > Math.PI ? 1 : 0
+  const t1 = _ellPt(cx, cy, rx, ry, ws), t2 = _ellPt(cx, cy, rx, ry, we)
+  const b2 = _ellPt(cx, cy + depth, rx, ry, we), b1 = _ellPt(cx, cy + depth, rx, ry, ws)
+  return `M ${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A ${rx} ${ry} 0 ${large} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L ${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A ${rx} ${ry} 0 ${large} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)} Z`
+}
+function _darken(hex: string, f = 0.4) {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgb(${Math.round(((n>>16)&0xff)*f)},${Math.round(((n>>8)&0xff)*f)},${Math.round((n&0xff)*f)})`
+}
+function _rgba(hex: string, a: number) {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n>>16)&0xff},${(n>>8)&0xff},${n&0xff},${a})`
+}
+
+/* ─── Composant DonutChart 3D Premium ──────────────────────────── */
+function DonutChart({ data }: { data: { ticker: string; pct: number; valeur?: number }[] }) {
+  const [hov, setHov] = React.useState<string | null>(null)
+
+  const W = 260, H = 190, DEPTH = 26
+  const cx = W / 2, cy = 76
+  const RX = 94, RY = 42
+  const rx = 40, ry = 18
+  const GAP = 0.03, EXPLODE = 5
 
   const total = data.reduce((s, d) => s + d.pct, 0)
-  const norm  = data.map(d => ({ ...d, pct: total > 0 ? (d.pct / total) * 100 : 0 }))
-
-  // angles cumulés
   let cum = -Math.PI / 2
-  const segs = norm.map((d, i) => {
+  const segs = data.map((d, i) => {
+    const pct = total > 0 ? (d.pct / total) * 100 : 0
+    const sweep = (pct / 100) * 2 * Math.PI - GAP * 2
     const start = cum + GAP
-    const sweep = (d.pct / 100) * 2 * Math.PI - GAP * 2
-    cum += (d.pct / 100) * 2 * Math.PI
-    const end = start + sweep
-    return { ...d, start, end, color: DONUT_COLORS[i % DONUT_COLORS.length] }
+    const end   = start + sweep
+    cum += (pct / 100) * 2 * Math.PI
+    const mid = (start + end) / 2
+    return {
+      ticker: d.ticker, pct, valeur: d.valeur,
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      start, end, mid,
+      ex: Math.cos(mid) * EXPLODE,
+      ey: Math.sin(mid) * EXPLODE,
+    }
   })
 
-  function ept(a: number, outer: boolean) {
-    return {
-      x: cx + (outer ? RX : rx) * Math.cos(a),
-      y: cy + (outer ? RY : ry) * Math.sin(a),
-    }
-  }
-
-  function topPath(s: number, e: number) {
-    const large = e - s > Math.PI ? 1 : 0
-    const a1 = ept(s, true), a2 = ept(e, true)
-    const b1 = ept(e, false), b2 = ept(s, false)
-    return `M${a1.x.toFixed(1)} ${a1.y.toFixed(1)} A${RX} ${RY} 0 ${large} 1 ${a2.x.toFixed(1)} ${a2.y.toFixed(1)} L${b1.x.toFixed(1)} ${b1.y.toFixed(1)} A${rx} ${ry} 0 ${large} 0 ${b2.x.toFixed(1)} ${b2.y.toFixed(1)}Z`
-  }
-
-  function sidePath(s: number, e: number) {
-    // face avant uniquement (angles entre -PI/2 et PI/2 = bas du donut)
-    const clampS = Math.max(s, -Math.PI / 2)
-    const clampE = Math.min(e, Math.PI * 3 / 2)
-    if (clampS >= clampE) return ''
-    const large = clampE - clampS > Math.PI ? 1 : 0
-    const a1 = ept(clampS, true), a2 = ept(clampE, true)
-    const b1 = ept(clampE, true), b2 = ept(clampS, true)
-    return `M${a1.x.toFixed(1)} ${a1.y.toFixed(1)} A${RX} ${RY} 0 ${large} 1 ${a2.x.toFixed(1)} ${a2.y.toFixed(1)} L${b1.x.toFixed(1)} ${(b1.y + DEPTH).toFixed(1)} A${RX} ${RY} 0 ${large} 0 ${b2.x.toFixed(1)} ${(b2.y + DEPTH).toFixed(1)}Z`
-  }
-
-  // Label au milieu du segment
-  function labelPos(s: number, e: number) {
-    const mid = (s + e) / 2
-    const lx = cx + (RX * 0.65) * Math.cos(mid)
-    const ly = cy + (RY * 0.65) * Math.sin(mid)
-    return { x: lx, y: ly }
-  }
-
-  const biggest = norm.reduce((a, b) => a.pct > b.pct ? a : b, norm[0])
-
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ flexShrink: 0, overflow: 'visible' }}>
-      {/* Ombre sous le donut */}
-      <ellipse cx={cx} cy={cy + DEPTH + 8} rx={RX - 4} ry={10}
-        fill="rgba(0,0,0,0.45)" />
+    <svg width={W} height={H + DEPTH + 14} viewBox={`0 0 ${W} ${H + DEPTH + 14}`} style={{ overflow: 'visible', flexShrink: 0 }}>
+      <defs>
+        {segs.map(s => (
+          <radialGradient key={s.ticker} id={`dg-${s.ticker}`} cx="50%" cy="25%" r="75%">
+            <stop offset="0%" stopColor={s.color} />
+            <stop offset="100%" stopColor={_darken(s.color, 0.55)} />
+          </radialGradient>
+        ))}
+        <radialGradient id="dg-gloss" cx="50%" cy="0%" r="80%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.20)" />
+          <stop offset="55%" stopColor="rgba(255,255,255,0.05)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+      </defs>
 
-      {/* Faces latérales 3D (dessinées en premier, sous le dessus) */}
+      {/* Glow sol */}
       {segs.map(s => {
-        const d = sidePath(s.start, s.end)
-        if (!d) return null
-        // Couleur plus sombre pour la face latérale
-        return <path key={`side-${s.ticker}`} d={d}
-          fill={s.color} opacity={0.45} />
+        const isH = hov === s.ticker
+        return (
+          <ellipse key={`gw-${s.ticker}`}
+            cx={cx + (isH ? s.ex * 1.6 : s.ex)}
+            cy={cy + (isH ? s.ey * 1.6 : s.ey) + DEPTH + 10}
+            rx={RX * s.pct / 100 * 2.2 + 18} ry={7}
+            fill={s.color} opacity={isH ? 0.25 : 0.10}
+            style={{ filter: 'blur(5px)', transition: 'all 0.3s ease' }}
+          />
+        )
+      })}
+
+      {/* Parois extérieures */}
+      {segs.map(s => {
+        const isH = hov === s.ticker
+        const ex = isH ? s.ex * 1.6 : s.ex, ey = isH ? s.ey * 1.6 : s.ey
+        const d = _wallPath(cx + ex, cy + ey, RX, RY, s.start, s.end, DEPTH)
+        return d ? <path key={`ow-${s.ticker}`} d={d} fill={_darken(s.color, 0.32)} style={{ transition: 'all 0.3s ease' }} /> : null
+      })}
+
+      {/* Parois intérieures */}
+      {segs.map(s => {
+        const isH = hov === s.ticker
+        const ex = isH ? s.ex * 1.6 : s.ex, ey = isH ? s.ey * 1.6 : s.ey
+        const d = _innerWall(cx + ex, cy + ey, rx, ry, s.start, s.end, DEPTH)
+        return d ? <path key={`iw-${s.ticker}`} d={d} fill={_darken(s.color, 0.20)} opacity={0.65} style={{ transition: 'all 0.3s ease' }} /> : null
       })}
 
       {/* Faces du dessus */}
-      {segs.map(s => (
-        <path key={`top-${s.ticker}`} d={topPath(s.start, s.end)}
-          fill={s.color}
-          style={{ filter: `drop-shadow(0 0 6px ${s.color}66)` }}
-        />
-      ))}
-
-      {/* Trou central dessus */}
-      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#111" />
-
-      {/* Labels % sur les segments */}
       {segs.map(s => {
-        const pos = labelPos(s.start, s.end)
-        if (s.pct < 8) return null
+        const isH = hov === s.ticker
+        const ex = isH ? s.ex * 1.6 : s.ex, ey = isH ? s.ey * 1.6 : s.ey
+        const sc = isH ? 1.045 : 1
+        const topD = _arcPath(cx + ex, cy + ey, RX, RY, rx, ry, s.start, s.end)
+        const lx = cx + ex + (RX + rx) / 2 * 0.57 * Math.cos(s.mid)
+        const ly = cy + ey + (RY + ry) / 2 * 0.57 * Math.sin(s.mid)
         return (
-          <text key={`lbl-${s.ticker}`}
-            x={pos.x} y={pos.y}
-            textAnchor="middle" dominantBaseline="middle"
-            fill="#FFFFFF" fontSize="11" fontWeight="700" fontFamily="monospace"
-            style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
-            {s.pct.toFixed(0)}%
-          </text>
+          <g key={`top-${s.ticker}`}
+            style={{ cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)', transform: `scale(${sc})`, transformOrigin: `${(cx+ex).toFixed(1)}px ${(cy+ey).toFixed(1)}px` }}
+            onMouseEnter={() => setHov(s.ticker)} onMouseLeave={() => setHov(null)}>
+            <path d={topD} fill={`url(#dg-${s.ticker})`} />
+            <path d={topD} fill="url(#dg-gloss)" />
+            {isH && <path d={topD} fill="none" stroke={s.color} strokeWidth={1.5} opacity={0.55} style={{ filter: `drop-shadow(0 0 7px ${s.color})` }} />}
+            {s.pct >= 9 && (
+              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+                fill="#fff" fontSize={10} fontWeight={800} fontFamily="monospace"
+                style={{ pointerEvents: 'none' }}>
+                {s.pct.toFixed(0)}%
+              </text>
+            )}
+          </g>
         )
       })}
+
+      {/* Trou central */}
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#060606" stroke="#1C1C1C" strokeWidth={1} />
+      <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 1} ry={ry - 0.5} fill="#040404" />
+      <text x={cx} y={cy - 5} textAnchor="middle" fill="#303030" fontSize={8} fontWeight={700} letterSpacing="0.12em">PORTEF.</text>
+      <text x={cx} y={cy + 6} textAnchor="middle" fill="#606060" fontSize={11} fontWeight={800} fontFamily="monospace">{segs.length}</text>
     </svg>
   )
 }
@@ -741,89 +786,148 @@ function VenteModal({
 /* ─────────────────────── Page principale ──────────────────────── */
 // ─── RepartitionBlock ────────────────────────────────────────────────────────
 function RepartitionBlock({ repartition }: { repartition: { ticker: string; valeur: number; pct: number }[] }) {
+  const [hov, setHov] = React.useState<string | null>(null)
   const [openTicker, setOpenTicker] = React.useState<string | null>(null)
 
+  const donutData = repartition.map(r => ({ ticker: r.ticker, pct: r.pct, valeur: r.valeur }))
+  const totalInvesti = repartition.reduce((s, r) => s + r.valeur, 0)
+
   return (
-    <div className="flex items-start gap-6">
-      <DonutChart data={repartition} />
-      <div className="flex-1 min-w-0">
-        {repartition.map((r, i) => {
-          const hasAlert = r.pct > 20
-          const color = DONUT_COLORS[i % DONUT_COLORS.length]
-          const isOpen = openTicker === r.ticker
-          return (
-            <div key={r.ticker}
-              style={{ borderBottom: i < repartition.length - 1 ? '1px solid var(--noir-border)' : 'none' }}>
+    <div>
+      {/* Header total */}
+      <div style={{ marginBottom: 14, paddingLeft: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 20, fontWeight: 700, color: '#F0F0F0', letterSpacing: '-0.02em', fontFamily: 'monospace' }}>
+            {totalInvesti.toLocaleString('fr-TN', { minimumFractionDigits: 0 })}
+          </span>
+          <span style={{ fontSize: 12, color: '#4A4A4A', fontWeight: 500 }}>DT engagés</span>
+        </div>
+      </div>
 
-              {/* Ligne ticker */}
-              <div className="flex items-center justify-between py-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                  <div>
-                    <div className="text-sm font-bold" style={{ color: '#F5F5F5' }}>{r.ticker}</div>
-                    <div className="text-xs" style={{ color: '#5C5C5C' }}>
-                      {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} DT
-                    </div>
-                  </div>
-                </div>
-                {/* Pourcentage + bouton sous le % */}
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <span className="text-sm font-bold" style={{ color }}>{r.pct.toFixed(0)}%</span>
-                  {hasAlert ? (
-                    <div style={{ marginTop: '3px' }}>
-                      <button
-                        onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
-                        style={{
-                          display: 'inline-flex', alignItems: 'center', gap: '2px',
-                          background: isOpen ? 'rgba(255,152,0,0.15)' : 'rgba(255,152,0,0.08)',
-                          border: '1px solid rgba(255,152,0,0.35)',
-                          borderRadius: '6px', padding: '2px 5px',
-                          cursor: 'pointer', transition: 'background 0.2s',
-                        }}>
-                        <span style={{ fontSize: '10px' }}>⚠️</span>
-                        <svg width="9" height="9" viewBox="0 0 10 10"
-                          style={{ color: '#FF9800', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
-                        </svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: '3px' }}>
-                      <ChevronRight size={11} style={{ color: '#3A3A3A' }} />
-                    </div>
-                  )}
-                </div>
-              </div>
+      {/* Donut + légende */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
 
-              {/* Panneau pleine largeur de la colonne */}
-              {hasAlert && isOpen && (
-                <div className="rounded-lg mb-2"
+        {/* SVG donut 3D */}
+        <DonutChart data={donutData} />
+
+        {/* Légende */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {repartition.map((r, i) => {
+            const color   = DONUT_COLORS[i % DONUT_COLORS.length]
+            const isHov   = hov === r.ticker
+            const hasAlert = r.pct > 20
+            const isOpen  = openTicker === r.ticker
+            return (
+              <div key={r.ticker}>
+                <div
+                  onMouseEnter={() => setHov(r.ticker)}
+                  onMouseLeave={() => setHov(null)}
                   style={{
-                    background: 'rgba(255,152,0,0.07)',
-                    border: '1px solid rgba(255,152,0,0.3)',
-                    overflow: 'hidden',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 8px', borderRadius: 10,
+                    background: isHov ? `rgba(${parseInt(color.slice(1,3),16)},${parseInt(color.slice(3,5),16)},${parseInt(color.slice(5,7),16)},0.08)` : 'transparent',
+                    border: `1px solid ${isHov ? color + '40' : 'transparent'}`,
+                    transition: 'all 0.2s ease', cursor: 'default',
                   }}>
-                  {/* Titre centré avec icône */}
+                  {/* Pastille */}
                   <div style={{
-                    textAlign: 'center', padding: '8px 10px 4px',
-                    borderBottom: '1px solid rgba(255,152,0,0.15)',
-                  }}>
-                    <span style={{ fontSize: '14px' }}>⚠️</span>
+                    width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+                    background: color,
+                    boxShadow: isHov ? `0 0 7px ${color}` : 'none',
+                    transition: 'box-shadow 0.2s',
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: isHov ? color : '#E0E0E0', transition: 'color 0.2s', letterSpacing: '0.05em' }}>
+                        {r.ticker}
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {hasAlert && (
+                          <button
+                            onClick={() => setOpenTicker(isOpen ? null : r.ticker)}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 2,
+                              background: isOpen ? 'rgba(255,152,0,0.18)' : 'rgba(255,152,0,0.08)',
+                              border: '1px solid rgba(255,152,0,0.35)',
+                              borderRadius: 5, padding: '1px 4px', cursor: 'pointer',
+                            }}>
+                            <span style={{ fontSize: 9 }}>⚠️</span>
+                          </button>
+                        )}
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: isHov ? color : '#888', transition: 'color 0.2s' }}>
+                          {r.pct.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10, color: '#484848', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                      {r.valeur.toLocaleString('fr-TN', { minimumFractionDigits: 0 })} DT
+                    </div>
                   </div>
-                  {/* Texte sur une colonne */}
-                  <div style={{ padding: '8px 10px' }}>
-                    <div className="text-xs font-bold" style={{ color: '#FF9800', marginBottom: '3px' }}>
+                </div>
+
+                {/* Alerte concentration */}
+                {hasAlert && isOpen && (
+                  <div style={{
+                    margin: '3px 8px 4px',
+                    padding: '6px 10px',
+                    borderRadius: 8,
+                    background: 'rgba(255,152,0,0.07)',
+                    border: '1px solid rgba(255,152,0,0.28)',
+                  }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#FF9800', marginBottom: 2 }}>
                       Exposition élevée : {r.pct.toFixed(0)}% &gt; 20%
                     </div>
-                    <div className="text-xs" style={{ color: '#A07040', lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 10, color: '#9A6030', lineHeight: 1.4 }}>
                       Risque de concentration. Diversification recommandée.
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          )
-        })}
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Footer positions ouvertes */}
+      <div style={{
+        marginTop: 14, paddingTop: 12,
+        borderTop: '1px solid #141414',
+        display: 'flex', alignItems: 'center', gap: 8,
+      }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8,
+          background: 'linear-gradient(135deg, #1A1A1A, #111)',
+          border: '1px solid #222',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>
+          <svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+            <rect x={2} y={5} width={20} height={15} rx={3} stroke="#555" strokeWidth={1.8} />
+            <path d="M2 9h20" stroke="#555" strokeWidth={1.8} />
+            <circle cx={17} cy={14} r={1.5} fill="#555" />
+          </svg>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#C8C8C8' }}>
+            {repartition.length} position{repartition.length > 1 ? 's' : ''} ouverte{repartition.length > 1 ? 's' : ''}
+          </div>
+          <div style={{ fontSize: 10, color: '#333', marginTop: 1 }}>Bourse de Tunis · Portefeuille actif</div>
+        </div>
+        {/* Mini barres */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-end', gap: 2, height: 20 }}>
+          {repartition.map((r, i) => {
+            const color = DONUT_COLORS[i % DONUT_COLORS.length]
+            return (
+              <div key={r.ticker} style={{
+                width: 4, borderRadius: 2,
+                height: `${Math.max(25, r.pct * 4)}%`,
+                background: color,
+                opacity: hov === null || hov === r.ticker ? 0.85 : 0.2,
+                transition: 'opacity 0.2s, height 0.3s',
+                boxShadow: hov === r.ticker ? `0 0 5px ${color}` : 'none',
+              }} />
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -1081,7 +1185,7 @@ export default function PositionsDashboard() {
         {/* Répartition des positions */}
         {stats.repartition.length > 0 && (
           <div>
-            <div className="text-xs font-bold tracking-wider mb-4" style={{ color: '#5C5C5C' }}>
+            <div className="text-xs font-bold tracking-wider mb-3" style={{ color: '#5C5C5C' }}>
               RÉPARTITION DES POSITIONS
             </div>
             <RepartitionBlock repartition={stats.repartition} />
