@@ -75,11 +75,11 @@ function DonutChart({ data, hovTicker, onHov }: {
   onHov: (t: string | null) => void
 }) {
   // Dimensions calibrées pour tenir dans la card mobile sans déborder
-  const VW = 220, VH = 160, DEPTH = 22
-  const cx = VW / 2, cy = 62
-  const RX = 80, RY = 34
-  const rx = 34, ry = 14
-  const GAP = 0.03, EXPLODE = 4
+  const VW = 220, VH = 150, DEPTH = 16
+  const cx = VW / 2, cy = 58
+  const RX = 82, RY = 36
+  const rx = 28, ry = 12
+  const GAP = 0.025, EXPLODE = 3
 
   const total = data.reduce((s, d) => s + d.pct, 0)
   let cum = -Math.PI / 2
@@ -127,8 +127,8 @@ function DonutChart({ data, hovTicker, onHov }: {
             cx={cx + (isH ? s.ex * 1.5 : s.ex)}
             cy={cy + (isH ? s.ey * 1.5 : s.ey) + DEPTH + 8}
             rx={RX * s.pct / 100 * 2 + 14} ry={6}
-            fill={s.color} opacity={isH ? 0.22 : 0.09}
-            style={{ filter: 'blur(4px)', transition: 'all 0.3s ease' }}
+            fill={s.color} opacity={isH ? 0.15 : 0.05}
+            style={{ filter: 'blur(6px)', transition: 'all 0.3s ease' }}
           />
         )
       })}
@@ -167,8 +167,8 @@ function DonutChart({ data, hovTicker, onHov }: {
             {isH && <path d={topD} fill="none" stroke={s.color} strokeWidth={1.5} opacity={0.5} style={{ filter: `drop-shadow(0 0 6px ${s.color})` }} />}
             {s.pct >= 8 && (
               <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-                fill="#fff" fontSize={9} fontWeight={800} fontFamily="monospace"
-                style={{ pointerEvents: 'none' }}>
+                fill="#fff" fontSize={10} fontWeight={700} fontFamily="monospace"
+                style={{ pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
                 {s.pct.toFixed(0)}%
               </text>
             )}
@@ -177,10 +177,10 @@ function DonutChart({ data, hovTicker, onHov }: {
       })}
 
       {/* Trou central */}
-      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#060606" stroke="#1C1C1C" strokeWidth={1} />
-      <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 1} ry={ry - 0.5} fill="#040404" />
-      <text x={cx} y={cy - 4} textAnchor="middle" fill="#2E2E2E" fontSize={7} fontWeight={700} letterSpacing="0.1em">PORTEF.</text>
-      <text x={cx} y={cy + 5} textAnchor="middle" fill="#585858" fontSize={10} fontWeight={800} fontFamily="monospace">{segs.length}</text>
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#141414" stroke="#222" strokeWidth={0.5} />
+      <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 1} ry={ry - 0.5} fill="#111" />
+      <text x={cx} y={cy - 3} textAnchor="middle" fill="#3A3A3A" fontSize={6.5} fontWeight={700} letterSpacing="0.08em">PORTEF.</text>
+      <text x={cx} y={cy + 6} textAnchor="middle" fill="#606060" fontSize={10} fontWeight={800} fontFamily="monospace">{segs.length}</text>
     </svg>
   )
 }
