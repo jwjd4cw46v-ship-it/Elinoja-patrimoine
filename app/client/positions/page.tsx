@@ -77,7 +77,7 @@ function DonutChart({ data, hovTicker, onHov }: {
   // ── Constantes géométriques (coordonnées elliptiques natives) ──
   const VW = 380, cy = 112
   const RX = 160, RY = 96        // ellipse extérieure
-  const rxi = 65,  ryi = 39      // ellipse intérieure (trou = 40%)
+  const rxi = 50,  ryi = 30      // ellipse intérieure (trou = 31%)
   const DEPTH = 18               // épaisseur extrusion
   const EXPLODE = 6              // écartement max 6 px
   const GAP = 0.022              // gap entre segments
@@ -209,8 +209,8 @@ function DonutChart({ data, hovTicker, onHov }: {
         const topD = topFace(cx + ex, cy + ey, s.start, s.end)
 
         // Label : milieu radial (innerRadius + outerRadius) / 2, translateY -8px
-        const labR  = (RX  + rxi)  / 2 * 0.62
-        const labRY = (RY  + ryi)  / 2 * 0.62
+        const labR  = (RX  + rxi)  / 2 * 0.72
+        const labRY = (RY  + ryi)  / 2 * 0.72
         const lx = cx + ex + labR  * Math.cos(s.mid)
         const ly = cy + ey + labRY * Math.sin(s.mid) - 8
 
