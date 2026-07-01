@@ -21,7 +21,38 @@ import dynamic from 'next/dynamic'
 // Donut 3D (WebGL réel — React Three Fiber). Chargé côté client uniquement :
 // le Canvas ne peut pas être rendu côté serveur.
 // Nécessite : npm install three @react-three/fiber @react-three/drei
-const Donut3D = dynamic(() => import('./Donut3D'), { ssr: false })
+// Donut3D chargé dynamiquement avec fallback en cas d'erreur WebGL
+const Donut3D = dynamic(
+  () => import('./Donut3D').catch(() => {
+    // Si Three.js échoue, retourner un composant vide
+    return { default: () => null }
+  }),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{
+        width: '100%', maxWidth: 230, margin: '0 auto 24px',
+        aspectRatio: '1 / 0.85', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4AF37',
+          animation: 'pulse 1s ease-in-out infinite' }} />
+      </div>
+    ),
+  }
+)
+
+// Error boundary pour capturer les crashs WebGL
+class DonutErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children
+  }
+}
 
 /* ─────────────────────── Helpers ─────────────────────────────── */
 const fmt = (n: number | null | undefined, d = 3) =>
@@ -958,7 +989,9 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
   return (
     <div>
       {/* Donut 3D (WebGL) — largeur/marge gérées en interne par le composant */}
-      <Donut3D data={donutData} hovTicker={hov} onHov={setHov} />
+      <DonutErrorBoundary fallback={null}>
+              <Donut3D data={donutData} hovTicker={hov} onHov={setHov} />
+            </DonutErrorBoundary>
 
       {/* Légende en grille 2 colonnes */}
       <div style={{
