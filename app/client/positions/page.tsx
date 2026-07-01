@@ -74,12 +74,26 @@ function DonutChart({ data, hovTicker, onHov }: {
   hovTicker: string | null
   onHov: (t: string | null) => void
 }) {
-  const VW = 240, VH = 130, DEPTH = 28
-  const cx = VW / 2, cy = 54
-  // Ellipse inclinée ~50° : ratio RY/RX ≈ 0.38
-  const RX = 88, RY = 34
-  const rx = RX * 0.45, ry = RY * 0.45   // trou = 45% du rayon
-  const GAP = 0.028, EXPLODE = 5
+  // Coordonnées elliptiques natives — pas de rotateX
+  const VW = 340, VH = 220
+  const cx = VW / 2, cy = 100
+  const RX = 130, RY = 52          // ellipse extérieure (ratio ≈ 0.4 → ~48° de perspective)
+  const rxi = RX * 0.38, ryi = RY * 0.38  // trou = 38 % du rayon
+  const DEPTH = 18                  // épaisseur extrusion 18 px
+  const GAP = 0.022                 // écartement minimal
+  const EXPLODE = 6                 // max 6 px
+
+  // Dégradés par couleur (top→bottom de la tranche du dessus)
+  const COLOR_GRADIENTS: Record<string, [string, string, string]> = {
+    '#22C55E': ['#32d26b', '#22c55e', '#15803d'],
+    '#EAB308': ['#facc15', '#eab308', '#a16207'],
+    '#3B82F6': ['#60a5fa', '#3b82f6', '#1d4ed8'],
+    '#A855F7': ['#c084fc', '#a855f7', '#7e22ce'],
+    '#EF4444': ['#f87171', '#ef4444', '#991b1b'],
+    '#06B6D4': ['#22d3ee', '#06b6d4', '#0e7490'],
+    '#F97316': ['#fb923c', '#f97316', '#c2410c'],
+    '#EC4899': ['#f472b6', '#ec4899', '#9d174d'],
+  }
 
   const total = data.reduce((s, d) => s + d.pct, 0)
   let cum = -Math.PI / 2
@@ -90,135 +104,157 @@ function DonutChart({ data, hovTicker, onHov }: {
     const end   = start + sweep
     cum += (pct / 100) * 2 * Math.PI
     const mid = (start + end) / 2
+    const baseColor = DONUT_COLORS[i % DONUT_COLORS.length]
+    const grad = COLOR_GRADIENTS[baseColor] ?? [baseColor, baseColor, _darken(baseColor, 0.5)]
     return {
-      ticker: d.ticker, pct, valeur: d.valeur,
-      color: DONUT_COLORS[i % DONUT_COLORS.length],
+      ticker: d.ticker, pct, color: baseColor, grad,
       start, end, mid,
       ex: Math.cos(mid) * EXPLODE,
       ey: Math.sin(mid) * EXPLODE,
     }
   })
 
-  const svgH = VH + DEPTH + 14
+  const svgH = VH
 
   return (
-    <svg
-      width="100%" viewBox={`0 0 ${VW} ${svgH}`}
+    <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
       style={{ display: 'block', overflow: 'visible' }}>
       <defs>
-        {segs.map(s => (
-          <radialGradient key={s.ticker} id={`dg-${s.ticker}`} cx="40%" cy="20%" r="75%">
-            <stop offset="0%" stopColor={s.color} stopOpacity="1" />
-            <stop offset="100%" stopColor={_darken(s.color, 0.42)} stopOpacity="1" />
-          </radialGradient>
+        {segs.map((s, i) => (
+          <linearGradient key={`lg-${s.ticker}-${i}`} id={`lg-${s.ticker}`}
+            x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%"   stopColor={s.grad[0]} />
+            <stop offset="45%"  stopColor={s.grad[1]} />
+            <stop offset="100%" stopColor={s.grad[2]} />
+          </linearGradient>
         ))}
-        {/* Reflet glossy */}
-        <radialGradient id="gloss" cx="50%" cy="0%" r="70%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
-          <stop offset="60%" stopColor="rgba(255,255,255,0.04)" />
+        {/* Reflet glossy dessus */}
+        <linearGradient id="gloss-top" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stopColor="rgba(255,255,255,0.20)" />
+          <stop offset="50%"  stopColor="rgba(255,255,255,0.06)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-        </radialGradient>
-        {/* Ombre portée */}
-        <radialGradient id="shadow-grad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="rgba(0,0,0,0.55)" />
-          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-        </radialGradient>
+        </linearGradient>
       </defs>
 
-      {/* ── Ombre portée globale sous le donut ── */}
+      {/* ── Ombre au sol : opacity 0.08, blur 18px, scaleY 0.35 ── */}
       <ellipse
-        cx={cx} cy={cy + DEPTH + 10}
-        rx={RX * 0.9} ry={8}
-        fill="url(#shadow-grad)"
-        style={{ filter: 'blur(3px)' }}
+        cx={cx} cy={cy + DEPTH + 14}
+        rx={RX * 0.88} ry={RY * 0.35}
+        fill="rgba(0,0,0,0.55)"
+        style={{ filter: 'blur(18px)' }}
       />
 
-      {/* ── Glows colorés sous chaque tranche ── */}
-      {segs.map(s => {
+      {/* ── Parois extérieures (visible uniquement sur la demi-inf: 0→π) ── */}
+      {segs.map((s, i) => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex
-        const ey = isH ? s.ey * 1.6 : s.ey
+        const ex = isH ? s.ex * 1.4 : s.ex
+        const ey = isH ? s.ey * 1.4 : s.ey
+        const ws = Math.max(s.start, 0), we = Math.min(s.end, Math.PI)
+        if (ws >= we) return null
+        const large = we - ws > Math.PI ? 1 : 0
+        const p = (a: number, r: number, rrr: number) => ({
+          x: cx + ex + r * Math.cos(a),
+          y: cy + ey + rrr * Math.sin(a)
+        })
+        const t1 = p(ws, RX, RY), t2 = p(we, RX, RY)
+        const b1 = p(ws, RX, RY + DEPTH), b2 = p(we, RX, RY + DEPTH)
+        const dPath = `M ${t1.x.toFixed(1)} ${t1.y.toFixed(1)} A ${RX} ${RY} 0 ${large} 1 ${t2.x.toFixed(1)} ${t2.y.toFixed(1)} L ${b2.x.toFixed(1)} ${b2.y.toFixed(1)} A ${RX} ${RY} 0 ${large} 0 ${b1.x.toFixed(1)} ${b1.y.toFixed(1)} Z`
         return (
-          <ellipse key={`gw-${s.ticker}`}
-            cx={cx + ex} cy={cy + ey + DEPTH + 6}
-            rx={RX * (s.pct / 100) * 2.2 + 10} ry={5}
-            fill={s.color}
-            opacity={isH ? 0.35 : 0.12}
-            style={{ filter: 'blur(5px)', transition: 'all 0.3s ease' }}
-          />
-        )
-      })}
-
-      {/* ── Parois extérieures (face avant seulement : angles 0→π) ── */}
-      {segs.map(s => {
-        const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex
-        const ey = isH ? s.ey * 1.6 : s.ey
-        const d = _wallPath(cx + ex, cy + ey, RX, RY, s.start, s.end, DEPTH)
-        if (!d) return null
-        return (
-          <path key={`ow-${s.ticker}`} d={d}
-            fill={_darken(s.color, 0.28)}
+          <path key={`ow-${s.ticker}-${i}`} d={dPath}
+            fill={s.grad[2]}
+            opacity={0.85}
             style={{ transition: 'all 0.25s ease' }}
           />
         )
       })}
 
       {/* ── Parois intérieures ── */}
-      {segs.map(s => {
+      {segs.map((s, i) => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex
-        const ey = isH ? s.ey * 1.6 : s.ey
-        const d = _innerWall(cx + ex, cy + ey, rx, ry, s.start, s.end, DEPTH)
-        if (!d) return null
+        const ex = isH ? s.ex * 1.4 : s.ex
+        const ey = isH ? s.ey * 1.4 : s.ey
+        const ws = Math.max(s.start, 0), we = Math.min(s.end, Math.PI)
+        if (ws >= we) return null
+        const large = we - ws > Math.PI ? 1 : 0
+        const p = (a: number, r: number, rrr: number) => ({
+          x: cx + ex + r * Math.cos(a),
+          y: cy + ey + rrr * Math.sin(a)
+        })
+        const t1 = p(ws, rxi, ryi), t2 = p(we, rxi, ryi)
+        const b1 = p(ws, rxi, ryi + DEPTH), b2 = p(we, rxi, ryi + DEPTH)
+        const dPath = `M ${t1.x.toFixed(1)} ${t1.y.toFixed(1)} A ${rxi} ${ryi} 0 ${large} 1 ${t2.x.toFixed(1)} ${t2.y.toFixed(1)} L ${b2.x.toFixed(1)} ${b2.y.toFixed(1)} A ${rxi} ${ryi} 0 ${large} 0 ${b1.x.toFixed(1)} ${b1.y.toFixed(1)} Z`
         return (
-          <path key={`iw-${s.ticker}`} d={d}
-            fill={_darken(s.color, 0.18)}
-            opacity={0.55}
+          <path key={`iw-${s.ticker}-${i}`} d={dPath}
+            fill={_darken(s.color, 0.22)}
+            opacity={0.5}
             style={{ transition: 'all 0.25s ease' }}
           />
         )
       })}
 
-      {/* ── Faces du dessus (top face) ── */}
-      {segs.map(s => {
+      {/* ── Glows colorés sous chaque tranche ── */}
+      {segs.map((s, i) => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.6 : s.ex
-        const ey = isH ? s.ey * 1.6 : s.ey
-        const topD = _arcPath(cx + ex, cy + ey, RX, RY, rx, ry, s.start, s.end)
-        // Position label : milieu radial
-        const lx = cx + ex + (RX + rx) / 2 * 0.58 * Math.cos(s.mid)
-        const ly = cy + ey + (RY + ry) / 2 * 0.58 * Math.sin(s.mid)
+        const ex = isH ? s.ex * 1.4 : s.ex
+        const ey = isH ? s.ey * 1.4 : s.ey
         return (
-          <g key={`top-${s.ticker}`}
+          <ellipse key={`gw-${s.ticker}-${i}`}
+            cx={cx + ex} cy={cy + ey + DEPTH + 8}
+            rx={RX * (s.pct / 100) * 2.0 + 8} ry={4}
+            fill={s.color}
+            opacity={isH ? 0.28 : 0.08}
+            style={{ filter: 'blur(6px)', transition: 'all 0.3s ease' }}
+          />
+        )
+      })}
+
+      {/* ── Faces du dessus ── */}
+      {segs.map((s, i) => {
+        const isH = hovTicker === s.ticker
+        const ex = isH ? s.ex * 1.4 : s.ex
+        const ey = isH ? s.ey * 1.4 : s.ey
+        const large = s.end - s.start > Math.PI ? 1 : 0
+        // Arc extérieur dessus
+        const o1 = { x: cx+ex+RX*Math.cos(s.start), y: cy+ey+RY*Math.sin(s.start) }
+        const o2 = { x: cx+ex+RX*Math.cos(s.end),   y: cy+ey+RY*Math.sin(s.end)   }
+        // Arc intérieur dessus
+        const i2 = { x: cx+ex+rxi*Math.cos(s.end),   y: cy+ey+ryi*Math.sin(s.end)   }
+        const i1 = { x: cx+ex+rxi*Math.cos(s.start), y: cy+ey+ryi*Math.sin(s.start) }
+        const topD = `M ${o1.x.toFixed(1)} ${o1.y.toFixed(1)} A ${RX} ${RY} 0 ${large} 1 ${o2.x.toFixed(1)} ${o2.y.toFixed(1)} L ${i2.x.toFixed(1)} ${i2.y.toFixed(1)} A ${rxi} ${ryi} 0 ${large} 0 ${i1.x.toFixed(1)} ${i1.y.toFixed(1)} Z`
+
+        // Label : milieu radial entre intérieur et extérieur
+        const labR = (RX + rxi) / 2 * 0.60
+        const labRY = (RY + ryi) / 2 * 0.60
+        const lx = cx + ex + labR * Math.cos(s.mid)
+        const ly = cy + ey + labRY * Math.sin(s.mid) - 6   // translateY -6px
+
+        return (
+          <g key={`top-${s.ticker}-${i}`}
             style={{
               cursor: 'pointer',
-              transform: isH ? `translate(${s.ex * 0.6}px, -6px) scale(1.03)` : 'none',
-              transformOrigin: `${(cx + s.ex).toFixed(1)}px ${(cy + s.ey).toFixed(1)}px`,
+              transform: isH ? `translate(${(s.ex*0.4).toFixed(1)}px, -6px) scale(1.03)` : 'none',
+              transformOrigin: `${(cx+s.ex).toFixed(1)}px ${(cy+s.ey).toFixed(1)}px`,
               transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)',
             }}
             onMouseEnter={() => onHov(s.ticker)}
             onMouseLeave={() => onHov(null)}
             onTouchStart={() => onHov(s.ticker)}
             onTouchEnd={() => onHov(null)}>
-            {/* Fond coloré avec dégradé radial */}
-            <path d={topD} fill={`url(#dg-${s.ticker})`} />
+            {/* Fond avec dégradé 180° */}
+            <path d={topD} fill={`url(#lg-${s.ticker})`} />
             {/* Reflet glossy */}
-            <path d={topD} fill="url(#gloss)" />
-            {/* Contour fin au hover */}
+            <path d={topD} fill="url(#gloss-top)" />
+            {/* Contour hover */}
             {isH && (
               <path d={topD} fill="none"
-                stroke={s.color} strokeWidth={1.5} opacity={0.6}
-              />
+                stroke={s.grad[0]} strokeWidth={1.5} opacity={0.7} />
             )}
-            {/* Label % */}
-            {s.pct >= 7 && (
-              <text
-                x={lx} y={ly}
+            {/* Label % — visible si ≥ 6% */}
+            {s.pct >= 6 && (
+              <text x={lx.toFixed(1)} y={ly.toFixed(1)}
                 textAnchor="middle" dominantBaseline="middle"
-                fill="#fff" fontSize={10} fontWeight={700}
-                fontFamily="monospace"
-                style={{ pointerEvents: 'none', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}>
+                fill="#fff" fontSize={11} fontWeight={700} fontFamily="monospace"
+                style={{ pointerEvents: 'none', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.9))' }}>
                 {s.pct.toFixed(0)}%
               </text>
             )}
@@ -226,19 +262,16 @@ function DonutChart({ data, hovTicker, onHov }: {
         )
       })}
 
-      {/* ── Trou central (bouchon dessus) ── */}
-      <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
-        fill="#111" stroke="#222" strokeWidth={0.5} />
-      {/* Paroi basse du trou */}
-      <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 0.5} ry={ry - 0.3}
+      {/* ── Trou central bouchon dessus ── */}
+      <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
+        fill="#111" stroke="#1E1E1E" strokeWidth={0.5} />
+      <ellipse cx={cx} cy={cy + DEPTH} rx={rxi - 0.5} ry={ryi - 0.3}
         fill="#0A0A0A" />
       {/* Texte centre */}
-      <text x={cx} y={cy - 3} textAnchor="middle"
-        fill="#383838" fontSize={6} fontWeight={700} letterSpacing="0.12em">
-        PORTEF.
-      </text>
-      <text x={cx} y={cy + 7} textAnchor="middle"
-        fill="#666" fontSize={11} fontWeight={800} fontFamily="monospace">
+      <text x={cx} y={cy - 2} textAnchor="middle"
+        fill="#333" fontSize={7} fontWeight={700} letterSpacing="0.1em">PORTEF.</text>
+      <text x={cx} y={cy + 8} textAnchor="middle"
+        fill="#666" fontSize={12} fontWeight={800} fontFamily="monospace">
         {segs.length}
       </text>
     </svg>
