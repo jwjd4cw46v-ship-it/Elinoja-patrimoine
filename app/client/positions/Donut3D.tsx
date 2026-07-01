@@ -28,7 +28,7 @@
 
 import { useMemo, useRef, useState, Suspense } from 'react'
 import * as THREE from 'three'
-import { Canvas, useFrame, ThreeEvent } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { Environment, ContactShadows, Html } from '@react-three/drei'
 
 // ─── Couleurs par ticker (mêmes règles que la version précédente) ───────────
@@ -119,7 +119,7 @@ function Slice({
     Math.cos(seg.mid) * midR, depth / 2 + 0.05, Math.sin(seg.mid) * midR,
   ]
 
-  const stop = (e: ThreeEvent<PointerEvent>) => e.stopPropagation()
+  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation()
 
   return (
     <group ref={group}>
