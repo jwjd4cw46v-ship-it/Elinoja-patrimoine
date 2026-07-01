@@ -191,8 +191,8 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
           {/* Parois extérieures (dégradé vertical) */}
           {segs.map((s, i) => {
             const isH = active === s.ticker
-            const ex = isH ? s.ex * 1.15 : s.ex
-            const ey = isH ? s.ey * 1.15 : s.ey
+            const ex = isH ? s.ex * 1.3 : 0
+            const ey = isH ? s.ey * 1.3 : 0
             const d = outerWall(cx+ex, cy+ey, RX, RY, s.start, s.end, DEPTH)
             return d ? (
               <path key={`ow-${i}`} d={d}
@@ -204,8 +204,8 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
           {/* Parois intérieures (dégradé vertical) */}
           {segs.map((s, i) => {
             const isH = active === s.ticker
-            const ex = isH ? s.ex * 1.15 : s.ex
-            const ey = isH ? s.ey * 1.15 : s.ey
+            const ex = isH ? s.ex * 1.3 : 0
+            const ey = isH ? s.ey * 1.3 : 0
             const d = innerWall(cx+ex, cy+ey, rxi, ryi, s.start, s.end, DEPTH)
             return d ? (
               <path key={`iw-${i}`} d={d}
@@ -217,8 +217,8 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
           {/* Faces supérieures + labels + tooltip */}
           {segs.map((s, i) => {
             const isH = active === s.ticker
-            const ex = isH ? s.ex * 1.15 : s.ex
-            const ey = isH ? s.ey * 1.15 : s.ey
+            const ex = isH ? s.ex * 1.3 : 0
+            const ey = isH ? s.ey * 1.3 : 0
             const topD = topFace(cx+ex, cy+ey, RX, RY, rxi, ryi, s.start, s.end)
 
             // Label : (innerRadius + outerRadius) / 2, translateY -6px
