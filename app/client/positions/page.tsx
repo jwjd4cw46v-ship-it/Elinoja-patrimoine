@@ -83,14 +83,14 @@ function DonutChart({ data, hovTicker, onHov }: {
   const active = hovTicker ?? clicked
 
   // ── Constantes géométriques (coordonnées elliptiques natives) ──
-  // Taille réduite de ~17.5% par rapport à la version précédente, et
+  // Taille réduite de ~17.5% par rapport à la version d'origine, et
   // trou central légèrement agrandi (ratio hole/outer ~0.42).
   const VW = 380, cy = 92
   const RX = 132, RY = 79        // ellipse extérieure
   const rxi = 56, ryi = 34       // ellipse intérieure (trou)
   const DEPTH = 22               // épaisseur extrusion (20–24px)
-  const EXPLODE = 6              // écartement max au survol
-  const GAP = 0.022              // gap entre segments
+  const EXPLODE = 6               // écartement au survol
+  const GAP = 0.022               // gap entre segments
   const cx = VW / 2
   const svgH = cy + DEPTH + 58
 
