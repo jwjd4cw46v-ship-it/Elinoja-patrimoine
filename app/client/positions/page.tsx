@@ -16,6 +16,12 @@ import {
   type Position, type AlertePosition,
 } from '@/lib/positions-engine'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
+
+// Donut 3D (WebGL réel — React Three Fiber). Chargé côté client uniquement :
+// le Canvas ne peut pas être rendu côté serveur.
+// Nécessite : npm install three @react-three/fiber @react-three/drei
+const Donut3D = dynamic(() => import('./Donut3D'), { ssr: false })
 
 /* ─────────────────────── Helpers ─────────────────────────────── */
 const fmt = (n: number | null | undefined, d = 3) =>
@@ -201,8 +207,8 @@ function DonutChart({ data, hovTicker, onHov }: {
       {/* ── Parois extérieures (dégradé vertical) ── */}
       {segs.map((s, i) => {
         const isH = active === s.ticker
-        const ex = isH ? s.ex * 1.15 : s.ex
-        const ey = isH ? s.ey * 1.15 : s.ey
+        const ex = isH ? s.ex * 1.3 : 0
+        const ey = isH ? s.ey * 1.3 : 0
         const d = outerWall(cx + ex, cy + ey, s.start, s.end)
         return d ? (
           <path key={`ow-${i}`} d={d}
@@ -214,8 +220,8 @@ function DonutChart({ data, hovTicker, onHov }: {
       {/* ── Parois intérieures (dégradé vertical) ── */}
       {segs.map((s, i) => {
         const isH = active === s.ticker
-        const ex = isH ? s.ex * 1.15 : s.ex
-        const ey = isH ? s.ey * 1.15 : s.ey
+        const ex = isH ? s.ex * 1.3 : 0
+        const ey = isH ? s.ey * 1.3 : 0
         const d = innerWall(cx + ex, cy + ey, s.start, s.end)
         return d ? (
           <path key={`iw-${i}`} d={d}
@@ -227,8 +233,8 @@ function DonutChart({ data, hovTicker, onHov }: {
       {/* ── Faces supérieures ── */}
       {segs.map((s, i) => {
         const isH = active === s.ticker
-        const ex = isH ? s.ex * 1.15 : s.ex
-        const ey = isH ? s.ey * 1.15 : s.ey
+        const ex = isH ? s.ex * 1.3 : 0
+        const ey = isH ? s.ey * 1.3 : 0
         const topD = topFace(cx + ex, cy + ey, s.start, s.end)
 
         // Label : milieu radial (innerRadius + outerRadius) / 2, translateY -6px
@@ -951,10 +957,8 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
 
   return (
     <div>
-      {/* Donut centré, taille contrainte pour ne jamais déborder de la carte */}
-      <div style={{ width: '100%', maxWidth: 220, margin: '0 auto', marginBottom: 24 }}>
-        <DonutChart data={donutData} hovTicker={hov} onHov={setHov} />
-      </div>
+      {/* Donut 3D (WebGL) — largeur/marge gérées en interne par le composant */}
+      <Donut3D data={donutData} hovTicker={hov} onHov={setHov} />
 
       {/* Légende en grille 2 colonnes */}
       <div style={{
