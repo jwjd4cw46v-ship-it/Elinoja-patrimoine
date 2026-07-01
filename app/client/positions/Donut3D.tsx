@@ -119,17 +119,15 @@ function Slice({
     Math.cos(seg.mid) * midR, depth / 2 + 0.05, Math.sin(seg.mid) * midR,
   ]
 
-  const stop = (e: { stopPropagation: () => void }) => e.stopPropagation()
-
   return (
     <group ref={group}>
       <mesh
         geometry={geo}
         castShadow
         receiveShadow
-        onPointerOver={e => { stop(e); onEnter() }}
-        onPointerOut={e => { stop(e); onLeave() }}
-        onClick={e => { stop(e); onClick() }}
+        onPointerOver={e => { e.stopPropagation(); onEnter() }}
+        onPointerOut={e => { e.stopPropagation(); onLeave() }}
+        onClick={e => { e.stopPropagation(); onClick() }}
       >
         <meshPhysicalMaterial
           color={seg.color}
