@@ -90,7 +90,7 @@ function Slice({
   onLeave: () => void
   onClick: () => void
 }) {
-  const innerR = 1.15, outerR = 3.0, depth = 0.85, bevel = 0.045
+  const innerR = 0.95, outerR = 2.5, depth = 0.7, bevel = 0.035
   const geo = useMemo(
     () => buildSliceGeometry(seg.start, seg.end, innerR, outerR, depth, bevel),
     [seg.start, seg.end]
@@ -131,26 +131,25 @@ function Slice({
       >
         <meshPhysicalMaterial
           color={seg.color}
-          roughness={0.35}
-          metalness={0.05}
-          clearcoat={0.7}
-          clearcoatRoughness={0.22}
-          reflectivity={0.35}
-          envMapIntensity={0.75}
+          roughness={0.22}
+          metalness={0.06}
+          clearcoat={0.95}
+          clearcoatRoughness={0.1}
+          reflectivity={0.55}
+          envMapIntensity={1.0}
         />
       </mesh>
-      {seg.pct >= 10 && (
-        <Html position={labelPos} center distanceFactor={7} style={{ pointerEvents: 'none' }}>
-          <div style={{
-            fontFamily: 'Inter, system-ui, sans-serif',
-            fontSize: 20, fontWeight: 700, color: 'white',
-            textShadow: '0 2px 6px rgba(0,0,0,.5)',
-            whiteSpace: 'nowrap',
-          }}>
-            {seg.pct.toFixed(0)}%
-          </div>
-        </Html>
-      )}
+      {/* Affiché sur toutes les tranches, y compris les petites (ex : 8%) */}
+      <Html position={labelPos} center distanceFactor={7} style={{ pointerEvents: 'none' }}>
+        <div style={{
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: 13, fontWeight: 700, color: 'white',
+          textShadow: '0 2px 6px rgba(0,0,0,.5)',
+          whiteSpace: 'nowrap',
+        }}>
+          {seg.pct.toFixed(0)}%
+        </div>
+      </Html>
     </group>
   )
 }
@@ -161,10 +160,10 @@ function CenterLabel({ count }: { count: number }) {
     <Html position={[0, 0.5, 0]} center distanceFactor={7} style={{ pointerEvents: 'none' }}>
       <div style={{ textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
         <div style={{
-          fontSize: 12, fontWeight: 700, letterSpacing: '0.15em',
+          fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
           color: '#D4AF37', opacity: 0.9,
         }}>PORTF.</div>
-        <div style={{ fontSize: 26, fontWeight: 700, color: '#D4AF37', opacity: 0.9 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: '#D4AF37', opacity: 0.9 }}>
           {count}
         </div>
       </div>
@@ -253,14 +252,23 @@ export default function Donut3D({
 
   return (
     <div style={{
-      width: '100%', maxWidth: 320, margin: '0 auto 24px',
-      aspectRatio: '1 / 0.72',
+      width: '100%', maxWidth: 230, margin: '0 auto 24px',
+      aspectRatio: '1 / 0.85',
+      borderRadius: 20, overflow: 'hidden',   // garantit qu'il ne déborde jamais de la carte
+      background: 'transparent',
     }}>
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [0, 5.6, 6.4], fov: 32 }}
-        gl={{ alpha: true, antialias: true }}
+        camera={{ position: [0, 6.4, 8.0], fov: 34 }}
+        gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
+        style={{ background: 'transparent' }}
+        onCreated={({ gl, scene }) => {
+          // Force la transparence même si un preset d'Environment tente
+          // de forcer un fond (bug rencontré avec certaines versions de drei).
+          gl.setClearColor(0x000000, 0)
+          scene.background = null
+        }}
       >
         <DonutScene data={data} hovTicker={hovTicker} onHov={onHov} />
       </Canvas>
