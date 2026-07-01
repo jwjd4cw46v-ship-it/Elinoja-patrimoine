@@ -131,12 +131,12 @@ function Slice({
       >
         <meshPhysicalMaterial
           color={seg.color}
-          roughness={0.28}
-          metalness={0.12}
-          clearcoat={1}
-          clearcoatRoughness={0.18}
-          reflectivity={0.6}
-          envMapIntensity={1.3}
+          roughness={0.35}
+          metalness={0.05}
+          clearcoat={0.7}
+          clearcoatRoughness={0.22}
+          reflectivity={0.35}
+          envMapIntensity={0.75}
         />
       </mesh>
       {seg.pct >= 10 && (
@@ -203,12 +203,13 @@ function DonutScene({
 
   return (
     <>
-      <color attach="background" args={['#00000000']} />
-      <ambientLight intensity={0.55} />
-      <directionalLight position={[4, 6, 3]} intensity={1.4} castShadow />
-      <directionalLight position={[-3, 2, -4]} intensity={0.35} color="#D4AF37" />
+      {/* Pas de <color attach="background"> : le Canvas est transparent
+          (gl alpha:true) et laisse voir le fond sombre de la carte. */}
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[4, 6, 3]} intensity={1.7} castShadow />
+      <directionalLight position={[-3, 2, -4]} intensity={0.4} color="#D4AF37" />
       <Suspense fallback={null}>
-        <Environment preset="city" />
+        <Environment preset="studio" background={false} />
       </Suspense>
 
       <group rotation={[0, 0, 0]}>
