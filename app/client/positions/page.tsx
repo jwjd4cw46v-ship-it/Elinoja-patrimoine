@@ -31,34 +31,38 @@ const fmtPct = (n: number) =>
 /* ─── Palette donut ─────────────────────────────────────────────── */
 const DONUT_COLORS = ['#22C55E', '#EAB308', '#3B82F6', '#A855F7', '#EF4444', '#06B6D4', '#F97316', '#EC4899']
 
+// Dégradés [clair, milieu, sombre] par couleur de base — utilisés à la fois
+// par le donut SVG et par la légende HTML pour garantir la cohérence.
+const DONUT_GRADS: Record<string, [string, string, string]> = {
+  '#22C55E': ['#32d26b', '#22c55e', '#15803d'],
+  '#EAB308': ['#facc15', '#eab308', '#a16207'],
+  '#3B82F6': ['#60a5fa', '#3b82f6', '#1d4ed8'],
+  '#A855F7': ['#c084fc', '#a855f7', '#7e22ce'],
+  '#EF4444': ['#f87171', '#ef4444', '#991b1b'],
+  '#06B6D4': ['#22d3ee', '#06b6d4', '#0e7490'],
+  '#F97316': ['#fb923c', '#f97316', '#c2410c'],
+  '#EC4899': ['#f472b6', '#ec4899', '#9d174d'],
+}
+
+// Couleurs dédiées à des tickers spécifiques (règle 9). Les autres tickers
+// retombent sur la palette générique ci-dessus, indexée par position.
+const TICKER_GRADS: Record<string, [string, string, string]> = {
+  TINV: ['#22C55E', '#1FAE57', '#16A34A'],
+  SFBT: ['#FACC15', '#DFAF10', '#CA8A04'],
+  TGH:  ['#3B82F6', '#2F70DA', '#2563EB'],
+}
+
+function getTickerGrad(ticker: string, i: number): [string, string, string] {
+  if (TICKER_GRADS[ticker]) return TICKER_GRADS[ticker]
+  const base = DONUT_COLORS[i % DONUT_COLORS.length]
+  return DONUT_GRADS[base] ?? [base, base, base]
+}
+
+function getTickerColor(ticker: string, i: number): string {
+  return getTickerGrad(ticker, i)[1]
+}
+
 /* ─── Helpers géométrie 3D ──────────────────────────────────────── */
-function _ellPt(cx: number, cy: number, rx: number, ry: number, a: number) {
-  return { x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) }
-}
-function _arcPath(cx: number, cy: number, RX: number, RY: number, rx: number, ry: number, s: number, e: number, dy = 0) {
-  const large = e - s > Math.PI ? 1 : 0
-  const o1 = _ellPt(cx, cy + dy, RX, RY, s), o2 = _ellPt(cx, cy + dy, RX, RY, e)
-  const i2 = _ellPt(cx, cy + dy, rx, ry, e), i1 = _ellPt(cx, cy + dy, rx, ry, s)
-  return `M ${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A ${RX} ${RY} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L ${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A ${rx} ${ry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
-}
-function _wallPath(cx: number, cy: number, RX: number, RY: number, s: number, e: number, depth: number, inner = false) {
-  const _rx = inner ? RX * 0 + (inner ? 0 : RX) : RX // unused, just routing
-  const ws = Math.max(s, 0), we = Math.min(e, Math.PI)
-  if (ws >= we) return ''
-  const large = we - ws > Math.PI ? 1 : 0
-  const [ERX, ERY] = inner ? [0, 0] : [RX, RY] // not used this way — see below
-  const t1 = _ellPt(cx, cy, RX, RY, ws), t2 = _ellPt(cx, cy, RX, RY, we)
-  const b2 = _ellPt(cx, cy + depth, RX, RY, we), b1 = _ellPt(cx, cy + depth, RX, RY, ws)
-  return `M ${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A ${RX} ${RY} 0 ${large} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L ${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A ${RX} ${RY} 0 ${large} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)} Z`
-}
-function _innerWall(cx: number, cy: number, rx: number, ry: number, s: number, e: number, depth: number) {
-  const ws = Math.max(s, 0), we = Math.min(e, Math.PI)
-  if (ws >= we) return ''
-  const large = we - ws > Math.PI ? 1 : 0
-  const t1 = _ellPt(cx, cy, rx, ry, ws), t2 = _ellPt(cx, cy, rx, ry, we)
-  const b2 = _ellPt(cx, cy + depth, rx, ry, we), b1 = _ellPt(cx, cy + depth, rx, ry, ws)
-  return `M ${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A ${rx} ${ry} 0 ${large} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L ${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A ${rx} ${ry} 0 ${large} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)} Z`
-}
 function _darken(hex: string, f = 0.4) {
   const n = parseInt(hex.slice(1), 16)
   return `rgb(${Math.round(((n>>16)&0xff)*f)},${Math.round(((n>>8)&0xff)*f)},${Math.round((n&0xff)*f)})`
@@ -74,26 +78,21 @@ function DonutChart({ data, hovTicker, onHov }: {
   hovTicker: string | null
   onHov: (t: string | null) => void
 }) {
+  // Sélection au clic (persiste sur mobile, sans nécessiter un survol)
+  const [clicked, setClicked] = useState<string | null>(null)
+  const active = hovTicker ?? clicked
+
   // ── Constantes géométriques (coordonnées elliptiques natives) ──
-  const VW = 380, cy = 112
-  const RX = 160, RY = 96        // ellipse extérieure
-  const rxi = 50,  ryi = 30      // ellipse intérieure (trou = 31%)
-  const DEPTH = 18               // épaisseur extrusion
-  const EXPLODE = 6              // écartement max 6 px
+  // Taille réduite de ~17.5% par rapport à la version précédente, et
+  // trou central légèrement agrandi (ratio hole/outer ~0.42).
+  const VW = 380, cy = 92
+  const RX = 132, RY = 79        // ellipse extérieure
+  const rxi = 56, ryi = 34       // ellipse intérieure (trou)
+  const DEPTH = 22               // épaisseur extrusion (20–24px)
+  const EXPLODE = 6              // écartement max au survol
   const GAP = 0.022              // gap entre segments
   const cx = VW / 2
-
-  // ── Dégradés par couleur ──────────────────────────────────────
-  const GRADS: Record<string, [string,string,string]> = {
-    '#22C55E': ['#32d26b','#22c55e','#15803d'],
-    '#EAB308': ['#facc15','#eab308','#a16207'],
-    '#3B82F6': ['#60a5fa','#3b82f6','#1d4ed8'],
-    '#A855F7': ['#c084fc','#a855f7','#7e22ce'],
-    '#EF4444': ['#f87171','#ef4444','#991b1b'],
-    '#06B6D4': ['#22d3ee','#06b6d4','#0e7490'],
-    '#F97316': ['#fb923c','#f97316','#c2410c'],
-    '#EC4899': ['#f472b6','#ec4899','#9d174d'],
-  }
+  const svgH = cy + DEPTH + 58
 
   // ── Construction des segments ─────────────────────────────────
   const total = data.reduce((s, d) => s + d.pct, 0)
@@ -106,8 +105,7 @@ function DonutChart({ data, hovTicker, onHov }: {
     const end   = start + Math.max(sweep, 0.001)
     cum += (pct / 100) * 2 * Math.PI
     const mid  = (start + end) / 2
-    const base = DONUT_COLORS[i % DONUT_COLORS.length]
-    const g    = GRADS[base] ?? [base, base, _darken(base, 0.5)]
+    const g    = getTickerGrad(d.ticker, i)
     return {
       ticker: d.ticker, pct, valeur: d.valeur,
       start, end, mid, g,
@@ -116,8 +114,6 @@ function DonutChart({ data, hovTicker, onHov }: {
       ey: Math.sin(mid) * EXPLODE,
     }
   })
-
-  const svgH = cy + DEPTH + 64
 
   // ── Helper point ellipse ──────────────────────────────────────
   const ep = (ecx: number, ecy: number, erx: number, ery: number, a: number) =>
@@ -151,9 +147,15 @@ function DonutChart({ data, hovTicker, onHov }: {
     return `M${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A${rxi} ${ryi} 0 ${lg} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A${rxi} ${ryi} 0 ${lg} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)}Z`
   }
 
+  const handleEnter = (t: string) => onHov(t)
+  const handleLeave = () => onHov(null)
+  const handleClick = (t: string) => setClicked(prev => prev === t ? null : t)
+  const handleTouchStart = (e: React.TouchEvent, t: string) => { e.preventDefault(); onHov(t) }
+  const handleTouchEnd = () => onHov(null)
+
   return (
     <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
-      style={{ display: 'block', overflow: 'visible' }}>
+      style={{ display: 'block', overflow: 'visible', maxWidth: 220, margin: '0 auto' }}>
       <defs>
         {segs.map((s, i) => (
           <linearGradient key={`lg-${i}`} id={`dlg-${i}`}
@@ -163,74 +165,108 @@ function DonutChart({ data, hovTicker, onHov }: {
             <stop offset="100%" stopColor={s.g[2]} />
           </linearGradient>
         ))}
+        {/* Dégradés verticaux pour les parois — accentuent la profondeur */}
+        {segs.map((s, i) => (
+          <linearGradient key={`ow-grad-${i}`} id={`dowg-${i}`}
+            x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%"   stopColor={s.g[1]} stopOpacity={0.75} />
+            <stop offset="100%" stopColor={_darken(s.g[2], 0.35)} stopOpacity={0.85} />
+          </linearGradient>
+        ))}
+        {segs.map((s, i) => (
+          <linearGradient key={`iw-grad-${i}`} id={`diwg-${i}`}
+            x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%"   stopColor={_darken(s.g[1], 0.55)} stopOpacity={0.75} />
+            <stop offset="100%" stopColor={_darken(s.g[2], 0.22)} stopOpacity={0.9} />
+          </linearGradient>
+        ))}
         <linearGradient id="d-gloss" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%"   stopColor="rgba(255,255,255,0.20)" />
           <stop offset="50%"  stopColor="rgba(255,255,255,0.05)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </linearGradient>
+        {/* Anneau intérieur du trou central — simule un inset subtil */}
+        <radialGradient id="d-hole-inset" cx="50%" cy="32%" r="78%">
+          <stop offset="0%"   stopColor="rgba(255,255,255,0.05)" />
+          <stop offset="55%"  stopColor="rgba(255,255,255,0)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0.28)" />
+        </radialGradient>
       </defs>
 
-      {/* ── Ombre au sol ── */}
-      <ellipse cx={cx} cy={cy + DEPTH + 22} rx={140} ry={14}
-        fill="rgba(0,200,83,0.55)" opacity={0.08}
-        style={{ filter: 'blur(18px)' }} />
+      {/* ── Ombre au sol : blur 25px, opacity 0.20, rgba(0,0,0,0.5) ── */}
+      <ellipse cx={cx} cy={cy + DEPTH + 20} rx={RX * 0.92} ry={14}
+        fill="rgba(0,0,0,0.5)" opacity={0.20}
+        style={{ filter: 'blur(25px)' }} />
 
-      {/* ── Parois extérieures ── */}
+      {/* ── Parois extérieures (dégradé vertical) ── */}
       {segs.map((s, i) => {
-        const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.3 : s.ex
-        const ey = isH ? s.ey * 1.3 : s.ey
+        const isH = active === s.ticker
+        const ex = isH ? s.ex * 1.15 : s.ex
+        const ey = isH ? s.ey * 1.15 : s.ey
         const d = outerWall(cx + ex, cy + ey, s.start, s.end)
         return d ? (
           <path key={`ow-${i}`} d={d}
-            fill={s.g[2]} opacity={0.55}
-            style={{ transition: 'all 0.22s ease' }} />
+            fill={`url(#dowg-${i})`}
+            style={{ transition: 'all 250ms ease' }} />
         ) : null
       })}
 
-      {/* ── Parois intérieures ── */}
+      {/* ── Parois intérieures (dégradé vertical) ── */}
       {segs.map((s, i) => {
-        const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.3 : s.ex
-        const ey = isH ? s.ey * 1.3 : s.ey
+        const isH = active === s.ticker
+        const ex = isH ? s.ex * 1.15 : s.ex
+        const ey = isH ? s.ey * 1.15 : s.ey
         const d = innerWall(cx + ex, cy + ey, s.start, s.end)
         return d ? (
           <path key={`iw-${i}`} d={d}
-            fill={_darken(s.g[1], 0.28)} opacity={0.55}
-            style={{ transition: 'all 0.22s ease' }} />
+            fill={`url(#diwg-${i})`}
+            style={{ transition: 'all 250ms ease' }} />
         ) : null
       })}
 
       {/* ── Faces supérieures ── */}
       {segs.map((s, i) => {
-        const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.3 : s.ex
-        const ey = isH ? s.ey * 1.3 : s.ey
+        const isH = active === s.ticker
+        const ex = isH ? s.ex * 1.15 : s.ex
+        const ey = isH ? s.ey * 1.15 : s.ey
         const topD = topFace(cx + ex, cy + ey, s.start, s.end)
 
-        // Label : milieu radial (innerRadius + outerRadius) / 2, translateY -8px
+        // Label : milieu radial (innerRadius + outerRadius) / 2, translateY -6px
         const labR  = (RX  + rxi)  / 2 * 0.72
         const labRY = (RY  + ryi)  / 2 * 0.72
         const lx = cx + ex + labR  * Math.cos(s.mid)
-        const ly = cy + ey + labRY * Math.sin(s.mid) - 8
+        const ly = cy + ey + labRY * Math.sin(s.mid) - 6
+
+        // Position du tooltip : évite tout débordement de la carte.
+        // Droite → tooltip à gauche · Gauche → tooltip à droite · Haut → tooltip dessous.
+        const cosM = Math.cos(s.mid), sinM = Math.sin(s.mid)
+        const nearTop   = sinM < -0.55
+        const rightSide = cosM > 0.12
+        const leftSide  = cosM < -0.12
+        const tip = ep(cx + ex, cy + ey, RX + 10, RY + 10, s.mid)
+        let ttTransform = 'translate(-50%, -100%)'
+        if (nearTop)       ttTransform = 'translate(-50%, 10px)'
+        else if (rightSide) ttTransform = 'translate(calc(-100% - 8px), -50%)'
+        else if (leftSide)  ttTransform = 'translate(8px, -50%)'
 
         return (
           <g key={`top-${i}`}
             style={{
               cursor:          'pointer',
               filter:          isH
-                ? `drop-shadow(0 8px 16px rgba(0,0,0,.45)) drop-shadow(0 0 16px ${s.midC})`
+                ? 'drop-shadow(0 12px 30px rgba(0,0,0,.45))'
                 : 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
               transform:       isH
-                ? `translate(${(s.ex * 0.3).toFixed(1)}px,-4px)`
+                ? `translate(${(s.ex * 0.25).toFixed(1)}px,-3px) scale(1.04)`
                 : 'none',
               transformOrigin: `${(cx + s.ex).toFixed(1)}px ${(cy + s.ey).toFixed(1)}px`,
-              transition:      'transform 220ms cubic-bezier(.2,.8,.2,1), filter 220ms',
+              transition:      'transform 250ms ease, filter 250ms ease',
             }}
-            onMouseEnter={() => onHov(s.ticker)}
-            onMouseLeave={() => onHov(null)}
-            onTouchStart={e => { e.preventDefault(); onHov(s.ticker) }}
-            onTouchEnd={() => onHov(null)}>
+            onMouseEnter={() => handleEnter(s.ticker)}
+            onMouseLeave={handleLeave}
+            onClick={() => handleClick(s.ticker)}
+            onTouchStart={e => handleTouchStart(e, s.ticker)}
+            onTouchEnd={handleTouchEnd}>
             {/* Fond dégradé */}
             <path d={topD} fill={`url(#dlg-${i})`} />
             {/* Reflet glossy */}
@@ -238,12 +274,12 @@ function DonutChart({ data, hovTicker, onHov }: {
             {/* Contour blanc subtil */}
             <path d={topD} fill="none"
               stroke="rgba(255,255,255,0.12)" strokeWidth={2} />
-            {/* Label % */}
-            {s.pct >= 5 && (
+            {/* Label % — uniquement pour les parts ≥ 10% */}
+            {s.pct >= 10 && (
               <text x={lx.toFixed(1)} y={ly.toFixed(1)}
                 textAnchor="middle" dominantBaseline="middle"
                 fontFamily="Inter, system-ui, monospace"
-                fontSize={11} fontWeight={700} fill="white"
+                fontSize={11} fontWeight={600} fill="white"
                 style={{
                   pointerEvents: 'none',
                   filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.95))',
@@ -251,21 +287,47 @@ function DonutChart({ data, hovTicker, onHov }: {
                 {s.pct.toFixed(0)}%
               </text>
             )}
+            {/* Tooltip — largeur max 180px, ne sort jamais de la carte */}
+            {isH && (
+              <foreignObject x={tip.x - 100} y={tip.y - 60} width={200} height={120}
+                style={{ overflow: 'visible', pointerEvents: 'none', zIndex: 50 }}>
+                <div style={{
+                  position: 'absolute', left: '50%', top: '50%',
+                  transform: ttTransform,
+                  maxWidth: 180, zIndex: 50,
+                  background: 'rgba(10,10,10,0.96)',
+                  border: `1px solid ${s.g[1]}55`,
+                  borderRadius: 10, padding: '8px 10px',
+                  boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                  fontFamily: 'Inter, system-ui',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: s.g[1] }}>{s.ticker}</div>
+                  <div style={{ fontSize: 10, color: '#D8D8D8', marginTop: 2 }}>{s.pct.toFixed(1)}%</div>
+                  {s.valeur !== undefined && (
+                    <div style={{ fontSize: 9, color: '#777', marginTop: 1 }}>
+                      {s.valeur.toLocaleString('fr-TN', { maximumFractionDigits: 0 })} DT
+                    </div>
+                  )}
+                </div>
+              </foreignObject>
+            )}
           </g>
         )
       })}
 
       {/* ── Trou central ── */}
       <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
-        fill="#090909" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+        fill="#050505" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+      {/* Anneau interne subtil (simule inset 0 0 12px rgba(255,255,255,0.05)) */}
+      <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi} fill="url(#d-hole-inset)" />
       <ellipse cx={cx} cy={cy + DEPTH} rx={rxi - 1} ry={ryi - 0.4}
-        fill="#060606" />
-      <text x={cx} y={cy - 3} textAnchor="middle"
-        fontFamily="Inter, system-ui" fontSize={7} fontWeight={700}
-        letterSpacing="0.12em" fill="rgba(255,255,255,0.18)">PORTEF.</text>
-      <text x={cx} y={cy + 8} textAnchor="middle"
-        fontFamily="Inter, monospace" fontSize={13} fontWeight={800}
-        fill="rgba(255,255,255,0.45)">
+        fill="#040404" />
+      <text x={cx} y={cy - 6} textAnchor="middle"
+        fontFamily="Inter, system-ui" fontSize={11} fontWeight={700}
+        letterSpacing="0.10em" fill="#D4AF37" opacity={0.9}>PORTF.</text>
+      <text x={cx} y={cy + 16} textAnchor="middle"
+        fontFamily="Inter, monospace" fontSize={24} fontWeight={700}
+        fill="#D4AF37" opacity={0.9}>
         {segs.length}
       </text>
     </svg>
@@ -889,8 +951,8 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
 
   return (
     <div>
-      {/* Donut centré pleine largeur */}
-      <div style={{ width: '100%', maxWidth: 240, margin: '0 auto' }}>
+      {/* Donut centré, taille contrainte pour ne jamais déborder de la carte */}
+      <div style={{ width: '100%', maxWidth: 220, margin: '0 auto', marginBottom: 24 }}>
         <DonutChart data={donutData} hovTicker={hov} onHov={setHov} />
       </div>
 
@@ -899,10 +961,9 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
         gap: '3px 8px',
-        marginTop: 10,
       }}>
         {repartition.map((r, i) => {
-          const color    = DONUT_COLORS[i % DONUT_COLORS.length]
+          const color    = getTickerColor(r.ticker, i)
           const isHov    = hov === r.ticker
           const hasAlert = r.pct > 20
           const isOpen   = openTicker === r.ticker
@@ -1011,7 +1072,7 @@ function RepartitionBlock({ repartition }: { repartition: { ticker: string; vale
         {/* Mini barres sparkline */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'flex-end', gap: 2, height: 18 }}>
           {repartition.map((r, i) => {
-            const color = DONUT_COLORS[i % DONUT_COLORS.length]
+            const color = getTickerColor(r.ticker, i)
             return (
               <div key={r.ticker} style={{
                 width: 4, borderRadius: 2,
@@ -1037,7 +1098,7 @@ function ConcentrationRow({ r, i, total }: {
 }) {
   const [open, setOpen] = React.useState(false)
   const hasAlert = r.pct > 20
-  const color = DONUT_COLORS[i % DONUT_COLORS.length]
+  const color = getTickerColor(r.ticker, i)
   const isLast = i === total - 1
 
   return (
