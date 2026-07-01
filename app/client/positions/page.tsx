@@ -74,187 +74,180 @@ function DonutChart({ data, hovTicker, onHov }: {
   hovTicker: string | null
   onHov: (t: string | null) => void
 }) {
-  // Coordonnées elliptiques natives — pas de rotateX
-  const VW = 340, VH = 220
-  const cx = VW / 2, cy = 100
-  const RX = 130, RY = 52          // ellipse extérieure (ratio ≈ 0.4 → ~48° de perspective)
-  const rxi = RX * 0.38, ryi = RY * 0.38  // trou = 38 % du rayon
-  const DEPTH = 18                  // épaisseur extrusion 18 px
-  const GAP = 0.022                 // écartement minimal
-  const EXPLODE = 6                 // max 6 px
+  // ── Constantes géométriques (coordonnées elliptiques natives) ──
+  const VW = 380, cy = 112
+  const RX = 160, RY = 96        // ellipse extérieure
+  const rxi = 65,  ryi = 39      // ellipse intérieure (trou = 40%)
+  const DEPTH = 18               // épaisseur extrusion
+  const EXPLODE = 6              // écartement max 6 px
+  const GAP = 0.022              // gap entre segments
+  const cx = VW / 2
 
-  // Dégradés par couleur (top→bottom de la tranche du dessus)
-  const COLOR_GRADIENTS: Record<string, [string, string, string]> = {
-    '#22C55E': ['#32d26b', '#22c55e', '#15803d'],
-    '#EAB308': ['#facc15', '#eab308', '#a16207'],
-    '#3B82F6': ['#60a5fa', '#3b82f6', '#1d4ed8'],
-    '#A855F7': ['#c084fc', '#a855f7', '#7e22ce'],
-    '#EF4444': ['#f87171', '#ef4444', '#991b1b'],
-    '#06B6D4': ['#22d3ee', '#06b6d4', '#0e7490'],
-    '#F97316': ['#fb923c', '#f97316', '#c2410c'],
-    '#EC4899': ['#f472b6', '#ec4899', '#9d174d'],
+  // ── Dégradés par couleur ──────────────────────────────────────
+  const GRADS: Record<string, [string,string,string]> = {
+    '#22C55E': ['#32d26b','#22c55e','#15803d'],
+    '#EAB308': ['#facc15','#eab308','#a16207'],
+    '#3B82F6': ['#60a5fa','#3b82f6','#1d4ed8'],
+    '#A855F7': ['#c084fc','#a855f7','#7e22ce'],
+    '#EF4444': ['#f87171','#ef4444','#991b1b'],
+    '#06B6D4': ['#22d3ee','#06b6d4','#0e7490'],
+    '#F97316': ['#fb923c','#f97316','#c2410c'],
+    '#EC4899': ['#f472b6','#ec4899','#9d174d'],
   }
 
+  // ── Construction des segments ─────────────────────────────────
   const total = data.reduce((s, d) => s + d.pct, 0)
   let cum = -Math.PI / 2
+
   const segs = data.map((d, i) => {
-    const pct = total > 0 ? (d.pct / total) * 100 : 0
+    const pct   = total > 0 ? (d.pct / total) * 100 : 0
     const sweep = (pct / 100) * 2 * Math.PI - GAP * 2
     const start = cum + GAP
-    const end   = start + sweep
+    const end   = start + Math.max(sweep, 0.001)
     cum += (pct / 100) * 2 * Math.PI
-    const mid = (start + end) / 2
-    const baseColor = DONUT_COLORS[i % DONUT_COLORS.length]
-    const grad = COLOR_GRADIENTS[baseColor] ?? [baseColor, baseColor, _darken(baseColor, 0.5)]
+    const mid  = (start + end) / 2
+    const base = DONUT_COLORS[i % DONUT_COLORS.length]
+    const g    = GRADS[base] ?? [base, base, _darken(base, 0.5)]
     return {
-      ticker: d.ticker, pct, color: baseColor, grad,
-      start, end, mid,
+      ticker: d.ticker, pct, valeur: d.valeur,
+      start, end, mid, g,
+      midC: g[1],
       ex: Math.cos(mid) * EXPLODE,
       ey: Math.sin(mid) * EXPLODE,
     }
   })
 
-  const svgH = VH
+  const svgH = cy + DEPTH + 64
+
+  // ── Helper point ellipse ──────────────────────────────────────
+  const ep = (ecx: number, ecy: number, erx: number, ery: number, a: number) =>
+    ({ x: ecx + erx * Math.cos(a), y: ecy + ery * Math.sin(a) })
+
+  // ── Path face supérieure ──────────────────────────────────────
+  const topFace = (ecx: number, ecy: number, s: number, e: number) => {
+    const lg = e - s > Math.PI ? 1 : 0
+    const o1 = ep(ecx,ecy,RX,RY,s), o2 = ep(ecx,ecy,RX,RY,e)
+    const i2 = ep(ecx,ecy,rxi,ryi,e), i1 = ep(ecx,ecy,rxi,ryi,s)
+    return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${RX} ${RY} 0 ${lg} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${rxi} ${ryi} 0 ${lg} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)}Z`
+  }
+
+  // ── Path paroi extérieure (demi-basse 0→π) ───────────────────
+  const outerWall = (ecx: number, ecy: number, s: number, e: number) => {
+    const ws = Math.max(s, 0), we = Math.min(e, Math.PI)
+    if (ws >= we - 0.001) return ''
+    const lg = we - ws > Math.PI ? 1 : 0
+    const t1 = ep(ecx,ecy,RX,RY,ws),        t2 = ep(ecx,ecy,RX,RY,we)
+    const b2 = ep(ecx,ecy+DEPTH,RX,RY,we),  b1 = ep(ecx,ecy+DEPTH,RX,RY,ws)
+    return `M${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A${RX} ${RY} 0 ${lg} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A${RX} ${RY} 0 ${lg} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)}Z`
+  }
+
+  // ── Path paroi intérieure (demi-basse 0→π) ───────────────────
+  const innerWall = (ecx: number, ecy: number, s: number, e: number) => {
+    const ws = Math.max(s, 0), we = Math.min(e, Math.PI)
+    if (ws >= we - 0.001) return ''
+    const lg = we - ws > Math.PI ? 1 : 0
+    const t1 = ep(ecx,ecy,rxi,ryi,ws),       t2 = ep(ecx,ecy,rxi,ryi,we)
+    const b2 = ep(ecx,ecy+DEPTH,rxi,ryi,we), b1 = ep(ecx,ecy+DEPTH,rxi,ryi,ws)
+    return `M${t1.x.toFixed(2)} ${t1.y.toFixed(2)} A${rxi} ${ryi} 0 ${lg} 1 ${t2.x.toFixed(2)} ${t2.y.toFixed(2)} L${b2.x.toFixed(2)} ${b2.y.toFixed(2)} A${rxi} ${ryi} 0 ${lg} 0 ${b1.x.toFixed(2)} ${b1.y.toFixed(2)}Z`
+  }
 
   return (
     <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
       style={{ display: 'block', overflow: 'visible' }}>
       <defs>
         {segs.map((s, i) => (
-          <linearGradient key={`lg-${s.ticker}-${i}`} id={`lg-${s.ticker}`}
+          <linearGradient key={`lg-${i}`} id={`dlg-${i}`}
             x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%"   stopColor={s.grad[0]} />
-            <stop offset="45%"  stopColor={s.grad[1]} />
-            <stop offset="100%" stopColor={s.grad[2]} />
+            <stop offset="0%"   stopColor={s.g[0]} />
+            <stop offset="45%"  stopColor={s.g[1]} />
+            <stop offset="100%" stopColor={s.g[2]} />
           </linearGradient>
         ))}
-        {/* Reflet glossy dessus */}
-        <linearGradient id="gloss-top" x1="0%" y1="0%" x2="0%" y2="100%">
+        <linearGradient id="d-gloss" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%"   stopColor="rgba(255,255,255,0.20)" />
-          <stop offset="50%"  stopColor="rgba(255,255,255,0.06)" />
+          <stop offset="50%"  stopColor="rgba(255,255,255,0.05)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
         </linearGradient>
       </defs>
 
-      {/* ── Ombre au sol : opacity 0.08, blur 18px, scaleY 0.35 ── */}
-      <ellipse
-        cx={cx} cy={cy + DEPTH + 14}
-        rx={RX * 0.88} ry={RY * 0.35}
-        fill="rgba(0,0,0,0.55)"
-        style={{ filter: 'blur(18px)' }}
-      />
+      {/* ── Ombre au sol ── */}
+      <ellipse cx={cx} cy={cy + DEPTH + 22} rx={140} ry={14}
+        fill="rgba(0,200,83,0.55)" opacity={0.08}
+        style={{ filter: 'blur(18px)' }} />
 
-      {/* ── Parois extérieures (visible uniquement sur la demi-inf: 0→π) ── */}
+      {/* ── Parois extérieures ── */}
       {segs.map((s, i) => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.4 : s.ex
-        const ey = isH ? s.ey * 1.4 : s.ey
-        const ws = Math.max(s.start, 0), we = Math.min(s.end, Math.PI)
-        if (ws >= we) return null
-        const large = we - ws > Math.PI ? 1 : 0
-        const p = (a: number, r: number, rrr: number) => ({
-          x: cx + ex + r * Math.cos(a),
-          y: cy + ey + rrr * Math.sin(a)
-        })
-        const t1 = p(ws, RX, RY), t2 = p(we, RX, RY)
-        const b1 = p(ws, RX, RY + DEPTH), b2 = p(we, RX, RY + DEPTH)
-        const dPath = `M ${t1.x.toFixed(1)} ${t1.y.toFixed(1)} A ${RX} ${RY} 0 ${large} 1 ${t2.x.toFixed(1)} ${t2.y.toFixed(1)} L ${b2.x.toFixed(1)} ${b2.y.toFixed(1)} A ${RX} ${RY} 0 ${large} 0 ${b1.x.toFixed(1)} ${b1.y.toFixed(1)} Z`
-        return (
-          <path key={`ow-${s.ticker}-${i}`} d={dPath}
-            fill={s.grad[2]}
-            opacity={0.85}
-            style={{ transition: 'all 0.25s ease' }}
-          />
-        )
+        const ex = isH ? s.ex * 1.3 : s.ex
+        const ey = isH ? s.ey * 1.3 : s.ey
+        const d = outerWall(cx + ex, cy + ey, s.start, s.end)
+        return d ? (
+          <path key={`ow-${i}`} d={d}
+            fill={s.g[2]} opacity={0.55}
+            style={{ transition: 'all 0.22s ease' }} />
+        ) : null
       })}
 
       {/* ── Parois intérieures ── */}
       {segs.map((s, i) => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.4 : s.ex
-        const ey = isH ? s.ey * 1.4 : s.ey
-        const ws = Math.max(s.start, 0), we = Math.min(s.end, Math.PI)
-        if (ws >= we) return null
-        const large = we - ws > Math.PI ? 1 : 0
-        const p = (a: number, r: number, rrr: number) => ({
-          x: cx + ex + r * Math.cos(a),
-          y: cy + ey + rrr * Math.sin(a)
-        })
-        const t1 = p(ws, rxi, ryi), t2 = p(we, rxi, ryi)
-        const b1 = p(ws, rxi, ryi + DEPTH), b2 = p(we, rxi, ryi + DEPTH)
-        const dPath = `M ${t1.x.toFixed(1)} ${t1.y.toFixed(1)} A ${rxi} ${ryi} 0 ${large} 1 ${t2.x.toFixed(1)} ${t2.y.toFixed(1)} L ${b2.x.toFixed(1)} ${b2.y.toFixed(1)} A ${rxi} ${ryi} 0 ${large} 0 ${b1.x.toFixed(1)} ${b1.y.toFixed(1)} Z`
-        return (
-          <path key={`iw-${s.ticker}-${i}`} d={dPath}
-            fill={_darken(s.color, 0.22)}
-            opacity={0.5}
-            style={{ transition: 'all 0.25s ease' }}
-          />
-        )
+        const ex = isH ? s.ex * 1.3 : s.ex
+        const ey = isH ? s.ey * 1.3 : s.ey
+        const d = innerWall(cx + ex, cy + ey, s.start, s.end)
+        return d ? (
+          <path key={`iw-${i}`} d={d}
+            fill={_darken(s.g[1], 0.28)} opacity={0.55}
+            style={{ transition: 'all 0.22s ease' }} />
+        ) : null
       })}
 
-      {/* ── Glows colorés sous chaque tranche ── */}
+      {/* ── Faces supérieures ── */}
       {segs.map((s, i) => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.4 : s.ex
-        const ey = isH ? s.ey * 1.4 : s.ey
-        return (
-          <ellipse key={`gw-${s.ticker}-${i}`}
-            cx={cx + ex} cy={cy + ey + DEPTH + 8}
-            rx={RX * (s.pct / 100) * 2.0 + 8} ry={4}
-            fill={s.color}
-            opacity={isH ? 0.28 : 0.08}
-            style={{ filter: 'blur(6px)', transition: 'all 0.3s ease' }}
-          />
-        )
-      })}
+        const ex = isH ? s.ex * 1.3 : s.ex
+        const ey = isH ? s.ey * 1.3 : s.ey
+        const topD = topFace(cx + ex, cy + ey, s.start, s.end)
 
-      {/* ── Faces du dessus ── */}
-      {segs.map((s, i) => {
-        const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.4 : s.ex
-        const ey = isH ? s.ey * 1.4 : s.ey
-        const large = s.end - s.start > Math.PI ? 1 : 0
-        // Arc extérieur dessus
-        const o1 = { x: cx+ex+RX*Math.cos(s.start), y: cy+ey+RY*Math.sin(s.start) }
-        const o2 = { x: cx+ex+RX*Math.cos(s.end),   y: cy+ey+RY*Math.sin(s.end)   }
-        // Arc intérieur dessus
-        const i2 = { x: cx+ex+rxi*Math.cos(s.end),   y: cy+ey+ryi*Math.sin(s.end)   }
-        const i1 = { x: cx+ex+rxi*Math.cos(s.start), y: cy+ey+ryi*Math.sin(s.start) }
-        const topD = `M ${o1.x.toFixed(1)} ${o1.y.toFixed(1)} A ${RX} ${RY} 0 ${large} 1 ${o2.x.toFixed(1)} ${o2.y.toFixed(1)} L ${i2.x.toFixed(1)} ${i2.y.toFixed(1)} A ${rxi} ${ryi} 0 ${large} 0 ${i1.x.toFixed(1)} ${i1.y.toFixed(1)} Z`
-
-        // Label : milieu radial entre intérieur et extérieur
-        const labR = (RX + rxi) / 2 * 0.60
-        const labRY = (RY + ryi) / 2 * 0.60
-        const lx = cx + ex + labR * Math.cos(s.mid)
-        const ly = cy + ey + labRY * Math.sin(s.mid) - 6   // translateY -6px
+        // Label : milieu radial (innerRadius + outerRadius) / 2, translateY -8px
+        const labR  = (RX  + rxi)  / 2 * 0.62
+        const labRY = (RY  + ryi)  / 2 * 0.62
+        const lx = cx + ex + labR  * Math.cos(s.mid)
+        const ly = cy + ey + labRY * Math.sin(s.mid) - 8
 
         return (
-          <g key={`top-${s.ticker}-${i}`}
+          <g key={`top-${i}`}
             style={{
-              cursor: 'pointer',
-              transform: isH ? `translate(${(s.ex*0.4).toFixed(1)}px, -6px) scale(1.03)` : 'none',
-              transformOrigin: `${(cx+s.ex).toFixed(1)}px ${(cy+s.ey).toFixed(1)}px`,
-              transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+              cursor:          'pointer',
+              filter:          isH
+                ? `drop-shadow(0 8px 16px rgba(0,0,0,.45)) drop-shadow(0 0 16px ${s.midC})`
+                : 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
+              transform:       isH
+                ? `translate(${(s.ex * 0.3).toFixed(1)}px,-4px)`
+                : 'none',
+              transformOrigin: `${(cx + s.ex).toFixed(1)}px ${(cy + s.ey).toFixed(1)}px`,
+              transition:      'transform 220ms cubic-bezier(.2,.8,.2,1), filter 220ms',
             }}
             onMouseEnter={() => onHov(s.ticker)}
             onMouseLeave={() => onHov(null)}
-            onTouchStart={() => onHov(s.ticker)}
+            onTouchStart={e => { e.preventDefault(); onHov(s.ticker) }}
             onTouchEnd={() => onHov(null)}>
-            {/* Fond avec dégradé 180° */}
-            <path d={topD} fill={`url(#lg-${s.ticker})`} />
+            {/* Fond dégradé */}
+            <path d={topD} fill={`url(#dlg-${i})`} />
             {/* Reflet glossy */}
-            <path d={topD} fill="url(#gloss-top)" />
-            {/* Contour hover */}
-            {isH && (
-              <path d={topD} fill="none"
-                stroke={s.grad[0]} strokeWidth={1.5} opacity={0.7} />
-            )}
-            {/* Label % — visible si ≥ 6% */}
-            {s.pct >= 6 && (
+            <path d={topD} fill="url(#d-gloss)" />
+            {/* Contour blanc subtil */}
+            <path d={topD} fill="none"
+              stroke="rgba(255,255,255,0.12)" strokeWidth={2} />
+            {/* Label % */}
+            {s.pct >= 5 && (
               <text x={lx.toFixed(1)} y={ly.toFixed(1)}
                 textAnchor="middle" dominantBaseline="middle"
-                fill="#fff" fontSize={11} fontWeight={700} fontFamily="monospace"
-                style={{ pointerEvents: 'none', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.9))' }}>
+                fontFamily="Inter, system-ui, monospace"
+                fontSize={11} fontWeight={700} fill="white"
+                style={{
+                  pointerEvents: 'none',
+                  filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.95))',
+                }}>
                 {s.pct.toFixed(0)}%
               </text>
             )}
@@ -262,16 +255,17 @@ function DonutChart({ data, hovTicker, onHov }: {
         )
       })}
 
-      {/* ── Trou central bouchon dessus ── */}
+      {/* ── Trou central ── */}
       <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
-        fill="#111" stroke="#1E1E1E" strokeWidth={0.5} />
-      <ellipse cx={cx} cy={cy + DEPTH} rx={rxi - 0.5} ry={ryi - 0.3}
-        fill="#0A0A0A" />
-      {/* Texte centre */}
-      <text x={cx} y={cy - 2} textAnchor="middle"
-        fill="#333" fontSize={7} fontWeight={700} letterSpacing="0.1em">PORTEF.</text>
+        fill="#090909" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+      <ellipse cx={cx} cy={cy + DEPTH} rx={rxi - 1} ry={ryi - 0.4}
+        fill="#060606" />
+      <text x={cx} y={cy - 3} textAnchor="middle"
+        fontFamily="Inter, system-ui" fontSize={7} fontWeight={700}
+        letterSpacing="0.12em" fill="rgba(255,255,255,0.18)">PORTEF.</text>
       <text x={cx} y={cy + 8} textAnchor="middle"
-        fill="#666" fontSize={12} fontWeight={800} fontFamily="monospace">
+        fontFamily="Inter, monospace" fontSize={13} fontWeight={800}
+        fill="rgba(255,255,255,0.45)">
         {segs.length}
       </text>
     </svg>
