@@ -94,7 +94,7 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
   const uid = useId().replace(/:/g, 'd')
   const active = hov ?? clicked
 
-  // Dimensions — réduites de ~17.5% par rapport à la version précédente,
+  // Dimensions — réduites de ~17.5% par rapport à la version d'origine,
   // trou central légèrement agrandi, épaisseur maintenue entre 20 et 24px.
   const VW    = 380, cy = 92
   const RX    = 132, RY    = 79
