@@ -74,12 +74,12 @@ function DonutChart({ data, hovTicker, onHov }: {
   hovTicker: string | null
   onHov: (t: string | null) => void
 }) {
-  // Dimensions calibrées pour tenir dans la card mobile sans déborder
-  const VW = 220, VH = 150, DEPTH = 16
-  const cx = VW / 2, cy = 58
-  const RX = 82, RY = 36
-  const rx = 28, ry = 12
-  const GAP = 0.025, EXPLODE = 3
+  const VW = 240, VH = 130, DEPTH = 28
+  const cx = VW / 2, cy = 54
+  // Ellipse inclinée ~50° : ratio RY/RX ≈ 0.38
+  const RX = 88, RY = 34
+  const rx = RX * 0.45, ry = RY * 0.45   // trou = 45% du rayon
+  const GAP = 0.028, EXPLODE = 5
 
   const total = data.reduce((s, d) => s + d.pct, 0)
   let cum = -Math.PI / 2
@@ -99,7 +99,7 @@ function DonutChart({ data, hovTicker, onHov }: {
     }
   })
 
-  const svgH = VH + DEPTH + 10
+  const svgH = VH + DEPTH + 14
 
   return (
     <svg
@@ -107,68 +107,118 @@ function DonutChart({ data, hovTicker, onHov }: {
       style={{ display: 'block', overflow: 'visible' }}>
       <defs>
         {segs.map(s => (
-          <radialGradient key={s.ticker} id={`dg-${s.ticker}`} cx="50%" cy="25%" r="75%">
-            <stop offset="0%" stopColor={s.color} />
-            <stop offset="100%" stopColor={_darken(s.color, 0.55)} />
+          <radialGradient key={s.ticker} id={`dg-${s.ticker}`} cx="40%" cy="20%" r="75%">
+            <stop offset="0%" stopColor={s.color} stopOpacity="1" />
+            <stop offset="100%" stopColor={_darken(s.color, 0.42)} stopOpacity="1" />
           </radialGradient>
         ))}
-        <radialGradient id="dg-gloss" cx="50%" cy="0%" r="80%">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
-          <stop offset="55%" stopColor="rgba(255,255,255,0.04)" />
+        {/* Reflet glossy */}
+        <radialGradient id="gloss" cx="50%" cy="0%" r="70%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+          <stop offset="60%" stopColor="rgba(255,255,255,0.04)" />
           <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+        {/* Ombre portée */}
+        <radialGradient id="shadow-grad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="rgba(0,0,0,0.55)" />
+          <stop offset="100%" stopColor="rgba(0,0,0,0)" />
         </radialGradient>
       </defs>
 
-      {/* Glow sol */}
+      {/* ── Ombre portée globale sous le donut ── */}
+      <ellipse
+        cx={cx} cy={cy + DEPTH + 10}
+        rx={RX * 0.9} ry={8}
+        fill="url(#shadow-grad)"
+        style={{ filter: 'blur(3px)' }}
+      />
+
+      {/* ── Glows colorés sous chaque tranche ── */}
       {segs.map(s => {
         const isH = hovTicker === s.ticker
+        const ex = isH ? s.ex * 1.6 : s.ex
+        const ey = isH ? s.ey * 1.6 : s.ey
         return (
           <ellipse key={`gw-${s.ticker}`}
-            cx={cx + (isH ? s.ex * 1.5 : s.ex)}
-            cy={cy + (isH ? s.ey * 1.5 : s.ey) + DEPTH + 8}
-            rx={RX * s.pct / 100 * 2 + 14} ry={6}
-            fill={s.color} opacity={isH ? 0.15 : 0.05}
-            style={{ filter: 'blur(6px)', transition: 'all 0.3s ease' }}
+            cx={cx + ex} cy={cy + ey + DEPTH + 6}
+            rx={RX * (s.pct / 100) * 2.2 + 10} ry={5}
+            fill={s.color}
+            opacity={isH ? 0.35 : 0.12}
+            style={{ filter: 'blur(5px)', transition: 'all 0.3s ease' }}
           />
         )
       })}
 
-      {/* Parois extérieures */}
+      {/* ── Parois extérieures (face avant seulement : angles 0→π) ── */}
       {segs.map(s => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.5 : s.ex, ey = isH ? s.ey * 1.5 : s.ey
+        const ex = isH ? s.ex * 1.6 : s.ex
+        const ey = isH ? s.ey * 1.6 : s.ey
         const d = _wallPath(cx + ex, cy + ey, RX, RY, s.start, s.end, DEPTH)
-        return d ? <path key={`ow-${s.ticker}`} d={d} fill={_darken(s.color, 0.32)} style={{ transition: 'all 0.3s ease' }} /> : null
+        if (!d) return null
+        return (
+          <path key={`ow-${s.ticker}`} d={d}
+            fill={_darken(s.color, 0.28)}
+            style={{ transition: 'all 0.25s ease' }}
+          />
+        )
       })}
 
-      {/* Parois intérieures */}
+      {/* ── Parois intérieures ── */}
       {segs.map(s => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.5 : s.ex, ey = isH ? s.ey * 1.5 : s.ey
+        const ex = isH ? s.ex * 1.6 : s.ex
+        const ey = isH ? s.ey * 1.6 : s.ey
         const d = _innerWall(cx + ex, cy + ey, rx, ry, s.start, s.end, DEPTH)
-        return d ? <path key={`iw-${s.ticker}`} d={d} fill={_darken(s.color, 0.20)} opacity={0.65} style={{ transition: 'all 0.3s ease' }} /> : null
+        if (!d) return null
+        return (
+          <path key={`iw-${s.ticker}`} d={d}
+            fill={_darken(s.color, 0.18)}
+            opacity={0.55}
+            style={{ transition: 'all 0.25s ease' }}
+          />
+        )
       })}
 
-      {/* Faces du dessus */}
+      {/* ── Faces du dessus (top face) ── */}
       {segs.map(s => {
         const isH = hovTicker === s.ticker
-        const ex = isH ? s.ex * 1.5 : s.ex, ey = isH ? s.ey * 1.5 : s.ey
-        const sc = isH ? 1.04 : 1
+        const ex = isH ? s.ex * 1.6 : s.ex
+        const ey = isH ? s.ey * 1.6 : s.ey
         const topD = _arcPath(cx + ex, cy + ey, RX, RY, rx, ry, s.start, s.end)
-        const lx = cx + ex + (RX + rx) / 2 * 0.56 * Math.cos(s.mid)
-        const ly = cy + ey + (RY + ry) / 2 * 0.56 * Math.sin(s.mid)
+        // Position label : milieu radial
+        const lx = cx + ex + (RX + rx) / 2 * 0.58 * Math.cos(s.mid)
+        const ly = cy + ey + (RY + ry) / 2 * 0.58 * Math.sin(s.mid)
         return (
           <g key={`top-${s.ticker}`}
-            style={{ cursor: 'pointer', transition: 'all 0.25s cubic-bezier(0.34,1.56,0.64,1)', transform: `scale(${sc})`, transformOrigin: `${(cx+ex).toFixed(1)}px ${(cy+ey).toFixed(1)}px` }}
-            onMouseEnter={() => onHov(s.ticker)} onMouseLeave={() => onHov(null)}
-            onTouchStart={() => onHov(s.ticker)} onTouchEnd={() => onHov(null)}>
+            style={{
+              cursor: 'pointer',
+              transform: isH ? `translate(${s.ex * 0.6}px, -6px) scale(1.03)` : 'none',
+              transformOrigin: `${(cx + s.ex).toFixed(1)}px ${(cy + s.ey).toFixed(1)}px`,
+              transition: 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+            }}
+            onMouseEnter={() => onHov(s.ticker)}
+            onMouseLeave={() => onHov(null)}
+            onTouchStart={() => onHov(s.ticker)}
+            onTouchEnd={() => onHov(null)}>
+            {/* Fond coloré avec dégradé radial */}
             <path d={topD} fill={`url(#dg-${s.ticker})`} />
-            <path d={topD} fill="url(#dg-gloss)" />
-            {isH && <path d={topD} fill="none" stroke={s.color} strokeWidth={1.5} opacity={0.5} style={{ filter: `drop-shadow(0 0 6px ${s.color})` }} />}
-            {s.pct >= 8 && (
-              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-                fill="#fff" fontSize={10} fontWeight={700} fontFamily="monospace"
-                style={{ pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}>
+            {/* Reflet glossy */}
+            <path d={topD} fill="url(#gloss)" />
+            {/* Contour fin au hover */}
+            {isH && (
+              <path d={topD} fill="none"
+                stroke={s.color} strokeWidth={1.5} opacity={0.6}
+              />
+            )}
+            {/* Label % */}
+            {s.pct >= 7 && (
+              <text
+                x={lx} y={ly}
+                textAnchor="middle" dominantBaseline="middle"
+                fill="#fff" fontSize={10} fontWeight={700}
+                fontFamily="monospace"
+                style={{ pointerEvents: 'none', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' }}>
                 {s.pct.toFixed(0)}%
               </text>
             )}
@@ -176,11 +226,21 @@ function DonutChart({ data, hovTicker, onHov }: {
         )
       })}
 
-      {/* Trou central */}
-      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="#141414" stroke="#222" strokeWidth={0.5} />
-      <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 1} ry={ry - 0.5} fill="#111" />
-      <text x={cx} y={cy - 3} textAnchor="middle" fill="#3A3A3A" fontSize={6.5} fontWeight={700} letterSpacing="0.08em">PORTEF.</text>
-      <text x={cx} y={cy + 6} textAnchor="middle" fill="#606060" fontSize={10} fontWeight={800} fontFamily="monospace">{segs.length}</text>
+      {/* ── Trou central (bouchon dessus) ── */}
+      <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+        fill="#111" stroke="#222" strokeWidth={0.5} />
+      {/* Paroi basse du trou */}
+      <ellipse cx={cx} cy={cy + DEPTH} rx={rx - 0.5} ry={ry - 0.3}
+        fill="#0A0A0A" />
+      {/* Texte centre */}
+      <text x={cx} y={cy - 3} textAnchor="middle"
+        fill="#383838" fontSize={6} fontWeight={700} letterSpacing="0.12em">
+        PORTEF.
+      </text>
+      <text x={cx} y={cy + 7} textAnchor="middle"
+        fill="#666" fontSize={11} fontWeight={800} fontFamily="monospace">
+        {segs.length}
+      </text>
     </svg>
   )
 }
