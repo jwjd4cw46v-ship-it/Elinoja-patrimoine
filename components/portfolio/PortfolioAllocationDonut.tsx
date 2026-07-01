@@ -16,7 +16,7 @@ interface Props {
   title?:  string
 }
 
-// ─── Palette & dégradés ──────────────────────────────────────────────────────
+// ─── Palette & dégradés génériques (fallback) ────────────────────────────────
 const GRADS: [string, string, string][] = [
   ['#32d26b', '#22c55e', '#15803d'],
   ['#facc15', '#eab308', '#a16207'],
@@ -27,6 +27,18 @@ const GRADS: [string, string, string][] = [
   ['#fb923c', '#f97316', '#c2410c'],
   ['#f472b6', '#ec4899', '#9d174d'],
 ]
+
+// Couleurs dédiées à certains tickers (règle 9) — les autres tickers
+// retombent sur la palette générique ci-dessus, indexée par position.
+const TICKER_GRADS: Record<string, [string, string, string]> = {
+  TINV: ['#22C55E', '#1FAE57', '#16A34A'],
+  SFBT: ['#FACC15', '#DFAF10', '#CA8A04'],
+  TGH:  ['#3B82F6', '#2F70DA', '#2563EB'],
+}
+
+function gradFor(ticker: string, i: number): [string, string, string] {
+  return TICKER_GRADS[ticker] ?? GRADS[i % GRADS.length]
+}
 
 // ─── Helpers géométrie ────────────────────────────────────────────────────────
 const ep = (cx: number, cy: number, rx: number, ry: number, a: number) =>
@@ -78,17 +90,20 @@ function darken(hex: string, f = 0.35): string {
 // ─── Composant ────────────────────────────────────────────────────────────────
 export default function PortfolioAllocationDonut({ data, title }: Props) {
   const [hov, setHov] = useState<string | null>(null)
+  const [clicked, setClicked] = useState<string | null>(null)
   const uid = useId().replace(/:/g, 'd')
+  const active = hov ?? clicked
 
-  // Dimensions
-  const VW    = 380, cy = 112
-  const RX    = 160, RY    = 96
-  const rxi   = 65,  ryi   = 39
-  const DEPTH = 18
+  // Dimensions — réduites de ~17.5% par rapport à la version précédente,
+  // trou central légèrement agrandi, épaisseur maintenue entre 20 et 24px.
+  const VW    = 380, cy = 92
+  const RX    = 132, RY    = 79
+  const rxi   = 56,  ryi   = 34
+  const DEPTH = 22
   const EXP   = 6
   const GAP   = 0.022
   const cx    = VW / 2
-  const svgH  = cy + DEPTH + 64
+  const svgH  = cy + DEPTH + 58
 
   // Segments
   const total = data.reduce((s, d) => s + d.pct, 0)
@@ -100,7 +115,7 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
     const end   = start + Math.max(sweep, 0.001)
     cum += (pct / 100) * 2 * Math.PI
     const mid = (start + end) / 2
-    const g   = GRADS[i % GRADS.length]
+    const g   = gradFor(d.ticker, i)
     return {
       ...d, pct, start, end, mid, g,
       ex: Math.cos(mid) * EXP,
@@ -115,6 +130,7 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
       borderRadius: '24px',
       padding:      '20px 16px 16px',
       width:        '100%',
+      overflow:     'hidden', // garantit qu'aucun élément ne déborde de la carte
     }}>
       {title && (
         <div style={{
@@ -126,131 +142,196 @@ export default function PortfolioAllocationDonut({ data, title }: Props) {
         </div>
       )}
 
-      <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
-        style={{ display: 'block', overflow: 'visible' }}>
-        <defs>
-          {segs.map((s, i) => (
-            <linearGradient key={i} id={`${uid}-lg-${i}`}
-              x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%"   stopColor={s.g[0]} />
-              <stop offset="45%"  stopColor={s.g[1]} />
-              <stop offset="100%" stopColor={s.g[2]} />
+      {/* Donut — centré, largeur max 220px pour rester compact sur mobile */}
+      <div style={{ width: '100%', maxWidth: 220, margin: '0 auto', marginBottom: 24 }}>
+        <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
+          style={{ display: 'block', overflow: 'visible' }}>
+          <defs>
+            {segs.map((s, i) => (
+              <linearGradient key={`top-${i}`} id={`${uid}-lg-${i}`}
+                x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor={s.g[0]} />
+                <stop offset="45%"  stopColor={s.g[1]} />
+                <stop offset="100%" stopColor={s.g[2]} />
+              </linearGradient>
+            ))}
+            {/* Dégradés verticaux pour les parois — accentuent la profondeur 3D */}
+            {segs.map((s, i) => (
+              <linearGradient key={`ow-${i}`} id={`${uid}-owg-${i}`}
+                x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor={s.g[1]} stopOpacity={0.75} />
+                <stop offset="100%" stopColor={darken(s.g[2], 0.35)} stopOpacity={0.85} />
+              </linearGradient>
+            ))}
+            {segs.map((s, i) => (
+              <linearGradient key={`iw-${i}`} id={`${uid}-iwg-${i}`}
+                x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%"   stopColor={darken(s.g[1], 0.55)} stopOpacity={0.75} />
+                <stop offset="100%" stopColor={darken(s.g[2], 0.22)} stopOpacity={0.9} />
+              </linearGradient>
+            ))}
+            <linearGradient id={`${uid}-gloss`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%"   stopColor="rgba(255,255,255,0.20)" />
+              <stop offset="55%"  stopColor="rgba(255,255,255,0.04)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
             </linearGradient>
-          ))}
-          <linearGradient id={`${uid}-gloss`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%"   stopColor="rgba(255,255,255,0.20)" />
-            <stop offset="55%"  stopColor="rgba(255,255,255,0.04)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </linearGradient>
-        </defs>
+            {/* Anneau interne du trou central — simule un inset subtil */}
+            <radialGradient id={`${uid}-hole-inset`} cx="50%" cy="32%" r="78%">
+              <stop offset="0%"   stopColor="rgba(255,255,255,0.05)" />
+              <stop offset="55%"  stopColor="rgba(255,255,255,0)" />
+              <stop offset="100%" stopColor="rgba(0,0,0,0.28)" />
+            </radialGradient>
+          </defs>
 
-        {/* Ombre au sol — discrète */}
-        <ellipse cx={cx} cy={cy + DEPTH + 22} rx={140} ry={14}
-          fill="rgba(0,200,83,0.55)" opacity={0.08}
-          style={{ filter: 'blur(18px)' }} />
+          {/* Ombre elliptique douce sous le donut : blur 25px, opacity 0.20, rgba(0,0,0,0.5) */}
+          <ellipse cx={cx} cy={cy + DEPTH + 20} rx={RX * 0.92} ry={14}
+            fill="rgba(0,0,0,0.5)" opacity={0.20}
+            style={{ filter: 'blur(25px)' }} />
 
-        {/* Parois extérieures */}
-        {segs.map((s, i) => {
-          const isH = hov === s.ticker
-          const ex = isH ? s.ex * 1.3 : s.ex
-          const ey = isH ? s.ey * 1.3 : s.ey
-          const d = outerWall(cx+ex, cy+ey, RX, RY, s.start, s.end, DEPTH)
-          return d ? (
-            <path key={`ow-${i}`} d={d}
-              fill={s.g[2]} opacity={0.55}
-              style={{ transition: 'all 0.22s ease' }} />
-          ) : null
-        })}
+          {/* Parois extérieures (dégradé vertical) */}
+          {segs.map((s, i) => {
+            const isH = active === s.ticker
+            const ex = isH ? s.ex * 1.15 : s.ex
+            const ey = isH ? s.ey * 1.15 : s.ey
+            const d = outerWall(cx+ex, cy+ey, RX, RY, s.start, s.end, DEPTH)
+            return d ? (
+              <path key={`ow-${i}`} d={d}
+                fill={`url(#${uid}-owg-${i})`}
+                style={{ transition: 'all 250ms ease' }} />
+            ) : null
+          })}
 
-        {/* Parois intérieures */}
-        {segs.map((s, i) => {
-          const isH = hov === s.ticker
-          const ex = isH ? s.ex * 1.3 : s.ex
-          const ey = isH ? s.ey * 1.3 : s.ey
-          const d = innerWall(cx+ex, cy+ey, rxi, ryi, s.start, s.end, DEPTH)
-          return d ? (
-            <path key={`iw-${i}`} d={d}
-              fill={darken(s.g[1], 0.28)} opacity={0.55}
-              style={{ transition: 'all 0.22s ease' }} />
-          ) : null
-        })}
+          {/* Parois intérieures (dégradé vertical) */}
+          {segs.map((s, i) => {
+            const isH = active === s.ticker
+            const ex = isH ? s.ex * 1.15 : s.ex
+            const ey = isH ? s.ey * 1.15 : s.ey
+            const d = innerWall(cx+ex, cy+ey, rxi, ryi, s.start, s.end, DEPTH)
+            return d ? (
+              <path key={`iw-${i}`} d={d}
+                fill={`url(#${uid}-iwg-${i})`}
+                style={{ transition: 'all 250ms ease' }} />
+            ) : null
+          })}
 
-        {/* Faces supérieures + labels */}
-        {segs.map((s, i) => {
-          const isH = hov === s.ticker
-          const ex = isH ? s.ex * 1.3 : s.ex
-          const ey = isH ? s.ey * 1.3 : s.ey
-          const topD = topFace(cx+ex, cy+ey, RX, RY, rxi, ryi, s.start, s.end)
+          {/* Faces supérieures + labels + tooltip */}
+          {segs.map((s, i) => {
+            const isH = active === s.ticker
+            const ex = isH ? s.ex * 1.15 : s.ex
+            const ey = isH ? s.ey * 1.15 : s.ey
+            const topD = topFace(cx+ex, cy+ey, RX, RY, rxi, ryi, s.start, s.end)
 
-          // Label : (innerRadius + outerRadius) / 2, translateY -8px
-          const labR  = (RX  + rxi)  / 2 * 0.62
-          const labRY = (RY  + ryi)  / 2 * 0.62
-          const lx = cx + ex + labR  * Math.cos(s.mid)
-          const ly = cy + ey + labRY * Math.sin(s.mid) - 8
+            // Label : (innerRadius + outerRadius) / 2, translateY -6px
+            const labR  = (RX  + rxi)  / 2 * 0.62
+            const labRY = (RY  + ryi)  / 2 * 0.62
+            const lx = cx + ex + labR  * Math.cos(s.mid)
+            const ly = cy + ey + labRY * Math.sin(s.mid) - 6
 
-          return (
-            <g key={`seg-${i}`}
-              style={{
-                cursor:          'pointer',
-                filter:          isH
-                  ? `drop-shadow(0 8px 16px rgba(0,0,0,.45)) drop-shadow(0 0 16px ${s.g[1]})`
-                  : 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
-                transform:       isH
-                  ? `translate(${(s.ex * 0.3).toFixed(1)}px,-4px)`
-                  : 'none',
-                transformOrigin: `${(cx+s.ex).toFixed(1)}px ${(cy+s.ey).toFixed(1)}px`,
-                transition:      'transform 220ms cubic-bezier(.2,.8,.2,1), filter 220ms',
-              }}
-              onMouseEnter={() => setHov(s.ticker)}
-              onMouseLeave={() => setHov(null)}
-              onTouchStart={e => { e.preventDefault(); setHov(s.ticker) }}
-              onTouchEnd={() => setHov(null)}>
-              <path d={topD} fill={`url(#${uid}-lg-${i})`} />
-              <path d={topD} fill={`url(#${uid}-gloss)`} />
-              <path d={topD} fill="none"
-                stroke="rgba(255,255,255,0.12)" strokeWidth={2} />
-              {s.pct >= 5 && (
-                <text
-                  x={lx.toFixed(1)} y={ly.toFixed(1)}
-                  textAnchor="middle" dominantBaseline="middle"
-                  fontFamily="Inter, system-ui, monospace"
-                  fontSize={11} fontWeight={700} fill="white"
-                  style={{
-                    pointerEvents: 'none',
-                    filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.95))',
-                  }}>
-                  {s.pct.toFixed(0)}%
-                </text>
-              )}
-            </g>
-          )
-        })}
+            // Tooltip : jamais hors de la carte.
+            // Part à droite → tooltip à gauche · à gauche → tooltip à droite · proche du haut → dessous.
+            const cosM = Math.cos(s.mid), sinM = Math.sin(s.mid)
+            const nearTop   = sinM < -0.55
+            const rightSide = cosM > 0.12
+            const leftSide  = cosM < -0.12
+            const tip = ep(cx+ex, cy+ey, RX + 10, RY + 10, s.mid)
+            let ttTransform = 'translate(-50%, -100%)'
+            if (nearTop)        ttTransform = 'translate(-50%, 10px)'
+            else if (rightSide) ttTransform = 'translate(calc(-100% - 8px), -50%)'
+            else if (leftSide)  ttTransform = 'translate(8px, -50%)'
 
-        {/* Trou central */}
-        <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
-          fill="#090909" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
-        <ellipse cx={cx} cy={cy+DEPTH} rx={rxi-1} ry={ryi-0.4}
-          fill="#060606" />
-        <text x={cx} y={cy-3} textAnchor="middle"
-          fontFamily="Inter, system-ui" fontSize={7} fontWeight={700}
-          letterSpacing="0.12em" fill="rgba(255,255,255,0.18)">PORTEF.</text>
-        <text x={cx} y={cy+8} textAnchor="middle"
-          fontFamily="Inter, monospace" fontSize={13} fontWeight={800}
-          fill="rgba(255,255,255,0.45)">{segs.length}</text>
-      </svg>
+            return (
+              <g key={`seg-${i}`}
+                style={{
+                  cursor:          'pointer',
+                  filter:          isH
+                    ? 'drop-shadow(0 12px 30px rgba(0,0,0,.45))'
+                    : 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
+                  transform:       isH
+                    ? `translate(${(s.ex * 0.25).toFixed(1)}px,-3px) scale(1.04)`
+                    : 'none',
+                  transformOrigin: `${(cx+s.ex).toFixed(1)}px ${(cy+s.ey).toFixed(1)}px`,
+                  transition:      'transform 250ms ease, filter 250ms ease',
+                }}
+                onMouseEnter={() => setHov(s.ticker)}
+                onMouseLeave={() => setHov(null)}
+                onClick={() => setClicked(prev => prev === s.ticker ? null : s.ticker)}
+                onTouchStart={e => { e.preventDefault(); setHov(s.ticker) }}
+                onTouchEnd={() => setHov(null)}>
+                <path d={topD} fill={`url(#${uid}-lg-${i})`} />
+                <path d={topD} fill={`url(#${uid}-gloss)`} />
+                <path d={topD} fill="none"
+                  stroke="rgba(255,255,255,0.12)" strokeWidth={2} />
+                {/* Pourcentage — uniquement pour les parts ≥ 10% */}
+                {s.pct >= 10 && (
+                  <text
+                    x={lx.toFixed(1)} y={ly.toFixed(1)}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontFamily="Inter, system-ui, monospace"
+                    fontSize={11} fontWeight={600} fill="white"
+                    style={{
+                      pointerEvents: 'none',
+                      filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.95))',
+                    }}>
+                    {s.pct.toFixed(0)}%
+                  </text>
+                )}
+                {/* Tooltip — largeur max 180px, z-index au-dessus du donut */}
+                {isH && (
+                  <foreignObject x={tip.x - 100} y={tip.y - 60} width={200} height={120}
+                    style={{ overflow: 'visible', pointerEvents: 'none', zIndex: 50 }}>
+                    <div style={{
+                      position: 'absolute', left: '50%', top: '50%',
+                      transform: ttTransform,
+                      maxWidth: 180, zIndex: 50,
+                      background: 'rgba(10,10,10,0.96)',
+                      border: `1px solid ${s.g[1]}55`,
+                      borderRadius: 10, padding: '8px 10px',
+                      boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                      fontFamily: 'Inter, system-ui',
+                    }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: s.g[1] }}>{s.ticker}</div>
+                      <div style={{ fontSize: 10, color: '#D8D8D8', marginTop: 2 }}>{s.pct.toFixed(1)}%</div>
+                      {s.valeur !== undefined && (
+                        <div style={{ fontSize: 9, color: '#777', marginTop: 1 }}>
+                          {s.valeur.toLocaleString('fr-TN', { maximumFractionDigits: 0 })} DT
+                        </div>
+                      )}
+                    </div>
+                  </foreignObject>
+                )}
+              </g>
+            )
+          })}
+
+          {/* Trou central */}
+          <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
+            fill="#050505" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+          {/* Anneau interne subtil (simule inset 0 0 12px rgba(255,255,255,0.05)) */}
+          <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi} fill={`url(#${uid}-hole-inset)`} />
+          <ellipse cx={cx} cy={cy+DEPTH} rx={rxi-1} ry={ryi-0.4}
+            fill="#040404" />
+          <text x={cx} y={cy-6} textAnchor="middle"
+            fontFamily="Inter, system-ui" fontSize={11} fontWeight={700}
+            letterSpacing="0.10em" fill="#D4AF37" opacity={0.9}>PORTF.</text>
+          <text x={cx} y={cy+16} textAnchor="middle"
+            fontFamily="Inter, monospace" fontSize={24} fontWeight={700}
+            fill="#D4AF37" opacity={0.9}>{segs.length}</text>
+        </svg>
+      </div>
 
       {/* Légende */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-        gap: '6px', marginTop: '10px', padding: '0 4px',
+        gap: '6px', padding: '0 4px',
       }}>
         {segs.map((s, i) => {
-          const isH = hov === s.ticker
+          const isH = active === s.ticker
           return (
             <div key={s.ticker}
               onMouseEnter={() => setHov(s.ticker)}
               onMouseLeave={() => setHov(null)}
+              onClick={() => setClicked(prev => prev === s.ticker ? null : s.ticker)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '5px 8px', borderRadius: '8px', cursor: 'pointer',
