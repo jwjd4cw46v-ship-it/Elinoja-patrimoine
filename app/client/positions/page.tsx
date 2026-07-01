@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Bell, TrendingUp, TrendingDown, Shield,
@@ -949,8 +949,8 @@ function VenteModal({
 /* ─────────────────────── Page principale ──────────────────────── */
 // ─── RepartitionBlock ────────────────────────────────────────────────────────
 function RepartitionBlock({ repartition }: { repartition: { ticker: string; valeur: number; pct: number }[] }) {
-  const [hov, setHov] = React.useState<string | null>(null)
-  const [openTicker, setOpenTicker] = React.useState<string | null>(null)
+  const [hov, setHov] = useState<string | null>(null)
+  const [openTicker, setOpenTicker] = useState<string | null>(null)
 
   const totalInvesti = repartition.reduce((s, r) => s + r.valeur, 0)
   const donutData = repartition.map(r => ({ ticker: r.ticker, pct: r.pct, valeur: r.valeur }))
@@ -1100,7 +1100,7 @@ function ConcentrationRow({ r, i, total }: {
   i: number
   total: number
 }) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = useState(false)
   const hasAlert = r.pct > 20
   const color = getTickerColor(r.ticker, i)
   const isLast = i === total - 1
