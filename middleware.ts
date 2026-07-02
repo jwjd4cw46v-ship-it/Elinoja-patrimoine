@@ -41,16 +41,18 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  const { data: { session } } = await supabase.auth.getSession()
+  // ✅ getUser() (au lieu de getSession()) : contacte le serveur Supabase Auth
+  // pour valider le token, au lieu de faire confiance au cookie tel quel.
+  const { data: { user } } = await supabase.auth.getUser()
 
   // Routes publiques
   const publicRoutes = ['/auth/login', '/auth/forgot-password', '/']
   if (publicRoutes.includes(pathname)) {
-    if (session) {
+    if (user) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single()
 
       if (profile?.role === 'admin') {
@@ -61,8 +63,8 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
-  // Vérification session
-  if (!session) {
+  // Vérification utilisateur
+  if (!user) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
@@ -71,7 +73,7 @@ export async function middleware(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile || profile.role !== 'admin') {
@@ -84,7 +86,7 @@ export async function middleware(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, is_active')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single()
 
     if (!profile || !profile.is_active) {
