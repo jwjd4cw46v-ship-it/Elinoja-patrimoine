@@ -7,7 +7,7 @@ import { Environment, ContactShadows, Text } from '@react-three/drei'
 
 // --- Types et Constantes ---
 interface Donut3DProps {
-  data: { ticker: string; pct: number; valeur?: number }[];
+  data: { ticker: string; pct: number; valeur?: number; color?: string }[];
   hovTicker?: string | null;
   onHov?: (t: string | null) => void;
 }
@@ -107,7 +107,7 @@ function Lighting() {
   )
 }
 
-// --- Composant principal exporté ---
+// --- Composant principal ---
 export default function Donut3D({ data, hovTicker: hovTickerProp, onHov: onHovProp }: Donut3DProps) {
   const [hovLocal, setHovLocal] = useState<string | null>(null)
   const hovTicker = hovTickerProp !== undefined ? hovTickerProp : hovLocal
@@ -115,7 +115,8 @@ export default function Donut3D({ data, hovTicker: hovTickerProp, onHov: onHovPr
 
   const segs = useMemo(() => {
     let cum = -Math.PI / 2
-    // On utilise les couleurs dynamiquement ou une fallback si non fournies
+    const defaultColors = ['#4ADE80', '#FACC15', '#3B82F6', '#A855F7', '#EF4444']
+    
     return data.map((d, i) => {
       const sweep = (d.pct / 100) * 2 * Math.PI - GAP
       const start = cum + GAP / 2
@@ -126,7 +127,7 @@ export default function Donut3D({ data, hovTicker: hovTickerProp, onHov: onHovPr
         start, 
         end, 
         mid: (start + end) / 2,
-        color: d.color || '#4ADE80' // Assurez-vous que data contient des couleurs ou définissez une logique ici
+        color: d.color || defaultColors[i % defaultColors.length]
       }
     })
   }, [data])
