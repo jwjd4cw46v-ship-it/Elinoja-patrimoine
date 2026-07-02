@@ -5,7 +5,13 @@ import * as THREE from 'three'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Environment, ContactShadows, Text } from '@react-three/drei'
 
-// --- Constantes ---
+// --- Types et Constantes ---
+interface Donut3DProps {
+  data: { ticker: string; pct: number; valeur?: number }[];
+  hovTicker?: string | null;
+  onHov?: (t: string | null) => void;
+}
+
 const INNER_R = 0.50
 const OUTER_R = 1.20
 const DEPTH   = 0.45
@@ -40,7 +46,7 @@ function buildSliceGeometry(startAngle: number, endAngle: number): THREE.Extrude
   return geo
 }
 
-// --- Composant Slice (avec animation) ---
+// --- Composant Slice avec animation ---
 function Slice({ seg, active, onHover }: { seg: any; active: boolean; onHover: (id: string | null) => void }) {
   const geo = useMemo(() => buildSliceGeometry(seg.start, seg.end), [seg.start, seg.end])
   
@@ -84,13 +90,12 @@ function Slice({ seg, active, onHover }: { seg: any; active: boolean; onHover: (
         anchorX="center"
         anchorY="middle"
       >
-        {`${seg.pct}%`}
+        {`${seg.pct.toFixed(0)}%`}
       </Text>
     </group>
   )
 }
 
-// --- Éclairage ---
 function Lighting() {
   return (
     <>
@@ -102,28 +107,29 @@ function Lighting() {
   )
 }
 
-// --- Composant principal ---
-export default function Donut3D() {
-  const [hovered, setHovered] = useState<string | null>(null)
-  
-  const data = [
-    { ticker: 'VERT', pct: 42, color: '#4ADE80' },
-    { ticker: 'JAUNE', pct: 25, color: '#FACC15' },
-    { ticker: 'BLEU', pct: 18, color: '#3B82F6' },
-    { ticker: 'VIOLET', pct: 10, color: '#A855F7' },
-    { ticker: 'ROUGE', pct: 5, color: '#EF4444' },
-  ]
+// --- Composant principal exporté ---
+export default function Donut3D({ data, hovTicker: hovTickerProp, onHov: onHovProp }: Donut3DProps) {
+  const [hovLocal, setHovLocal] = useState<string | null>(null)
+  const hovTicker = hovTickerProp !== undefined ? hovTickerProp : hovLocal
+  const onHov = onHovProp ?? setHovLocal
 
   const segs = useMemo(() => {
     let cum = -Math.PI / 2
-    return data.map(d => {
+    // On utilise les couleurs dynamiquement ou une fallback si non fournies
+    return data.map((d, i) => {
       const sweep = (d.pct / 100) * 2 * Math.PI - GAP
       const start = cum + GAP / 2
       const end = start + sweep
       cum += (d.pct / 100) * 2 * Math.PI
-      return { ...d, start, end, mid: (start + end) / 2 }
+      return { 
+        ...d, 
+        start, 
+        end, 
+        mid: (start + end) / 2,
+        color: d.color || '#4ADE80' // Assurez-vous que data contient des couleurs ou définissez une logique ici
+      }
     })
-  }, [])
+  }, [data])
 
   return (
     <div style={{ width: '100%', height: '500px', background: '#000' }}>
@@ -135,8 +141,8 @@ export default function Donut3D() {
             <Slice 
               key={s.ticker} 
               seg={s} 
-              active={hovered === s.ticker} 
-              onHover={setHovered} 
+              active={hovTicker === s.ticker} 
+              onHover={onHov} 
             />
           ))}
           <ContactShadows position={[0, -DEPTH / 2, 0]} opacity={0.6} scale={10} blur={2} far={1} />
