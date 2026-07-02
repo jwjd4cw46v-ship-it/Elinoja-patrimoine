@@ -3,6 +3,20 @@
 /*
   Donut3D — donut pseudo-3D en SVG pur (pieTop / pieOuter / pieInner).
   Aucune dépendance supplémentaire. Build fiable, rendu stable sur mobile.
+
+  FIX (légende en double) : ce composant ne rend PLUS sa propre légende —
+  RepartitionBlock (dans page.tsx) affiche déjà une légende juste après
+  <Donut3D />. Les deux légendes s'affichaient l'une sous l'autre.
+
+  FIX (morceau manquant) : un anneau de fond neutre est maintenant dessiné
+  derrière les tranches. Au point de "couture" où la dernière tranche
+  rejoint la première (autour de l'angle 0/2π), le petit espace entre
+  tranches laissait voir le fond noir de la carte au travers — ça donnait
+  l'impression d'un morceau de donut manquant. L'anneau de fond comble
+  ce vide avec une teinte neutre au lieu du noir de la carte.
+
+  FIX (couleurs plus brillantes) : dessus légèrement éclairci, parois
+  moins assombries.
 */
 
 import { useId, useState } from 'react'
@@ -20,6 +34,12 @@ function colorFor(ticker: string, i: number): string {
 function darken(hex: string, f = 0.72): string {
   const n = parseInt(hex.slice(1), 16)
   return `rgb(${Math.round(((n>>16)&0xff)*f)},${Math.round(((n>>8)&0xff)*f)},${Math.round((n&0xff)*f)})`
+}
+function lighten(hex: string, amt = 0.16): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff
+  const mix = (c: number) => Math.round(c + (255 - c) * amt)
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`
 }
 
 const ep = (rx: number, ry: number, a: number, rot: number) =>
@@ -84,8 +104,12 @@ export default function Donut3D({
     return { ticker:d.ticker, pct, valeur:d.valeur, start, end, mid, color:colorFor(d.ticker,i) }
   })
 
+  // Anneau de fond plein (0 → 2π, pas de gap) — comble tout espace résiduel
+  // entre les tranches, notamment au point de couture dernière/première tranche.
+  const backingD = pieTop(0.0005, 2*Math.PI - 0.0005, RX, RY, rxi, ryi, ROT)
+
   return (
-    <div style={{ width:'100%', maxWidth:230, margin:'0 auto 0' }}>
+    <div style={{ width:'100%', maxWidth:230, margin:'0 auto 28px' }}>
       <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
         style={{ display:'block', overflow:'visible' }}>
         <defs>
@@ -99,6 +123,9 @@ export default function Donut3D({
         <ellipse cx={cx} cy={cy+H+16} rx={RX*0.82} ry={9}
           fill="rgba(0,0,0,0.55)" opacity={0.18}
           style={{ filter:'blur(18px)' }}/>
+
+        {/* Anneau de fond — masque les micro-espaces entre tranches */}
+        {backingD && <path d={backingD} fill="#2a2a2a" />}
 
         {/* Segments */}
         {segs.map((s,i)=>{
@@ -124,9 +151,9 @@ export default function Donut3D({
               onClick={()=>setClicked(p=>p===s.ticker?null:s.ticker)}
               onTouchStart={e=>{e.preventDefault();onHov(s.ticker)}}
               onTouchEnd={()=>onHov(null)}>
-              {outerD && <path d={outerD} fill={darken(s.color,0.62)}/>}
-              {innerD && <path d={innerD} fill={darken(s.color,0.48)}/>}
-              <path d={topD} fill={s.color} stroke="rgba(255,255,255,0.14)" strokeWidth={1.5}/>
+              {outerD && <path d={outerD} fill={darken(s.color,0.72)}/>}
+              {innerD && <path d={innerD} fill={darken(s.color,0.58)}/>}
+              <path d={topD} fill={lighten(s.color,0.1)} stroke="rgba(255,255,255,0.18)" strokeWidth={1.5}/>
               <path d={topD} fill={`url(#${uid}-gl)`}/>
               {s.end-s.start>0.20 && (
                 <text x={lp.x.toFixed(1)} y={lp.y.toFixed(1)}
@@ -151,48 +178,6 @@ export default function Donut3D({
           fontFamily="Inter,monospace" fontSize={13} fontWeight={700}
           fill="#D4AF37" opacity={0.85}>{segs.length}</text>
       </svg>
-
-      {/* Légende — espacement 32px au-dessus */}
-      <div style={{
-        display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(85px,1fr))',
-        gap:'6px', marginTop:32, padding:'0 4px',
-      }}>
-        {segs.map(s=>{
-          const isA=active===s.ticker
-          return (
-            <div key={s.ticker}
-              onMouseEnter={()=>onHov(s.ticker)}
-              onMouseLeave={()=>onHov(null)}
-              onClick={()=>setClicked(p=>p===s.ticker?null:s.ticker)}
-              style={{
-                display:'flex', alignItems:'center', gap:6,
-                padding:'5px 8px', borderRadius:8, cursor:'pointer',
-                background:isA?'rgba(255,255,255,0.05)':'transparent',
-                border:`1px solid ${isA?'rgba(255,255,255,0.08)':'transparent'}`,
-                transition:'all 0.18s ease',
-              }}>
-              <div style={{
-                width:7,height:7,borderRadius:'50%',
-                background:s.color,flexShrink:0,
-                boxShadow:`0 0 5px ${s.color}99`,
-              }}/>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:700,color:isA?'#fff':'#C0C0C0'}}>
-                  {s.ticker}
-                </div>
-                <div style={{fontSize:10,fontWeight:600,color:s.color,fontFamily:'monospace'}}>
-                  {s.pct.toFixed(1)}%
-                </div>
-                {s.valeur!==undefined&&(
-                  <div style={{fontSize:9,color:'#444'}}>
-                    {s.valeur.toLocaleString('fr-TN',{maximumFractionDigits:0})} DT
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
     </div>
   )
 }
