@@ -55,12 +55,12 @@ function darken(hex: string, factor = 0.72): string {
 const ep = (rx: number, ry: number, a: number, rot: number) =>
   ({ x: rx * Math.cos(a + rot), y: ry * Math.sin(a + rot) })
 
-function pieTop(start: number, end: number, rx: number, ry: number, ir: number, rot: number): string {
+function pieTop(start: number, end: number, rx: number, ry: number, innerRx: number, innerRy: number, rot: number): string {
   if (end - start <= 0) return ''
   const large = end - start > Math.PI ? 1 : 0
   const o1 = ep(rx, ry, start, rot), o2 = ep(rx, ry, end, rot)
-  const i2 = ep(ir * rx, ir * ry, end, rot), i1 = ep(ir * rx, ir * ry, start, rot)
-  return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${ir * rx} ${ir * ry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
+  const i2 = ep(innerRx, innerRy, end, rot), i1 = ep(innerRx, innerRy, start, rot)
+  return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${innerRx} ${innerRy} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
 }
 
 // Paroi extérieure — visible seulement sur le demi-cercle "devant" [0, π]
@@ -100,7 +100,6 @@ export default function Donut3D({
   const VW = 380, cy = 92
   const RX = 132, RY = 79
   const rxi = 56, ryi = 34
-  const ir = rxi / RX               // ratio rayon intérieur, format attendu par pieInner/pieTop
   const H = 22                      // épaisseur d'extrusion (20–24px)
   const EXPLODE = 8
   const GAP = 0.03
@@ -149,7 +148,7 @@ export default function Donut3D({
 
           const outerD = pieOuter(s.start, s.end, RX, RY, H, ROT)
           const innerD = pieInner(s.start, s.end, rxi, ryi, H, 1, ROT)
-          const topD = pieTop(s.start, s.end, RX, RY, ir, ROT)
+          const topD = pieTop(s.start, s.end, RX, RY, rxi, ryi, ROT)
 
           const labR = 0.62
           const lp = ep(RX * labR, RY * labR, s.mid, ROT)
@@ -189,9 +188,10 @@ export default function Donut3D({
           )
         })}
 
-        {/* Centre */}
+        {/* Centre — un seul disque plat, aligné exactement sur le cutout
+            des faces supérieures (pas de second disque décalé en profondeur,
+            qui donnait l'illusion d'un trou décalé vers le bas). */}
         <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi} fill="#050505" stroke="rgba(255,255,255,0.06)" />
-        <ellipse cx={cx} cy={cy + H} rx={rxi - 1} ry={ryi - 0.4} fill="#040404" />
         <text x={cx} y={cy - 6} textAnchor="middle" fontFamily="Inter, system-ui"
           fontSize={11} fontWeight={700} letterSpacing="0.1em" fill="#D4AF37" opacity={0.9}>PORTF.</text>
         <text x={cx} y={cy + 16} textAnchor="middle" fontFamily="Inter, monospace"
@@ -201,7 +201,7 @@ export default function Donut3D({
       {/* Légende */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
-        gap: '6px', marginTop: 12, padding: '0 4px',
+        gap: '6px', marginTop: 26, padding: '0 4px',
       }}>
         {segs.map(s => {
           const isActive = active === s.ticker
