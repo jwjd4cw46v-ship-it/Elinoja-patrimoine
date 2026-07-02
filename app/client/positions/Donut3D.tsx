@@ -125,7 +125,11 @@ export default function Donut3D({
           style={{ filter:'blur(18px)' }}/>
 
         {/* Anneau de fond — masque les micro-espaces entre tranches */}
-        {backingD && <path d={backingD} fill="#2a2a2a" />}
+        {backingD && (
+          <g transform={`translate(${cx} ${cy})`}>
+            <path d={backingD} fill="#2a2a2a" />
+          </g>
+        )}
 
         {/* Segments */}
         {segs.map((s,i)=>{
