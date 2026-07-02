@@ -1,48 +1,33 @@
 'use client'
 
 /*
-  Donut3D — rendu 3D premium façon Cinema4D / marketing Apple.
+  Donut3D — donut pseudo-3D en SVG, porté du plugin historique "Donut3D.js"
+  (pieTop / pieOuter / pieInner). Aucune dépendance supplémentaire (pas de
+  Three.js, pas de d3 — juste du SVG + trigonométrie), donc build beaucoup
+  plus simple/fiable que la version WebGL précédente.
 
-  DÉPENDANCES REQUISES (à ajouter dans package.json) :
-    npm install three @react-three/fiber @react-three/drei troika-three-text
+  INTÉGRATION : strictement identique à l'ancienne version R3F, aucun
+  changement requis dans page.tsx :
 
-  (three, @react-three/fiber, @react-three/drei sont déjà dans le projet.
-   troika-three-text est requis par <Text> de drei pour le rendu de texte 3D —
-   à ajouter explicitement pour éviter un module manquant au build.)
-
-  INTÉGRATION (inchangée) :
     import dynamic from 'next/dynamic'
     const Donut3D = dynamic(() => import('./Donut3D'), { ssr: false })
     <Donut3D data={donutData} hovTicker={hov} onHov={setHov} />
-    où donutData = [{ ticker, pct, valeur }, ...]
 
-  NOTES D'IMPLÉMENTATION (pour référence) :
-  - InstancedMesh n'est pas utilisé : chaque tranche a un ANGLE D'ARC différent,
-    donc une géométrie réellement différente (pas seulement une transform
-    différente). L'instancing ne s'applique qu'à une géométrie partagée.
-    À la place : géométries ET matériaux sont mémoïsés (useMemo) par tranche,
-    donc rien n'est recréé inutilement au re-render — c'est l'équivalent
-    pratique pour ce cas de figure.
-  - Ambient Occlusion "vraie" (SSAO) demande un pass de postprocessing
-    (@react-three/postprocessing + postprocessing). Pour ne pas complexifier
-    davantage le pipeline de build, l'AO est approximée ici par
-    AccumulativeShadows (contact shadow accumulé, très proche visuellement).
-    Je peux ajouter le vrai SSAO ensuite si tu veux pousser plus loin.
-  - La caméra demandée (position [0,4.2,5], fov 25) est BEAUCOUP plus basse
-    et plus serrée que la précédente version : le donut a donc été redimensionné
-    (rayon ~1 au lieu de ~2.5) pour rester dans le cadre. Sans ça, avec les
-    anciennes dimensions, l'objet aurait été très largement hors-champ.
+  (Le dynamic/ssr:false n'est plus strictement nécessaire ici — le SVG est
+  serveur-safe — mais le garder ne casse rien et évite un changement inutile.)
+
+  PORTAGE — différence corrigée par rapport au fichier fourni :
+  Dans le plugin original, pieOuter ET pieInner clippent tous les deux sur
+  le même demi-cercle [0, π]. Géométriquement, seule la paroi EXTÉRIEURE doit
+  être visible sur ce demi-cercle (le "devant" du donut) ; la paroi INTÉRIEURE
+  (le fond du trou) doit être visible sur le demi-cercle OPPOSÉ [π, 2π] (l'
+  "arrière" du trou, qu'on aperçoit en regardant depuis au-dessus). C'est ce
+  que fait ce portage — résultat plus fidèle à un vrai objet 3D.
 */
 
-import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
-import * as THREE from 'three'
-import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js'
-import { Canvas, useFrame } from '@react-three/fiber'
-import {
-  Environment, ContactShadows, AccumulativeShadows, RandomizedLight, Text,
-} from '@react-three/drei'
+import { useId, useState } from 'react'
 
-// ─── Couleurs par ticker ──────────────────────────────────────────────────
+// ─── Couleurs par ticker (identique aux versions précédentes) ────────────
 const TICKER_COLORS: Record<string, string> = {
   TINV: '#22C55E',
   SFBT: '#FACC15',
@@ -54,262 +39,49 @@ function colorFor(ticker: string, i: number): string {
   return TICKER_COLORS[ticker] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
 }
 
-// ─── Échelle du donut dans l'espace 3D (recalibrée pour la nouvelle caméra) ─
-const INNER_R = 0.42
-const OUTER_R = 1.05
-const DEPTH   = 0.42          // épaisseur — massif par rapport au rayon
-const BEVEL   = DEPTH * 0.32  // chanfrein large et doux
-const CURVE_SEGMENTS = 180    // 128–256 : lissage des arcs
-const BEVEL_SEGMENTS = 10     // arêtes jamais anguleuses
-const EXPLODE_DISTANCE = 0.11 // ≈ 8–12px à l'échelle de cette caméra
-
-// ─── Géométrie : secteur annulaire extrudé, chanfrein large ───────────────
-function buildSliceGeometry(startAngle: number, endAngle: number): THREE.ExtrudeGeometry {
-  const shape = new THREE.Shape()
-  const segs = CURVE_SEGMENTS
-  for (let i = 0; i <= segs; i++) {
-    const a = startAngle + (endAngle - startAngle) * (i / segs)
-    const x = Math.cos(a) * OUTER_R, y = Math.sin(a) * OUTER_R
-    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y)
-  }
-  for (let i = segs; i >= 0; i--) {
-    const a = startAngle + (endAngle - startAngle) * (i / segs)
-    shape.lineTo(Math.cos(a) * INNER_R, Math.sin(a) * INNER_R)
-  }
-  shape.closePath()
-
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: DEPTH,
-    bevelEnabled: true,
-    bevelThickness: BEVEL,
-    bevelSize: BEVEL,
-    bevelOffset: 0,
-    bevelSegments: BEVEL_SEGMENTS,
-    curveSegments: segs,
-  })
-  geo.rotateX(-Math.PI / 2)
-  geo.translate(0, -DEPTH / 2, 0)
-  geo.computeVertexNormals()
-  return geo
+function darken(hex: string, factor = 0.72): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = Math.round(((n >> 16) & 0xff) * factor)
+  const g = Math.round(((n >> 8) & 0xff) * factor)
+  const b = Math.round((n & 0xff) * factor)
+  return `rgb(${r},${g},${b})`
 }
 
-// ─── Spring critique-amorti (évite d'ajouter @react-spring/three) ─────────
-function springTo(current: number, target: number, vel: { v: number }, dt: number, stiffness = 170, damping = 20) {
-  const accel = (target - current) * stiffness - vel.v * damping
-  vel.v += accel * dt
-  return current + vel.v * dt
+// ─── Géométrie : port direct de pieTop / pieOuter / pieInner ──────────────
+// rot = décalage visuel (-π/2 → la première tranche commence en haut).
+// Les tests de clip (Math.min/max(..., Math.PI)) restent sur les angles
+// NON décalés : c'est ce qui détermine correctement quelle moitié est
+// "devant" vs "derrière", indépendamment de la rotation visuelle.
+const ep = (rx: number, ry: number, a: number, rot: number) =>
+  ({ x: rx * Math.cos(a + rot), y: ry * Math.sin(a + rot) })
+
+function pieTop(start: number, end: number, rx: number, ry: number, ir: number, rot: number): string {
+  if (end - start <= 0) return ''
+  const large = end - start > Math.PI ? 1 : 0
+  const o1 = ep(rx, ry, start, rot), o2 = ep(rx, ry, end, rot)
+  const i2 = ep(ir * rx, ir * ry, end, rot), i1 = ep(ir * rx, ir * ry, start, rot)
+  return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${ir * rx} ${ir * ry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
 }
 
-// ─── Une tranche : géométrie + matériaux mémoïsés, animation spring ───────
-function Slice({
-  seg, active, seed, onEnter, onLeave, onClick,
-}: {
-  seg: { ticker: string; pct: number; start: number; end: number; mid: number; color: string }
-  active: boolean
-  seed: number
-  onEnter: () => void
-  onLeave: () => void
-  onClick: () => void
-}) {
-  const geo = useMemo(() => buildSliceGeometry(seg.start, seg.end), [seg.start, seg.end])
-
-  const [sideMat, topMat] = useMemo(() => {
-    const base = new THREE.Color(seg.color)
-    const top = base.clone().offsetHSL(0, 0, 0.04)
-    const side = base.clone().offsetHSL(0, 0.02, -0.10)
-    const common = {
-      transmission: 0.06,
-      thickness: 0.3,
-      ior: 1.4,
-      clearcoat: 1,
-      clearcoatRoughness: 0.03,
-      roughness: 0.15,
-      metalness: 0.05,
-      reflectivity: 0.85,
-      envMapIntensity: 1.6,
-    }
-    return [
-      new THREE.MeshPhysicalMaterial({ color: side, ...common }),
-      new THREE.MeshPhysicalMaterial({ color: top, ...common }),
-    ]
-  }, [seg.color])
-
-  const group = useRef<THREE.Group>(null)
-  const velX = useRef({ v: 0 }); const velZ = useRef({ v: 0 })
-  const velScale = useRef({ v: 0 }); const velTilt = useRef({ v: 0 })
-  const dir = useMemo(() => [Math.cos(seg.mid), Math.sin(seg.mid)] as const, [seg.mid])
-
-  useFrame((state, dt) => {
-    if (!group.current) return
-    const t = state.clock.elapsedTime
-    const floatY = Math.sin(t * 1.15 + seed) * 0.025
-
-    const targetOffset = active ? EXPLODE_DISTANCE : 0
-    const targetScale = active ? 1.045 : 1
-    const targetTilt = active ? 0.07 : 0
-
-    const nx = springTo(group.current.position.x, dir[0] * targetOffset, velX.current, dt)
-    const nz = springTo(group.current.position.z, dir[1] * targetOffset, velZ.current, dt)
-    const ns = springTo(group.current.scale.x, targetScale, velScale.current, dt)
-    const nt = springTo(group.current.rotation.x, targetTilt * Math.sin(seg.mid), velTilt.current, dt)
-
-    group.current.position.set(nx, floatY, nz)
-    group.current.scale.setScalar(ns)
-    group.current.rotation.x = nt
-    group.current.rotation.z = springTo(group.current.rotation.z, targetTilt * Math.cos(seg.mid) * -1, velTilt.current, dt)
-  })
-
-  const midR = (INNER_R + OUTER_R) / 2
-  const lx = Math.cos(seg.mid) * midR
-  const lz = Math.sin(seg.mid) * midR
-
-  const stop = (e: any) => e.stopPropagation()
-
-  return (
-    <group ref={group}>
-      <mesh
-        geometry={geo}
-        material={[sideMat, topMat]}
-        castShadow
-        receiveShadow
-        onPointerOver={e => { stop(e); onEnter() }}
-        onPointerOut={e => { stop(e); onLeave() }}
-        onClick={e => { stop(e); onClick() }}
-      />
-      <Text
-        position={[lx, DEPTH / 2 + BEVEL + 0.012, lz]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.155}
-        color="white"
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.004}
-        outlineColor="#000000"
-        outlineOpacity={0.35}
-      >
-        {seg.pct.toFixed(0)}%
-      </Text>
-    </group>
-  )
+// Paroi extérieure — visible seulement sur le demi-cercle "devant" [0, π]
+function pieOuter(start: number, end: number, rx: number, ry: number, h: number, rot: number): string {
+  const s = Math.min(Math.max(start, 0), Math.PI)
+  const e = Math.min(Math.max(end, 0), Math.PI)
+  if (e - s <= 0.001) return ''
+  const p1 = ep(rx, ry, s, rot), p2 = ep(rx, ry, e, rot)
+  return `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 0 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 0 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
 }
 
-// ─── Centre : texte 3D + léger reflet dans le trou (pas de contour noir) ──
-function Center({ count }: { count: number }) {
-  const holeMat = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#050505',
-    roughness: 0.35,
-    metalness: 0.1,
-    clearcoat: 0.6,
-    clearcoatRoughness: 0.2,
-    envMapIntensity: 0.5,
-  }), [])
-
-  return (
-    <>
-      <mesh position={[0, -DEPTH / 2 - 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]} material={holeMat}>
-        <circleGeometry args={[INNER_R, 96]} />
-      </mesh>
-
-      <Text
-        position={[0, DEPTH / 2 + BEVEL + 0.014, 0.09]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.085}
-        letterSpacing={0.15}
-        fontWeight={700 as any}
-        color="#D4AF37"
-        anchorX="center"
-        anchorY="middle"
-      >
-        PORTF.
-      </Text>
-      <Text
-        position={[0, DEPTH / 2 + BEVEL + 0.014, -0.08]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.19}
-        color="#D4AF37"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {count}
-      </Text>
-    </>
-  )
+// Paroi intérieure (fond du trou) — visible sur le demi-cercle opposé [π, 2π]
+function pieInner(start: number, end: number, rx: number, ry: number, h: number, ir: number, rot: number): string {
+  const s = Math.max(Math.min(start, 2 * Math.PI), Math.PI)
+  const e = Math.max(Math.min(end, 2 * Math.PI), Math.PI)
+  if (e - s <= 0.001) return ''
+  const p1 = ep(ir * rx, ir * ry, s, rot), p2 = ep(ir * rx, ir * ry, e, rot)
+  return `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${ir * rx} ${ir * ry} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${ir * rx} ${ir * ry} 0 0 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
 }
 
-// ─── Lumières : rig studio (area lights, rim light, dorée très faible) ────
-function StudioLighting() {
-  useEffect(() => {
-    RectAreaLightUniformsLib.init()
-  }, [])
-
-  return (
-    <>
-      <ambientLight intensity={0.22} />
-      <rectAreaLight position={[1.6, 2.2, 1.4]} rotation={[-0.6, 0.5, 0]} width={2.2} height={2.2} intensity={9} color="#ffffff" />
-      <rectAreaLight position={[-1.8, 1.4, -1.2]} rotation={[0.3, -0.8, 0]} width={2} height={2} intensity={4} color="#dfe8ff" />
-      <directionalLight position={[-2.4, 1.2, -2.8]} intensity={1.1} color="#ffffff" />
-      <directionalLight position={[0.5, 1.8, 2.5]} intensity={0.12} color="#D4AF37" />
-    </>
-  )
-}
-
-// ─── Scène ──────────────────────────────────────────────────────────────
-function DonutScene({
-  data, hovTicker, onHov,
-}: {
-  data: { ticker: string; pct: number; valeur?: number }[]
-  hovTicker: string | null
-  onHov: (t: string | null) => void
-}) {
-  const [clicked, setClicked] = useState<string | null>(null)
-  const active = hovTicker ?? clicked
-
-  const segs = useMemo(() => {
-    const total = data.reduce((s, d) => s + d.pct, 0)
-    const gap = 0.045
-    let cum = -Math.PI / 2
-    return data.map((d, i) => {
-      const pct = total > 0 ? (d.pct / total) * 100 : 0
-      const sweep = (pct / 100) * 2 * Math.PI - gap
-      const start = cum + gap / 2
-      const end = start + Math.max(sweep, 0.001)
-      cum += (pct / 100) * 2 * Math.PI
-      return {
-        ticker: d.ticker, pct, start, end, mid: (start + end) / 2,
-        color: colorFor(d.ticker, i),
-      }
-    })
-  }, [data])
-
-  return (
-    <>
-      <StudioLighting />
-      <Suspense fallback={null}>
-        <Environment preset="studio" background={false} />
-      </Suspense>
-
-      {segs.map((s, i) => (
-        <Slice
-          key={s.ticker}
-          seg={s}
-          seed={i * 1.7}
-          active={active === s.ticker}
-          onEnter={() => onHov(s.ticker)}
-          onLeave={() => onHov(null)}
-          onClick={() => setClicked(prev => prev === s.ticker ? null : s.ticker)}
-        />
-      ))}
-      <Center count={segs.length} />
-
-      <ContactShadows position={[0, -DEPTH / 2 - 0.01, 0]} opacity={0.5} scale={4} blur={2.2} far={1.4} color="#000000" />
-      <AccumulativeShadows position={[0, -DEPTH / 2 - 0.011, 0]} temporal frames={40} alphaTest={0.85} scale={4} color="#000000" opacity={0.55}>
-        <RandomizedLight amount={6} radius={2.5} intensity={1} position={[2, 3, 2]} bias={0.001} />
-      </AccumulativeShadows>
-    </>
-  )
-}
-
-// ─── Export ────────────────────────────────────────────────────────────
+// ─── Composant ─────────────────────────────────────────────────────────
 export default function Donut3D({
   data, hovTicker: hovTickerProp, onHov: onHovProp,
 }: {
@@ -317,30 +89,155 @@ export default function Donut3D({
   hovTicker?: string | null
   onHov?: (t: string | null) => void
 }) {
+  const uid = useId().replace(/:/g, 'd')
   const [hovLocal, setHovLocal] = useState<string | null>(null)
+  const [clicked, setClicked] = useState<string | null>(null)
   const hovTicker = hovTickerProp !== undefined ? hovTickerProp : hovLocal
   const onHov = onHovProp ?? setHovLocal
+  const active = hovTicker ?? clicked
+
+  // ── Dimensions (mêmes proportions éprouvées que la version SVG précédente) ─
+  const VW = 380, cy = 92
+  const RX = 132, RY = 79
+  const rxi = 56, ryi = 34
+  const ir = rxi / RX               // ratio rayon intérieur, format attendu par pieInner/pieTop
+  const H = 22                      // épaisseur d'extrusion (20–24px)
+  const EXPLODE = 8
+  const GAP = 0.03
+  const ROT = -Math.PI / 2          // 1ère tranche commence en haut
+  const cx = VW / 2
+  const svgH = cy + H + 58
+
+  const total = data.reduce((s, d) => s + d.pct, 0)
+  let cum = 0
+  const segs = data.map((d, i) => {
+    const pct = total > 0 ? (d.pct / total) * 100 : 0
+    const sweep = (pct / 100) * 2 * Math.PI - GAP
+    const start = cum + GAP / 2
+    const end = start + Math.max(sweep, 0.001)
+    cum += (pct / 100) * 2 * Math.PI
+    const mid = (start + end) / 2
+    return {
+      ticker: d.ticker, pct, valeur: d.valeur,
+      start, end, mid,
+      color: colorFor(d.ticker, i),
+    }
+  })
+
+  const handleEnter = (t: string) => onHov(t)
+  const handleLeave = () => onHov(null)
+  const handleClick = (t: string) => setClicked(prev => prev === t ? null : t)
 
   return (
-    <div style={{
-      width: '100%', maxWidth: 230, margin: '0 auto 24px',
-      aspectRatio: '1 / 0.85',
-      borderRadius: 20, overflow: 'hidden',
-      background: 'transparent',
-    }}>
-      <Canvas
-        shadows
-        dpr={[1, 2]}
-        camera={{ position: [0, 4.2, 5], fov: 25 }}
-        gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
-        style={{ background: 'transparent' }}
-        onCreated={({ gl, scene }) => {
-          gl.setClearColor(0x000000, 0)
-          scene.background = null
-        }}
-      >
-        <DonutScene data={data} hovTicker={hovTicker} onHov={onHov} />
-      </Canvas>
+    <div style={{ width: '100%', maxWidth: 230, margin: '0 auto 24px' }}>
+      <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`} style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={`${uid}-gloss`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </linearGradient>
+        </defs>
+
+        {/* Ombre douce au sol */}
+        <ellipse cx={cx} cy={cy + H + 20} rx={RX * 0.9} ry={13}
+          fill="rgba(0,0,0,0.5)" opacity={0.2} style={{ filter: 'blur(20px)' }} />
+
+        {segs.map((s, i) => {
+          const isActive = active === s.ticker
+          const ex = isActive ? Math.cos(s.mid + ROT) * EXPLODE : 0
+          const ey = isActive ? Math.sin(s.mid + ROT) * EXPLODE : 0
+
+          const outerD = pieOuter(s.start, s.end, RX, RY, H, ROT)
+          const innerD = pieInner(s.start, s.end, rxi, ryi, H, 1, ROT)
+          const topD = pieTop(s.start, s.end, RX, RY, ir, ROT)
+
+          const labR = 0.62
+          const lp = ep(RX * labR, RY * labR, s.mid, ROT)
+
+          return (
+            <g key={s.ticker}
+              transform={`translate(${(cx + ex).toFixed(1)} ${(cy + ey).toFixed(1)}) scale(${isActive ? 1.04 : 1})`}
+              style={{
+                cursor: 'pointer',
+                filter: isActive
+                  ? 'drop-shadow(0 12px 24px rgba(0,0,0,.5))'
+                  : 'drop-shadow(0 4px 10px rgba(0,0,0,.35))',
+                transition: 'transform 220ms ease, filter 220ms ease',
+              }}
+              onMouseEnter={() => handleEnter(s.ticker)}
+              onMouseLeave={handleLeave}
+              onClick={() => handleClick(s.ticker)}
+              onTouchStart={e => { e.preventDefault(); handleEnter(s.ticker) }}
+              onTouchEnd={handleLeave}
+            >
+              {outerD && <path d={outerD} fill={darken(s.color, 0.65)} />}
+              {innerD && <path d={innerD} fill={darken(s.color, 0.5)} />}
+              <path d={topD} fill={s.color} stroke="rgba(255,255,255,0.12)" strokeWidth={1.5} />
+              <path d={topD} fill={`url(#${uid}-gloss)`} />
+              {s.end - s.start > 0.22 && (
+                <text
+                  x={lp.x.toFixed(1)} y={lp.y.toFixed(1)}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fontFamily="Inter, system-ui, monospace"
+                  fontSize={11} fontWeight={700} fill="white"
+                  style={{ pointerEvents: 'none', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,.9))' }}
+                >
+                  {s.pct.toFixed(0)}%
+                </text>
+              )}
+            </g>
+          )
+        })}
+
+        {/* Centre */}
+        <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi} fill="#050505" stroke="rgba(255,255,255,0.06)" />
+        <ellipse cx={cx} cy={cy + H} rx={rxi - 1} ry={ryi - 0.4} fill="#040404" />
+        <text x={cx} y={cy - 6} textAnchor="middle" fontFamily="Inter, system-ui"
+          fontSize={11} fontWeight={700} letterSpacing="0.1em" fill="#D4AF37" opacity={0.9}>PORTF.</text>
+        <text x={cx} y={cy + 16} textAnchor="middle" fontFamily="Inter, monospace"
+          fontSize={24} fontWeight={700} fill="#D4AF37" opacity={0.9}>{segs.length}</text>
+      </svg>
+
+      {/* Légende */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))',
+        gap: '6px', marginTop: 12, padding: '0 4px',
+      }}>
+        {segs.map(s => {
+          const isActive = active === s.ticker
+          return (
+            <div key={s.ticker}
+              onMouseEnter={() => handleEnter(s.ticker)}
+              onMouseLeave={handleLeave}
+              onClick={() => handleClick(s.ticker)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 8px', borderRadius: 8, cursor: 'pointer',
+                background: isActive ? 'rgba(255,255,255,0.05)' : 'transparent',
+                border: `1px solid ${isActive ? 'rgba(255,255,255,0.08)' : 'transparent'}`,
+                transition: 'all 0.18s ease',
+              }}>
+              <div style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: s.color, flexShrink: 0, boxShadow: `0 0 5px ${s.color}88`,
+              }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? '#fff' : '#C0C0C0' }}>
+                  {s.ticker}
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 600, color: s.color, fontFamily: 'monospace' }}>
+                  {s.pct.toFixed(1)}%
+                </div>
+                {s.valeur !== undefined && (
+                  <div style={{ fontSize: 9, color: '#444' }}>
+                    {s.valeur.toLocaleString('fr-TN', { maximumFractionDigits: 0 })} DT
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
