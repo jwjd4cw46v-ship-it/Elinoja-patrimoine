@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Bell, TrendingUp, TrendingDown, Shield,
@@ -16,10 +16,12 @@ import {
   type Position, type AlertePosition,
 } from '@/lib/positions-engine'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 
 // Donut 3D (WebGL réel — React Three Fiber). Chargé côté client uniquement :
 // le Canvas ne peut pas être rendu côté serveur.
 // Nécessite : npm install three @react-three/fiber @react-three/drei
+const Donut3D = dynamic(() => import('./Donut3D'), { ssr: false })
 
 /* ─────────────────────── Helpers ─────────────────────────────── */
 const fmt = (n: number | null | undefined, d = 3) =>
@@ -944,181 +946,19 @@ function VenteModal({
   )
 }
 
-
-/* ─── DonutSVG : donut 3D extrudé en SVG pur ───────────────────── */
-const TICKER_COLORS_MAP: Record<string, [string,string,string]> = {
-  'TINV': ['#32d26b','#22c55e','#166534'],
-  'SFBT': ['#fde047','#facc15','#854d0e'],
-  'TGH':  ['#93c5fd','#3b82f6','#1e3a8a'],
-}
-const GRAD_FALLBACK: [string,string,string][] = [
-  ['#c084fc','#a855f7','#581c87'],
-  ['#f87171','#ef4444','#7f1d1d'],
-  ['#22d3ee','#06b6d4','#164e63'],
-  ['#fb923c','#f97316','#7c2d12'],
-]
-
-function DonutSVG({ data, hovTicker, onHov }: {
-  data: { ticker: string; pct: number; valeur?: number }[]
-  hovTicker: string | null
-  onHov: (t: string | null) => void
-}) {
-  const VW = 280, cy = 82, cx = VW/2
-  const RX = 118, RY = 70
-  const rxi = 48, ryi = 29
-  const DEPTH = 20
-  const GAP = 0.022, EXP = 5
-
-  const total = data.reduce((s,d) => s+d.pct, 0)
-  let cum = -Math.PI/2
-  const segs = data.map((d,i) => {
-    const pct   = total>0 ? (d.pct/total)*100 : 0
-    const sweep = (pct/100)*2*Math.PI - GAP*2
-    const start = cum+GAP
-    const end   = start+Math.max(sweep,0.001)
-    cum += (pct/100)*2*Math.PI
-    const mid = (start+end)/2
-    const g   = TICKER_COLORS_MAP[d.ticker] ?? GRAD_FALLBACK[i%GRAD_FALLBACK.length]
-    return { ticker:d.ticker, pct, valeur:d.valeur, start, end, mid, g,
-      ex: Math.cos(mid)*EXP, ey: Math.sin(mid)*EXP }
-  })
-
-  const ep = (ecx:number,ecy:number,erx:number,ery:number,a:number) =>
-    ({x:ecx+erx*Math.cos(a), y:ecy+ery*Math.sin(a)})
-
-  const topPath = (ecx:number,ecy:number,s:number,e:number) => {
-    const lg=e-s>Math.PI?1:0
-    const o1=ep(ecx,ecy,RX,RY,s),o2=ep(ecx,ecy,RX,RY,e)
-    const i2=ep(ecx,ecy,rxi,ryi,e),i1=ep(ecx,ecy,rxi,ryi,s)
-    return `M${o1.x.toFixed(1)} ${o1.y.toFixed(1)} A${RX} ${RY} 0 ${lg} 1 ${o2.x.toFixed(1)} ${o2.y.toFixed(1)} L${i2.x.toFixed(1)} ${i2.y.toFixed(1)} A${rxi} ${ryi} 0 ${lg} 0 ${i1.x.toFixed(1)} ${i1.y.toFixed(1)}Z`
-  }
-
-  const wallPath = (ecx:number,ecy:number,erx:number,ery:number,s:number,e:number) => {
-    const ws=Math.max(s,0), we=Math.min(e,Math.PI)
-    if(ws>=we-0.001) return ''
-    const lg=we-ws>Math.PI?1:0
-    const t1=ep(ecx,ecy,erx,ery,ws),t2=ep(ecx,ecy,erx,ery,we)
-    const b2=ep(ecx,ecy+DEPTH,erx,ery,we),b1=ep(ecx,ecy+DEPTH,erx,ery,ws)
-    return `M${t1.x.toFixed(1)} ${t1.y.toFixed(1)} A${erx} ${ery} 0 ${lg} 1 ${t2.x.toFixed(1)} ${t2.y.toFixed(1)} L${b2.x.toFixed(1)} ${b2.y.toFixed(1)} A${erx} ${ery} 0 ${lg} 0 ${b1.x.toFixed(1)} ${b1.y.toFixed(1)}Z`
-  }
-
-  const svgH = cy+DEPTH+32
-
-  return (
-    <div style={{width:'100%',marginBottom:20}}>
-      <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
-        style={{display:'block',overflow:'visible',maxWidth:260,margin:'0 auto'}}>
-        <defs>
-          {segs.map((s,i)=>(
-            <linearGradient key={i} id={`sg-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%"   stopColor={s.g[0]}/>
-              <stop offset="45%"  stopColor={s.g[1]}/>
-              <stop offset="100%" stopColor={s.g[2]}/>
-            </linearGradient>
-          ))}
-          {segs.map((s,i)=>(
-            <linearGradient key={`w${i}`} id={`wg-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%"   stopColor={s.g[1]} stopOpacity="0.6"/>
-              <stop offset="100%" stopColor={s.g[2]} stopOpacity="1"/>
-            </linearGradient>
-          ))}
-          <linearGradient id="gloss" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%"   stopColor="rgba(255,255,255,0.25)"/>
-            <stop offset="55%"  stopColor="rgba(255,255,255,0.05)"/>
-            <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
-          </linearGradient>
-        </defs>
-
-        {/* Ombre sol */}
-        <ellipse cx={cx} cy={cy+DEPTH+12} rx={RX*0.78} ry={9}
-          fill="rgba(0,0,0,0.6)" opacity={0.18}
-          style={{filter:'blur(20px)'}}/>
-
-        {/* Parois extérieures */}
-        {segs.map((s,i)=>{
-          const isH=hovTicker===s.ticker
-          const ex=isH?s.ex*1.3:s.ex, ey=isH?s.ey*1.3:s.ey
-          const d=wallPath(cx+ex,cy+ey,RX,RY,s.start,s.end)
-          return d?<path key={`ow${i}`} d={d} fill={`url(#wg-${i})`} opacity={0.9}
-            style={{transition:'all 0.22s ease'}}/>:null
-        })}
-
-        {/* Parois intérieures */}
-        {segs.map((s,i)=>{
-          const isH=hovTicker===s.ticker
-          const ex=isH?s.ex*1.3:s.ex, ey=isH?s.ey*1.3:s.ey
-          const d=wallPath(cx+ex,cy+ey,rxi,ryi,s.start,s.end)
-          return d?<path key={`iw${i}`} d={d} fill={s.g[2]} opacity={0.35}
-            style={{transition:'all 0.22s ease'}}/>:null
-        })}
-
-        {/* Faces supérieures */}
-        {segs.map((s,i)=>{
-          const isH=hovTicker===s.ticker
-          const ex=isH?s.ex*1.3:s.ex, ey=isH?s.ey*1.3:s.ey
-          const topD=topPath(cx+ex,cy+ey,s.start,s.end)
-          const labR=(RX+rxi)/2*0.66, labRY=(RY+ryi)/2*0.66
-          const lx=cx+ex+labR*Math.cos(s.mid)
-          const ly=cy+ey+labRY*Math.sin(s.mid)-7
-          return (
-            <g key={`seg${i}`}
-              style={{
-                cursor:'pointer',
-                filter:isH
-                  ?`drop-shadow(0 10px 24px rgba(0,0,0,.5)) drop-shadow(0 0 14px ${s.g[1]})`
-                  :'drop-shadow(0 3px 8px rgba(0,0,0,.3))',
-                transform:isH?`translate(${(s.ex*.3).toFixed(1)}px,-4px) scale(1.04)`:'none',
-                transformOrigin:`${(cx+s.ex).toFixed(1)}px ${(cy+s.ey).toFixed(1)}px`,
-                transition:'transform 250ms ease, filter 250ms ease',
-              }}
-              onMouseEnter={()=>onHov(s.ticker)}
-              onMouseLeave={()=>onHov(null)}
-              onTouchStart={e=>{e.preventDefault();onHov(s.ticker)}}
-              onTouchEnd={()=>onHov(null)}>
-              <path d={topD} fill={`url(#sg-${i})`}/>
-              <path d={topD} fill="url(#gloss)"/>
-              <path d={topD} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={1.5}/>
-              {s.pct>=8 && (
-                <text x={lx.toFixed(1)} y={ly.toFixed(1)}
-                  textAnchor="middle" dominantBaseline="middle"
-                  fontFamily="Inter,system-ui,monospace"
-                  fontSize={10} fontWeight={700} fill="white"
-                  style={{pointerEvents:'none',filter:'drop-shadow(0 1px 2px rgba(0,0,0,1))'}}>
-                  {s.pct.toFixed(0)}%
-                </text>
-              )}
-            </g>
-          )
-        })}
-
-        {/* Trou central */}
-        <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
-          fill="#050505" stroke="rgba(255,255,255,0.05)" strokeWidth={1}/>
-        <ellipse cx={cx} cy={cy+DEPTH} rx={rxi-1} ry={ryi-.5} fill="#030303"/>
-        <text x={cx} y={cy-4} textAnchor="middle"
-          fontFamily="Inter,system-ui" fontSize={6.5} fontWeight={700}
-          letterSpacing="0.14em" fill="#D4AF37" opacity={0.85}>PORTF.</text>
-        <text x={cx} y={cy+9} textAnchor="middle"
-          fontFamily="Inter,monospace" fontSize={13} fontWeight={700}
-          fill="#D4AF37" opacity={0.85}>{segs.length}</text>
-      </svg>
-    </div>
-  )
-}
-
 /* ─────────────────────── Page principale ──────────────────────── */
 // ─── RepartitionBlock ────────────────────────────────────────────────────────
 function RepartitionBlock({ repartition }: { repartition: { ticker: string; valeur: number; pct: number }[] }) {
-  const [hov, setHov] = useState<string | null>(null)
-  const [openTicker, setOpenTicker] = useState<string | null>(null)
+  const [hov, setHov] = React.useState<string | null>(null)
+  const [openTicker, setOpenTicker] = React.useState<string | null>(null)
 
   const totalInvesti = repartition.reduce((s, r) => s + r.valeur, 0)
   const donutData = repartition.map(r => ({ ticker: r.ticker, pct: r.pct, valeur: r.valeur }))
 
   return (
     <div>
-      {/* Donut SVG 3D — stable sur tous les appareils */}
-      <DonutSVG data={donutData} hovTicker={hov} onHov={setHov} />
+      {/* Donut 3D (WebGL) — largeur/marge gérées en interne par le composant */}
+      <Donut3D data={donutData} hovTicker={hov} onHov={setHov} />
 
       {/* Légende en grille 2 colonnes */}
       <div style={{
@@ -1260,7 +1100,7 @@ function ConcentrationRow({ r, i, total }: {
   i: number
   total: number
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = React.useState(false)
   const hasAlert = r.pct > 20
   const color = getTickerColor(r.ticker, i)
   const isLast = i === total - 1
