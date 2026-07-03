@@ -146,9 +146,11 @@ export default function Donut3D({
           // filet d'anti-aliasing entre tranches adjacentes, quel que soit
           // l'endroit où il se produirait sur le cercle.
           const OVERLAP = 0.015
+          const WALL_OVERLAP = 0.006
           const rs = s.start - OVERLAP, re = s.end + OVERLAP
-          const outerD = pieOuter(s.start, s.end, RX, RY, H, ROT)
-          const innerD = pieInner(s.start, s.end, rxi, ryi, H, ROT)
+          const ws = s.start - WALL_OVERLAP, we = s.end + WALL_OVERLAP
+          const outerD = pieOuter(ws, we, RX, RY, H, ROT)
+          const innerD = pieInner(ws, we, rxi, ryi, H, ROT)
           const topD = pieTop(rs, re, RX, RY, rxi, ryi, ROT)
           const lp = ep(RX * 0.63, RY * 0.63, s.mid, ROT)
           return (
