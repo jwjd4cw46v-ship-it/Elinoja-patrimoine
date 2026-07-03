@@ -57,20 +57,20 @@ function pieTop(start: number, end: number, rx: number, ry: number, irx: number,
 
 // Paroi extérieure — visible sur le demi-cercle "devant" [0, π]
 function pieOuter(start: number, end: number, rx: number, ry: number, h: number, rot: number): string {
-  const s = Math.min(Math.max(start, 0), Math.PI)
-  const e = Math.min(Math.max(end, 0), Math.PI)
-  if (e - s <= 0.001) return ''
-  const p1 = ep(rx, ry, s, rot), p2 = ep(rx, ry, e, rot)
-  return `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 0 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 0 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
+  if (end - start <= 0.001) return ''
+  const large = end - start > Math.PI ? 1 : 0
+  const p1 = ep(rx, ry, start, rot), p2 = ep(rx, ry, end, rot)
+  return `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 ${large} 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
 }
 
-// Paroi intérieure (fond du trou) — visible sur le demi-cercle opposé [π, 2π]
+// Paroi intérieure (fond du trou) — dessinée sur toute la tranche (360°),
+// pas seulement sur un demi-cercle : chaque secteur garde son épaisseur
+// visible tout autour, comme les visuels de référence.
 function pieInner(start: number, end: number, irx: number, iry: number, h: number, rot: number): string {
-  const s = Math.max(Math.min(start, 2 * Math.PI), Math.PI)
-  const e = Math.max(Math.min(end, 2 * Math.PI), Math.PI)
-  if (e - s <= 0.001) return ''
-  const p1 = ep(irx, iry, s, rot), p2 = ep(irx, iry, e, rot)
-  return `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${irx} ${iry} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${irx} ${iry} 0 0 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
+  if (end - start <= 0.001) return ''
+  const large = end - start > Math.PI ? 1 : 0
+  const p1 = ep(irx, iry, start, rot), p2 = ep(irx, iry, end, rot)
+  return `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${irx} ${iry} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${irx} ${iry} 0 ${large} 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
 }
 
 export default function Donut3D({
