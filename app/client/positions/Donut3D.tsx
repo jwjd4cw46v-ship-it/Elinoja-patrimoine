@@ -170,7 +170,7 @@ export default function Donut3D({
               onTouchEnd={() => onHov(null)}>
               {outerD && <path d={outerD} fill={darken(s.color, 0.72)} />}
               {innerD && <path d={innerD} fill={darken(s.color, 0.58)} />}
-              <path d={topD} fill={lighten(s.color, 0.1)} stroke="rgba(0,0,0,0.35)" strokeWidth={2} />
+              <path d={topD} fill={lighten(s.color, 0.1)} />
               <path d={topD} fill={`url(#${uid}-gl)`} />
               {s.end - s.start > 0.20 && (
                 <text x={lp.x.toFixed(1)} y={lp.y.toFixed(1)}
