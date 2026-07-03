@@ -147,8 +147,8 @@ export default function Donut3D({
           // l'endroit où il se produirait sur le cercle.
           const OVERLAP = 0.015
           const rs = s.start - OVERLAP, re = s.end + OVERLAP
-          const outerD = pieOuter(rs, re, RX, RY, H, ROT)
-          const innerD = pieInner(rs, re, rxi, ryi, H, ROT)
+          const outerD = pieOuter(s.start, s.end, RX, RY, H, ROT)
+          const innerD = pieInner(s.start, s.end, rxi, ryi, H, ROT)
           const topD = pieTop(rs, re, RX, RY, rxi, ryi, ROT)
           const lp = ep(RX * 0.63, RY * 0.63, s.mid, ROT)
           return (
