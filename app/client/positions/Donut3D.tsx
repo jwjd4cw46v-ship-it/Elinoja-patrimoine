@@ -55,27 +55,21 @@ function pieTop(start: number, end: number, rx: number, ry: number, irx: number,
   return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${irx} ${iry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
 }
 
-// Paroi extérieure — visible UNIQUEMENT sur le demi-cercle avant [0, π]
-// (logique exacte du plugin Donut3D.js original)
+// Paroi extérieure — visible sur le demi-cercle "devant" [0, π]
 function pieOuter(start: number, end: number, rx: number, ry: number, h: number, rot: number): string {
-  // Clipper à [0, π] dans l'espace NON-rotaté (angles absolus)
-  const sa = start > Math.PI ? Math.PI : start
-  const ea = end   > Math.PI ? Math.PI : end
-  if (ea - sa <= 0.001) return ''
-  const large = ea - sa > Math.PI ? 1 : 0
-  const p1 = ep(rx, ry, sa, rot), p2 = ep(rx, ry, ea, rot)
+  if (end - start <= 0.001) return ''
+  const large = end - start > Math.PI ? 1 : 0
+  const p1 = ep(rx, ry, start, rot), p2 = ep(rx, ry, end, rot)
   return `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 ${large} 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
 }
 
-// Paroi intérieure — visible UNIQUEMENT sur le demi-cercle arrière [π, 2π]
-// (logique exacte du plugin Donut3D.js original)
+// Paroi intérieure (fond du trou) — dessinée sur toute la tranche (360°),
+// pas seulement sur un demi-cercle : chaque secteur garde son épaisseur
+// visible tout autour, comme les visuels de référence.
 function pieInner(start: number, end: number, irx: number, iry: number, h: number, rot: number): string {
-  // Clipper à [π, 2π] dans l'espace NON-rotaté (angles absolus)
-  const sa = start < Math.PI ? Math.PI : start
-  const ea = end   < Math.PI ? Math.PI : end
-  if (ea - sa <= 0.001) return ''
-  const large = ea - sa > Math.PI ? 1 : 0
-  const p1 = ep(irx, iry, sa, rot), p2 = ep(irx, iry, ea, rot)
+  if (end - start <= 0.001) return ''
+  const large = end - start > Math.PI ? 1 : 0
+  const p1 = ep(irx, iry, start, rot), p2 = ep(irx, iry, end, rot)
   return `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${irx} ${iry} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${irx} ${iry} 0 ${large} 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
 }
 
@@ -116,6 +110,7 @@ export default function Donut3D({
 
   // Anneau de fond plein (0 → 2π, sans gap) — comble tout espace résiduel
   // entre les tranches, notamment au point de couture dernière/première tranche.
+  const backingD = pieTop(0.0005, 2 * Math.PI - 0.0005, RX, RY, rxi, ryi, ROT)
 
   return (
     <div style={{ width: '100%', maxWidth: 230, margin: '0 auto 28px' }}>
@@ -136,10 +131,11 @@ export default function Donut3D({
         {/* Anneau de fond — centré sur le donut, masque les micro-espaces
             entre tranches (IMPORTANT : bien wrappé dans le translate ici,
             c'est l'oubli de ce translate qui causait le bug précédent) */}
-
-        {/* Fond de l'anneau — masque les artefacts entre tranches */}
-        <ellipse cx={cx} cy={cy} rx={RX + 1} ry={RY + 1} fill="#141414" />
-        <ellipse cx={cx} cy={cy} rx={rxi - 1} ry={ryi - 1} fill="#141414" />
+        {backingD && (
+          <g transform={`translate(${cx} ${cy})`}>
+            <path d={backingD} fill="#2a2a2a" />
+          </g>
+        )}
 
         {/* Segments */}
         {segs.map((s, i) => {
@@ -149,8 +145,8 @@ export default function Donut3D({
           // Léger chevauchement (pas juste un espace réduit) : élimine tout
           // filet d'anti-aliasing entre tranches adjacentes, quel que soit
           // l'endroit où il se produirait sur le cercle.
-          const OVERLAP = 0.004
-          const WALL_OVERLAP = 0.003
+          const OVERLAP = 0.015
+          const WALL_OVERLAP = 0.006
           const rs = s.start - OVERLAP, re = s.end + OVERLAP
           const ws = s.start - WALL_OVERLAP, we = s.end + WALL_OVERLAP
           const outerD = pieOuter(ws, we, RX, RY, H, ROT)
