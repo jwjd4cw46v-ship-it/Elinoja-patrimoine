@@ -92,7 +92,7 @@ export default function Donut3D({
   const rxi = 50, ryi = 30
   const H = 20
   const EXPLODE = 7
-  const GAP = 0.03
+  const GAP = 0.006  // quasi nul : la séparation visuelle vient du contour blanc, pas d'un vrai espace
   const ROT = -Math.PI / 2
   const svgH = cy + H + 40
 
@@ -163,7 +163,7 @@ export default function Donut3D({
               onTouchEnd={() => onHov(null)}>
               {outerD && <path d={outerD} fill={darken(s.color, 0.72)} />}
               {innerD && <path d={innerD} fill={darken(s.color, 0.58)} />}
-              <path d={topD} fill={lighten(s.color, 0.1)} stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} />
+              <path d={topD} fill={lighten(s.color, 0.1)} stroke="rgba(0,0,0,0.35)" strokeWidth={2} />
               <path d={topD} fill={`url(#${uid}-gl)`} />
               {s.end - s.start > 0.20 && (
                 <text x={lp.x.toFixed(1)} y={lp.y.toFixed(1)}
