@@ -1,264 +1,78 @@
 'use client'
 
 /*
-  Donut3D — vrai rendu 3D WebGL (React Three Fiber), maillage fermé.
+  Donut3D — donut pseudo-3D en SVG pur (pieTop / pieOuter / pieInner).
+  Aucune dépendance supplémentaire. Pas de WebGL — stable sur tous les
+  navigateurs/appareils, build simple et fiable.
 
-  POURQUOI CE CHANGEMENT : la version précédente était du SVG "pseudo-3D"
-  (des formes plates découpées à la main pour simuler la profondeur). Ça ne
-  peut structurellement pas produire un volume fermé — d'où les faces
-  manquantes / trous entre secteurs / fond visible à travers.
+  Ce composant N'A PAS de légende intégrée — RepartitionBlock (dans
+  page.tsx) affiche déjà la légende juste après <Donut3D />.
 
-  Ici, chaque secteur est une SEULE géométrie ExtrudeGeometry : Three.js
-  génère automatiquement la face du dessus, la face du dessous, la paroi
-  extérieure, la paroi intérieure ET les deux faces de fermeture radiales,
-  à partir d'un seul "Shape" en forme d'anneau-secteur. C'est un vrai mesh
-  fermé (watertight) — aucune face manquante possible par construction.
-
-  DÉPENDANCES : déjà présentes dans package.json (three, @react-three/fiber,
-  @react-three/drei, troika-three-text) — aucune installation supplémentaire.
-
-  INTÉGRATION : identique à avant, aucun changement dans page.tsx :
-    const Donut3D = dynamic(() => import('./Donut3D'), { ssr: false })
-    <Donut3D data={donutData} hovTicker={hov} onHov={setHov} />
+  Historique des fixes accumulés dans cette version :
+  - pieTop utilise les rayons intérieurs exacts (rxi/ryi), plus de ratio
+    imprécis → le trou central est parfaitement aligné avec les tranches.
+  - Une seule ellipse pour le trou central (pas de second disque décalé
+    en profondeur qui donnait l'illusion d'un trou décalé).
+  - Anneau de fond plein (backingD), correctement centré via
+    <g transform="translate(cx,cy)">, comble tout espace résiduel entre
+    les tranches (notamment au point de couture dernière/première tranche).
+  - Couleurs éclaircies (face du dessus) et parois moins assombries pour
+    un rendu plus lumineux.
 */
 
-import { useMemo, useRef, useState, Suspense } from 'react'
-import * as THREE from 'three'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { Environment, ContactShadows, Text } from '@react-three/drei'
+import { useId, useState } from 'react'
 
-// ─── Couleurs + finitions métalliques par ticker ──────────────────────────
-// (metalness/roughness dans la plage demandée ; le satiné du gold est
-// légèrement plus rugueux pour un rendu "or satiné" plutôt que miroir.)
-const TICKER_FINISH: Record<string, { color: string; metalness: number; roughness: number }> = {
-  TINV: { color: '#2ED573', metalness: 0.75, roughness: 0.20 }, // métal vert brillant
-  SFBT: { color: '#E8B923', metalness: 0.80, roughness: 0.30 }, // or satiné
-  TGH:  { color: '#4C8DFF', metalness: 0.68, roughness: 0.18 }, // aluminium anodisé bleu
+const TICKER_COLORS: Record<string, string> = {
+  TINV: '#22C55E',
+  SFBT: '#FACC15',
+  TGH:  '#3B82F6',
 }
-const FALLBACK_FINISH = [
-  { color: '#A855F7', metalness: 0.72, roughness: 0.22 },
-  { color: '#EF4444', metalness: 0.72, roughness: 0.22 },
-  { color: '#06B6D4', metalness: 0.72, roughness: 0.22 },
-  { color: '#F97316', metalness: 0.72, roughness: 0.22 },
-  { color: '#EC4899', metalness: 0.72, roughness: 0.22 },
-]
+const FALLBACK_COLORS = ['#22C55E','#EAB308','#3B82F6','#A855F7','#EF4444','#06B6D4','#F97316','#EC4899']
 
-function finishFor(ticker: string, i: number) {
-  return TICKER_FINISH[ticker] ?? FALLBACK_FINISH[i % FALLBACK_FINISH.length]
+function colorFor(ticker: string, i: number): string {
+  return TICKER_COLORS[ticker] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+}
+function darken(hex: string, f = 0.72): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgb(${Math.round(((n>>16)&0xff)*f)},${Math.round(((n>>8)&0xff)*f)},${Math.round((n&0xff)*f)})`
+}
+function lighten(hex: string, amt = 0.1): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff
+  const mix = (c: number) => Math.round(c + (255 - c) * amt)
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`
 }
 
-// ─── Géométrie du secteur : UN seul ExtrudeGeometry = mesh fermé ─────────
-const INNER_R = 0.55
-const OUTER_R = 1.15
-const DEPTH   = 0.34            // épaisseur — assez massive pour capter les reflets
-const BEVEL   = DEPTH * 0.26    // bevel léger sur les arêtes (capte la lumière)
-const CURVE_SEGMENTS = 128      // arcs lissés
-const BEVEL_SEGMENTS = 6
-const GAP = 0.012               // séparation fine entre secteurs (volontaire, pas un trou)
-const EXPLODE_DISTANCE = 0.09
+// rot = décalage visuel (-π/2 → la première tranche commence en haut).
+const ep = (rx: number, ry: number, a: number, rot: number) =>
+  ({ x: rx * Math.cos(a + rot), y: ry * Math.sin(a + rot) })
 
-function buildSliceGeometry(startAngle: number, endAngle: number): THREE.ExtrudeGeometry {
-  const shape = new THREE.Shape()
-  const segs = CURVE_SEGMENTS
-  // Arc extérieur (aller)
-  for (let i = 0; i <= segs; i++) {
-    const a = startAngle + (endAngle - startAngle) * (i / segs)
-    const x = Math.cos(a) * OUTER_R, y = Math.sin(a) * OUTER_R
-    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y)
-  }
-  // Arc intérieur (retour) — referme la forme en anneau-secteur.
-  // Les deux segments radiaux (fin d'arc extérieur → début d'arc intérieur,
-  // et fin d'arc intérieur → fermeture) deviennent, une fois extrudés,
-  // les deux "faces latérales de fermeture" du secteur.
-  for (let i = segs; i >= 0; i--) {
-    const a = startAngle + (endAngle - startAngle) * (i / segs)
-    shape.lineTo(Math.cos(a) * INNER_R, Math.sin(a) * INNER_R)
-  }
-  shape.closePath()
-
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: DEPTH,
-    bevelEnabled: true,
-    bevelThickness: BEVEL,
-    bevelSize: BEVEL,
-    bevelSegments: BEVEL_SEGMENTS,
-    curveSegments: segs,
-  })
-  geo.rotateX(-Math.PI / 2)
-  geo.translate(0, -DEPTH / 2, 0)
-  geo.computeVertexNormals() // recalcul des normales — reflets corrects sur tout le volume
-  return geo
+function pieTop(start: number, end: number, rx: number, ry: number, irx: number, iry: number, rot: number): string {
+  if (end - start <= 0) return ''
+  const large = end - start > Math.PI ? 1 : 0
+  const o1 = ep(rx, ry, start, rot), o2 = ep(rx, ry, end, rot)
+  const i2 = ep(irx, iry, end, rot), i1 = ep(irx, iry, start, rot)
+  return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${irx} ${iry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
 }
 
-// ─── Spring critique-amorti pour l'explosion au survol ────────────────────
-function springTo(current: number, target: number, vel: { v: number }, dt: number, stiffness = 180, damping = 22) {
-  const accel = (target - current) * stiffness - vel.v * damping
-  vel.v += accel * dt
-  return current + vel.v * dt
+// Paroi extérieure — visible sur le demi-cercle "devant" [0, π]
+function pieOuter(start: number, end: number, rx: number, ry: number, h: number, rot: number): string {
+  const s = Math.min(Math.max(start, 0), Math.PI)
+  const e = Math.min(Math.max(end, 0), Math.PI)
+  if (e - s <= 0.001) return ''
+  const p1 = ep(rx, ry, s, rot), p2 = ep(rx, ry, e, rot)
+  return `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 0 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 0 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
 }
 
-// ─── Une tranche : mesh fermé unique + matériau PBR métallique ────────────
-function Slice({
-  seg, active, onEnter, onLeave, onClick,
-}: {
-  seg: { ticker: string; pct: number; start: number; end: number; mid: number; finish: { color: string; metalness: number; roughness: number } }
-  active: boolean
-  onEnter: () => void
-  onLeave: () => void
-  onClick: () => void
-}) {
-  const geo = useMemo(() => buildSliceGeometry(seg.start, seg.end), [seg.start, seg.end])
-
-  const material = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: seg.finish.color,
-    metalness: seg.finish.metalness,
-    roughness: seg.finish.roughness,
-    clearcoat: 0.8,
-    clearcoatRoughness: 0.05,
-    reflectivity: 1,
-    envMapIntensity: 1.5,
-  }), [seg.finish.color, seg.finish.metalness, seg.finish.roughness])
-
-  const group = useRef<THREE.Group>(null)
-  const velX = useRef({ v: 0 }); const velZ = useRef({ v: 0 }); const velScale = useRef({ v: 0 })
-  const dir = useMemo(() => [Math.cos(seg.mid), Math.sin(seg.mid)] as const, [seg.mid])
-
-  useFrame((_, dt) => {
-    if (!group.current) return
-    const targetOffset = active ? EXPLODE_DISTANCE : 0
-    const targetScale = active ? 1.04 : 1
-    const nx = springTo(group.current.position.x, dir[0] * targetOffset, velX.current, dt)
-    const nz = springTo(group.current.position.z, dir[1] * targetOffset, velZ.current, dt)
-    const ns = springTo(group.current.scale.x, targetScale, velScale.current, dt)
-    group.current.position.set(nx, 0, nz)
-    group.current.scale.setScalar(ns)
-  })
-
-  const midR = (INNER_R + OUTER_R) / 2
-  const lx = Math.cos(seg.mid) * midR
-  const lz = Math.sin(seg.mid) * midR
-
-  const stop = (e: any) => e.stopPropagation()
-
-  return (
-    <group ref={group}>
-      <mesh
-        geometry={geo}
-        material={material}
-        castShadow
-        receiveShadow
-        onPointerOver={e => { stop(e); onEnter() }}
-        onPointerOut={e => { stop(e); onLeave() }}
-        onClick={e => { stop(e); onClick() }}
-      />
-      <Text
-        position={[lx, DEPTH / 2 + BEVEL + 0.01, lz]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.16}
-        color="white"
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.004}
-        outlineColor="#000000"
-        outlineOpacity={0.4}
-      >
-        {seg.pct.toFixed(0)}%
-      </Text>
-    </group>
-  )
+// Paroi intérieure (fond du trou) — visible sur le demi-cercle opposé [π, 2π]
+function pieInner(start: number, end: number, irx: number, iry: number, h: number, rot: number): string {
+  const s = Math.max(Math.min(start, 2 * Math.PI), Math.PI)
+  const e = Math.max(Math.min(end, 2 * Math.PI), Math.PI)
+  if (e - s <= 0.001) return ''
+  const p1 = ep(irx, iry, s, rot), p2 = ep(irx, iry, e, rot)
+  return `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${irx} ${iry} 0 0 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${irx} ${iry} 0 0 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
 }
 
-// ─── Centre ────────────────────────────────────────────────────────────
-function Center({ count }: { count: number }) {
-  const holeMat = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#0a0a0a', metalness: 0.4, roughness: 0.4, clearcoat: 0.4, envMapIntensity: 0.6,
-  }), [])
-  return (
-    <>
-      <mesh position={[0, -DEPTH / 2 - 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]} material={holeMat}>
-        <circleGeometry args={[INNER_R, 96]} />
-      </mesh>
-      <Text position={[0, DEPTH / 2 + BEVEL + 0.012, 0.11]} rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.09} letterSpacing={0.15} color="#D4AF37" anchorX="center" anchorY="middle">
-        PORTF.
-      </Text>
-      <Text position={[0, DEPTH / 2 + BEVEL + 0.012, -0.1]} rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={0.2} color="#D4AF37" anchorX="center" anchorY="middle">
-        {count}
-      </Text>
-    </>
-  )
-}
-
-// ─── Éclairage : HDRI + lumière clé + rim light ───────────────────────────
-function Lighting() {
-  return (
-    <>
-      <ambientLight intensity={0.35} />
-      {/* Lumière clé */}
-      <directionalLight position={[2.5, 3.5, 2]} intensity={1.6} castShadow />
-      {/* Rim light — accroche le bord, détache le métal du fond */}
-      <directionalLight position={[-2.2, 1.4, -2.6]} intensity={1.3} color="#ffffff" />
-      {/* Touche dorée très légère */}
-      <directionalLight position={[0.5, 1.2, 2.2]} intensity={0.15} color="#D4AF37" />
-    </>
-  )
-}
-
-// ─── Scène ─────────────────────────────────────────────────────────────
-function DonutScene({
-  data, hovTicker, onHov,
-}: {
-  data: { ticker: string; pct: number; valeur?: number }[]
-  hovTicker: string | null
-  onHov: (t: string | null) => void
-}) {
-  const [clicked, setClicked] = useState<string | null>(null)
-  const active = hovTicker ?? clicked
-
-  const segs = useMemo(() => {
-    const total = data.reduce((s, d) => s + d.pct, 0)
-    let cum = -Math.PI / 2
-    return data.map((d, i) => {
-      const pct = total > 0 ? (d.pct / total) * 100 : 0
-      const sweep = (pct / 100) * 2 * Math.PI - GAP
-      const start = cum + GAP / 2
-      const end = start + Math.max(sweep, 0.001)
-      cum += (pct / 100) * 2 * Math.PI
-      return {
-        ticker: d.ticker, pct, start, end, mid: (start + end) / 2,
-        finish: finishFor(d.ticker, i),
-      }
-    })
-  }, [data])
-
-  return (
-    <>
-      <Lighting />
-      <Suspense fallback={null}>
-        {/* HDRI — indispensable pour des reflets métalliques crédibles */}
-        <Environment preset="city" background={false} />
-      </Suspense>
-
-      {segs.map((s, i) => (
-        <Slice
-          key={s.ticker}
-          seg={s}
-          active={active === s.ticker}
-          onEnter={() => onHov(s.ticker)}
-          onLeave={() => onHov(null)}
-          onClick={() => setClicked(prev => prev === s.ticker ? null : s.ticker)}
-        />
-      ))}
-      <Center count={segs.length} />
-
-      {/* Ombre douce sous le donut */}
-      <ContactShadows position={[0, -DEPTH / 2 - 0.01, 0]} opacity={0.55} scale={4.5} blur={2.4} far={1.4} color="#000000" />
-    </>
-  )
-}
-
-// ─── Export ────────────────────────────────────────────────────────────
 export default function Donut3D({
   data, hovTicker: hovTickerProp, onHov: onHovProp,
 }: {
@@ -266,30 +80,115 @@ export default function Donut3D({
   hovTicker?: string | null
   onHov?: (t: string | null) => void
 }) {
+  const uid = useId().replace(/:/g, 'd')
   const [hovLocal, setHovLocal] = useState<string | null>(null)
+  const [clicked, setClicked] = useState<string | null>(null)
   const hovTicker = hovTickerProp !== undefined ? hovTickerProp : hovLocal
   const onHov = onHovProp ?? setHovLocal
+  const active = hovTicker ?? clicked
+
+  const VW = 280, cy = 80, cx = VW / 2
+  const RX = 118, RY = 70
+  const rxi = 50, ryi = 30
+  const H = 20
+  const EXPLODE = 7
+  const GAP = 0.03
+  const ROT = -Math.PI / 2
+  const svgH = cy + H + 40
+
+  const total = data.reduce((s, d) => s + d.pct, 0)
+  let cum = 0
+  const segs = data.map((d, i) => {
+    const pct = total > 0 ? (d.pct / total) * 100 : 0
+    const sweep = (pct / 100) * 2 * Math.PI - GAP
+    const start = cum + GAP / 2
+    const end = start + Math.max(sweep, 0.001)
+    cum += (pct / 100) * 2 * Math.PI
+    const mid = (start + end) / 2
+    return { ticker: d.ticker, pct, valeur: d.valeur, start, end, mid, color: colorFor(d.ticker, i) }
+  })
+
+  // Anneau de fond plein (0 → 2π, sans gap) — comble tout espace résiduel
+  // entre les tranches, notamment au point de couture dernière/première tranche.
+  const backingD = pieTop(0.0005, 2 * Math.PI - 0.0005, RX, RY, rxi, ryi, ROT)
 
   return (
-    <div style={{
-      width: '100%', maxWidth: 260, margin: '0 auto 28px',
-      aspectRatio: '1 / 0.85',
-      borderRadius: 20, overflow: 'hidden',
-      background: 'transparent',
-    }}>
-      <Canvas
-        shadows
-        dpr={[1, 2]}
-        camera={{ position: [0, 3.6, 4.4], fov: 30 }}
-        gl={{ alpha: true, antialias: true, premultipliedAlpha: false }}
-        style={{ background: 'transparent' }}
-        onCreated={({ gl, scene }) => {
-          gl.setClearColor(0x000000, 0)
-          scene.background = null
-        }}
-      >
-        <DonutScene data={data} hovTicker={hovTicker} onHov={onHov} />
-      </Canvas>
+    <div style={{ width: '100%', maxWidth: 230, margin: '0 auto 28px' }}>
+      <svg width="100%" viewBox={`0 0 ${VW} ${svgH}`}
+        style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id={`${uid}-gl`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.20)" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+          </linearGradient>
+        </defs>
+
+        {/* Ombre au sol */}
+        <ellipse cx={cx} cy={cy + H + 16} rx={RX * 0.82} ry={9}
+          fill="rgba(0,0,0,0.55)" opacity={0.18}
+          style={{ filter: 'blur(18px)' }} />
+
+        {/* Anneau de fond — centré sur le donut, masque les micro-espaces
+            entre tranches (IMPORTANT : bien wrappé dans le translate ici,
+            c'est l'oubli de ce translate qui causait le bug précédent) */}
+        {backingD && (
+          <g transform={`translate(${cx} ${cy})`}>
+            <path d={backingD} fill="#2a2a2a" />
+          </g>
+        )}
+
+        {/* Segments */}
+        {segs.map((s, i) => {
+          const isA = active === s.ticker
+          const ex = isA ? Math.cos(s.mid + ROT) * EXPLODE : 0
+          const ey = isA ? Math.sin(s.mid + ROT) * EXPLODE : 0
+          const outerD = pieOuter(s.start, s.end, RX, RY, H, ROT)
+          const innerD = pieInner(s.start, s.end, rxi, ryi, H, ROT)
+          const topD = pieTop(s.start, s.end, RX, RY, rxi, ryi, ROT)
+          const lp = ep(RX * 0.63, RY * 0.63, s.mid, ROT)
+          return (
+            <g key={s.ticker}
+              transform={`translate(${(cx + ex).toFixed(1)} ${(cy + ey).toFixed(1)}) scale(${isA ? 1.04 : 1})`}
+              style={{
+                cursor: 'pointer',
+                filter: isA
+                  ? `drop-shadow(0 10px 22px rgba(0,0,0,.5)) drop-shadow(0 0 12px ${s.color}88)`
+                  : 'drop-shadow(0 3px 8px rgba(0,0,0,.3))',
+                transition: 'transform 220ms ease, filter 220ms ease',
+              }}
+              onMouseEnter={() => onHov(s.ticker)}
+              onMouseLeave={() => onHov(null)}
+              onClick={() => setClicked(p => p === s.ticker ? null : s.ticker)}
+              onTouchStart={e => { e.preventDefault(); onHov(s.ticker) }}
+              onTouchEnd={() => onHov(null)}>
+              {outerD && <path d={outerD} fill={darken(s.color, 0.72)} />}
+              {innerD && <path d={innerD} fill={darken(s.color, 0.58)} />}
+              <path d={topD} fill={lighten(s.color, 0.1)} stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} />
+              <path d={topD} fill={`url(#${uid}-gl)`} />
+              {s.end - s.start > 0.20 && (
+                <text x={lp.x.toFixed(1)} y={lp.y.toFixed(1)}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fontFamily="Inter,system-ui,monospace"
+                  fontSize={10} fontWeight={700} fill="white"
+                  style={{ pointerEvents: 'none', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,1))' }}>
+                  {s.pct.toFixed(0)}%
+                </text>
+              )}
+            </g>
+          )
+        })}
+
+        {/* Trou central — une seule ellipse, alignée exactement sur la
+            découpe des faces supérieures */}
+        <ellipse cx={cx} cy={cy} rx={rxi} ry={ryi}
+          fill="#050505" stroke="rgba(255,255,255,0.06)" strokeWidth={1} />
+        <text x={cx} y={cy - 4} textAnchor="middle"
+          fontFamily="Inter,system-ui" fontSize={7} fontWeight={700}
+          letterSpacing="0.14em" fill="#D4AF37" opacity={0.85}>PORTF.</text>
+        <text x={cx} y={cy + 9} textAnchor="middle"
+          fontFamily="Inter,monospace" fontSize={13} fontWeight={700}
+          fill="#D4AF37" opacity={0.85}>{segs.length}</text>
+      </svg>
     </div>
   )
 }
