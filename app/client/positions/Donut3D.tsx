@@ -142,9 +142,14 @@ export default function Donut3D({
           const isA = active === s.ticker
           const ex = isA ? Math.cos(s.mid + ROT) * EXPLODE : 0
           const ey = isA ? Math.sin(s.mid + ROT) * EXPLODE : 0
-          const outerD = pieOuter(s.start, s.end, RX, RY, H, ROT)
-          const innerD = pieInner(s.start, s.end, rxi, ryi, H, ROT)
-          const topD = pieTop(s.start, s.end, RX, RY, rxi, ryi, ROT)
+          // Léger chevauchement (pas juste un espace réduit) : élimine tout
+          // filet d'anti-aliasing entre tranches adjacentes, quel que soit
+          // l'endroit où il se produirait sur le cercle.
+          const OVERLAP = 0.015
+          const rs = s.start - OVERLAP, re = s.end + OVERLAP
+          const outerD = pieOuter(rs, re, RX, RY, H, ROT)
+          const innerD = pieInner(rs, re, rxi, ryi, H, ROT)
+          const topD = pieTop(rs, re, RX, RY, rxi, ryi, ROT)
           const lp = ep(RX * 0.63, RY * 0.63, s.mid, ROT)
           return (
             <g key={s.ticker}
