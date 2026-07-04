@@ -55,28 +55,41 @@ function pieTop(start: number, end: number, rx: number, ry: number, irx: number,
   return `M${o1.x.toFixed(2)} ${o1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${o2.x.toFixed(2)} ${o2.y.toFixed(2)} L${i2.x.toFixed(2)} ${i2.y.toFixed(2)} A${irx} ${iry} 0 ${large} 0 ${i1.x.toFixed(2)} ${i1.y.toFixed(2)} Z`
 }
 
-// Paroi extérieure — visible UNIQUEMENT sur le demi-cercle avant [0, π]
-// (logique exacte du plugin Donut3D.js original)
-function pieOuter(start: number, end: number, rx: number, ry: number, h: number, rot: number): string {
-  // Clipper à [0, π] dans l'espace NON-rotaté (angles absolus)
-  const sa = start > Math.PI ? Math.PI : start
-  const ea = end   > Math.PI ? Math.PI : end
-  if (ea - sa <= 0.001) return ''
-  const large = ea - sa > Math.PI ? 1 : 0
-  const p1 = ep(rx, ry, sa, rot), p2 = ep(rx, ry, ea, rot)
-  return `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 ${large} 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
+// Frontières où le donut passe la médiane horizontale, EN TENANT COMPTE
+// de la rotation (ROT). C'est ça qui manquait avant : comparer l'angle
+// brut à 0/π sans corriger pour ROT donnait une frontière fausse dès
+// qu'on tournait le repère.
+const VIS_A = Math.PI / 2      // -ROT
+const VIS_B = 3 * Math.PI / 2  // π - ROT
+const TRANS_OVERLAP = 0.02     // chevauchement au point de transition avant/arrière
+
+function arcPath(start: number, end: number, rx: number, ry: number, rot: number, h: number, innerSide: boolean): string {
+  const large = end - start > Math.PI ? 1 : 0
+  const p1 = ep(rx, ry, start, rot), p2 = ep(rx, ry, end, rot)
+  return innerSide
+    ? `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${rx} ${ry} 0 ${large} 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
+    : `M${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} A${rx} ${ry} 0 ${large} 1 ${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} L${p2.x.toFixed(2)} ${p2.y.toFixed(2)} A${rx} ${ry} 0 ${large} 0 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`
 }
 
-// Paroi intérieure — visible UNIQUEMENT sur le demi-cercle arrière [π, 2π]
-// (logique exacte du plugin Donut3D.js original)
-function pieInner(start: number, end: number, irx: number, iry: number, h: number, rot: number): string {
-  // Clipper à [π, 2π] dans l'espace NON-rotaté (angles absolus)
-  const sa = start < Math.PI ? Math.PI : start
-  const ea = end   < Math.PI ? Math.PI : end
-  if (ea - sa <= 0.001) return ''
-  const large = ea - sa > Math.PI ? 1 : 0
-  const p1 = ep(irx, iry, sa, rot), p2 = ep(irx, iry, ea, rot)
-  return `M${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A${irx} ${iry} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L${p2.x.toFixed(2)} ${(h + p2.y).toFixed(2)} A${irx} ${iry} 0 ${large} 0 ${p1.x.toFixed(2)} ${(h + p1.y).toFixed(2)} Z`
+// Paroi extérieure — visible EN DESSOUS de la médiane horizontale (une
+// seule zone connexe, un simple clip suffit).
+function pieOuter(start: number, end: number, rx: number, ry: number, h: number, rot: number): string {
+  const s = Math.max(start, VIS_A - TRANS_OVERLAP), e = Math.min(end, VIS_B + TRANS_OVERLAP)
+  if (e - s <= 0.001) return ''
+  return arcPath(s, e, rx, ry, rot, h, false)
+}
+
+// Paroi intérieure (fond du trou) — visible AU-DESSUS de la médiane
+// horizontale. Cette zone est en DEUX morceaux séparés ([0,VIS_A] et
+// [VIS_B,2π]) : une grosse tranche peut traverser la médiane deux fois,
+// donc on renvoie jusqu'à deux chemins au lieu d'un seul.
+function pieInner(start: number, end: number, irx: number, iry: number, h: number, rot: number): string[] {
+  const paths: string[] = []
+  const s1 = Math.max(start, 0), e1 = Math.min(end, VIS_A + TRANS_OVERLAP)
+  if (e1 - s1 > 0.001) paths.push(arcPath(s1, e1, irx, iry, rot, h, true))
+  const s2 = Math.max(start, VIS_B - TRANS_OVERLAP), e2 = Math.min(end, 2 * Math.PI)
+  if (e2 - s2 > 0.001) paths.push(arcPath(s2, e2, irx, iry, rot, h, true))
+  return paths
 }
 
 export default function Donut3D({
@@ -116,6 +129,7 @@ export default function Donut3D({
 
   // Anneau de fond plein (0 → 2π, sans gap) — comble tout espace résiduel
   // entre les tranches, notamment au point de couture dernière/première tranche.
+  const backingD = pieTop(0.0005, 2 * Math.PI - 0.0005, RX, RY, rxi, ryi, ROT)
 
   return (
     <div style={{ width: '100%', maxWidth: 230, margin: '0 auto 28px' }}>
@@ -136,10 +150,11 @@ export default function Donut3D({
         {/* Anneau de fond — centré sur le donut, masque les micro-espaces
             entre tranches (IMPORTANT : bien wrappé dans le translate ici,
             c'est l'oubli de ce translate qui causait le bug précédent) */}
-
-        {/* Fond de l'anneau — masque les artefacts entre tranches */}
-        <ellipse cx={cx} cy={cy} rx={RX + 1} ry={RY + 1} fill="#141414" />
-        <ellipse cx={cx} cy={cy} rx={rxi - 1} ry={ryi - 1} fill="#141414" />
+        {backingD && (
+          <g transform={`translate(${cx} ${cy})`}>
+            <path d={backingD} fill="#2a2a2a" />
+          </g>
+        )}
 
         {/* Segments */}
         {segs.map((s, i) => {
@@ -149,8 +164,8 @@ export default function Donut3D({
           // Léger chevauchement (pas juste un espace réduit) : élimine tout
           // filet d'anti-aliasing entre tranches adjacentes, quel que soit
           // l'endroit où il se produirait sur le cercle.
-          const OVERLAP = 0.004
-          const WALL_OVERLAP = 0.003
+          const OVERLAP = 0.05
+          const WALL_OVERLAP = 0.05
           const rs = s.start - OVERLAP, re = s.end + OVERLAP
           const ws = s.start - WALL_OVERLAP, we = s.end + WALL_OVERLAP
           const outerD = pieOuter(ws, we, RX, RY, H, ROT)
@@ -173,8 +188,8 @@ export default function Donut3D({
               onTouchStart={e => { e.preventDefault(); onHov(s.ticker) }}
               onTouchEnd={() => onHov(null)}>
               {outerD && <path d={outerD} fill={darken(s.color, 0.72)} />}
-              {innerD && <path d={innerD} fill={darken(s.color, 0.58)} />}
-              <path d={topD} fill={lighten(s.color, 0.1)} stroke="rgba(0,0,0,0.35)" strokeWidth={2} />
+              {innerD.map((d, k) => <path key={`in-${k}`} d={d} fill={darken(s.color, 0.58)} />)}
+              <path d={topD} fill={lighten(s.color, 0.1)} />
               <path d={topD} fill={`url(#${uid}-gl)`} />
               {s.end - s.start > 0.20 && (
                 <text x={lp.x.toFixed(1)} y={lp.y.toFixed(1)}
