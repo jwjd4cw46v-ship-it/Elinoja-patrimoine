@@ -25,7 +25,8 @@ export function usePushNotifications() {
     const sub = existing ?? await reg.pushManager.subscribe({
       userVisibleOnly: true,
       // Remplacez la ligne 27 par celle-ci :
-applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!) as unknown as Uint8Array,
+applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!).buffer as ArrayBuffer,
+
 
     })
 
