@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bell, LogOut, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
+import { LogOut, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import type { Profile } from '@/types'
-import { NotifPanel } from '@/components/watchlist/NotifPanel'
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 interface Market {
   isin:       string
@@ -20,30 +20,12 @@ interface Market {
   }
 }
 
-export interface AlertLog {
-  id:      string
-  type:    'low' | 'high'
-  current: number
-  low:     number
-  high:    number
-  time:    string
-}
-
 const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 'BT', 'PGH', 'STB']
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
   const [menuOpen,   setMenuOpen]   = useState(false)
-  const [notifOpen,  setNotifOpen]  = useState(false)
   const [markets,    setMarkets]    = useState<Market[]>([])
   const [loading,    setLoading]    = useState(true)
-  const [countLow,   setCountLow]   = useState(0)
-  const [countHigh,  setCountHigh]  = useState(0)
-  const [logs,       setLogs]       = useState<AlertLog[]>([])
-  const [popLow,     setPopLow]     = useState(false)
-  const [popHigh,    setPopHigh]    = useState(false)
-
-  // Mémoire franchissements — évite les doublons entre polls
-  const triggered = useRef<Record<string, { low: boolean; high: boolean }>>({})
 
   const router   = useRouter()
   const supabase = createClient()
@@ -59,52 +41,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
       setMarkets(data.markets)
       setLoading(false)
 
-      // FIX : lecture depuis 'watchlists' avec les bonnes colonnes
-      const { data: alertes } = await supabase
-        .from('watchlists')
-        .select('ticker, alert_price_low, alert_price_high')
-        .eq('user_id', profile.id)
-
-      if (!alertes?.length) return
-
-      const now = new Date()
-      const timeStr = now.toLocaleTimeString('fr-FR', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-      })
-
-      data.markets.forEach((m: Market) => {
-        const ticker = m.referentiel?.ticker?.toUpperCase()
-        const alerte = alertes.find(a => a.ticker?.toUpperCase() === ticker)
-        if (!alerte) return
-
-        const current = m.last
-        // FIX : bonnes colonnes
-        const low     = alerte.alert_price_low  ?? 0
-        const high    = alerte.alert_price_high ?? 0
-        const mem     = triggered.current[ticker] ?? { low: false, high: false }
-
-        // FIX : condition <= au lieu de < (alerte quand cours touche le seuil)
-        if (low > 0 && current <= low && !mem.low) {
-          triggered.current[ticker] = { ...mem, low: true }
-          setCountLow(c => c + 1)
-          setPopLow(true)
-          setTimeout(() => setPopLow(false), 420)
-          setLogs(l => [...l, { id: ticker, type: 'low', current, low, high, time: timeStr }])
-        } else if (current > low) {
-          triggered.current[ticker] = { ...mem, low: false }
-        }
-
-        // FIX : condition >= au lieu de > (alerte quand cours touche le seuil)
-        if (high > 0 && current >= high && !mem.high) {
-          triggered.current[ticker] = { ...triggered.current[ticker], high: true }
-          setCountHigh(c => c + 1)
-          setPopHigh(true)
-          setTimeout(() => setPopHigh(false), 420)
-          setLogs(l => [...l, { id: ticker, type: 'high', current, low, high, time: timeStr }])
-        } else if (current < high) {
-          triggered.current[ticker] = { ...triggered.current[ticker], high: false }
-        }
-      })
+      // Détection franchissements gérée par le système de notifications
     } catch {
       // silencieux
     }
@@ -115,14 +52,6 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     const interval = setInterval(fetchMarkets, 60 * 1000)
     return () => clearInterval(interval)
   }, [])
-
-  function handleBellOpen() {
-    setNotifOpen(o => !o)
-    if (!notifOpen) {
-      setCountLow(0)
-      setCountHigh(0)
-    }
-  }
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -138,20 +67,58 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   ] as Market[]
 
   const tickerItems  = sorted.length > 0 ? [...sorted, ...sorted, ...sorted, ...sorted] : []
-  const animDuration = Math.max(30, sorted.length * 2.4)  // ~48s pour 20 items
-  const totalAlerts  = countLow + countHigh
-
+  const animDuration = Math.max(40, sorted.length * 3)
   return (
     <>
-<header
+      <style>{`
+        @keyframes ticker-scroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .ticker-track {
+          display: flex;
+          white-space: nowrap;
+          animation: ticker-scroll linear infinite;
+          will-change: transform;
+        }
+        .ticker-track:hover { animation-play-state: paused; }
+
+        @keyframes badge-pop {
+          0%   { transform: scale(1); }
+          40%  { transform: scale(1.5); }
+          70%  { transform: scale(0.88); }
+          100% { transform: scale(1); }
+        }
+        .badge-pop { animation: badge-pop 0.4s cubic-bezier(.36,.07,.19,.97); }
+
+        @keyframes bell-ring {
+          0%, 100% { transform: rotate(0deg); }
+          15%       { transform: rotate(12deg); }
+          30%       { transform: rotate(-10deg); }
+          45%       { transform: rotate(8deg); }
+          60%       { transform: rotate(-6deg); }
+          75%       { transform: rotate(4deg); }
+        }
+        .bell-ring { animation: bell-ring 0.6s ease; }
+
+        /* Mobile : padding-left pour le bouton hamburger fixe du sidebar */
+        @media (max-width: 767px) {
+          .client-header { padding-left: 62px !important; padding-right: 16px; }
+        }
+        @media (min-width: 768px) {
+          .client-header { padding-left: 24px; padding-right: 24px; }
+        }
+      `}</style>
+
+      <header
         className="flex items-center justify-between h-14 flex-shrink-0 border-b client-header"
         style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
 
 
         {/* ── Ticker Band ─────────────────────────────── */}
-        <div className="flex-1 min-w-0 overflow-hidden ticker-outer">
+        <div className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden mr-2">
           <span
-            className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden"
+            className="text-[10px] font-bold tracking-wider flex-shrink-0 hidden sm:block"
             style={{ color: '#5C5C5C' }}>
             MARCHÉ
           </span>
@@ -163,9 +130,10 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
               ))}
             </div>
           ) : (
-            <div
-              className="ticker-track"
-              style={{ animationDuration: `${animDuration}s`, gap: '20px', width: 'max-content' }}>
+            <div className="overflow-hidden flex-1">
+              <div
+                className="ticker-track"
+                style={{ animationDuration: `${animDuration}s`, gap: '20px' }}>
                 {tickerItems.map((m, i) => {
                   const color = m.change > 0 ? '#00C853' : m.change < 0 ? '#FF1744' : '#707070'
                   return (
@@ -190,91 +158,16 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
                     </span>
                   )
                 })}
+              </div>
             </div>
           )}
         </div>
 
         {/* ── Right actions ────────────────────────────── */}
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-1">
+        <div className="flex items-center gap-2 flex-shrink-0">
 
-          {/* ── Cloche avec badges ── */}
-          <div className="relative">
-            <button
-              onClick={handleBellOpen}
-              className={`relative p-2 rounded-lg transition-colors ${totalAlerts > 0 ? 'bell-ring' : ''}`}
-              style={{ color: totalAlerts > 0 ? '#D4AF37' : '#707070' }}>
-              <Bell size={16} />
-
-              {totalAlerts === 0 && (
-                <span
-                  className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full animate-pulse"
-                  style={{ background: '#D4AF37' }} />
-              )}
-
-              {countLow > 0 && (
-                <span
-                  className={popLow ? 'badge-pop' : ''}
-                  style={{
-                    position:   'absolute',
-                    bottom:     '0px',
-                    left:       '0px',
-                    background: '#FF3B3B',
-                    color:      '#fff',
-                    fontSize:   '9px',
-                    fontWeight: 700,
-                    minWidth:   '16px',
-                    height:     '16px',
-                    borderRadius: '8px',
-                    display:    'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding:    '0 3px',
-                    border:     '1.5px solid var(--noir-surface)',
-                    boxShadow:  '0 0 8px rgba(255,59,59,0.7)',
-                    lineHeight: 1,
-                    fontFamily: 'monospace',
-                  }}>
-                  {countLow}
-                </span>
-              )}
-
-              {countHigh > 0 && (
-                <span
-                  className={popHigh ? 'badge-pop' : ''}
-                  style={{
-                    position:   'absolute',
-                    bottom:     '0px',
-                    right:      '0px',
-                    background: '#00C853',
-                    color:      '#fff',
-                    fontSize:   '9px',
-                    fontWeight: 700,
-                    minWidth:   '16px',
-                    height:     '16px',
-                    borderRadius: '8px',
-                    display:    'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding:    '0 3px',
-                    border:     '1.5px solid var(--noir-surface)',
-                    boxShadow:  '0 0 8px rgba(0,200,83,0.7)',
-                    lineHeight: 1,
-                    fontFamily: 'monospace',
-                  }}>
-                  {countHigh}
-                </span>
-              )}
-            </button>
-
-            <AnimatePresence>
-              {notifOpen && (
-                <NotifPanel
-                  logs={logs}
-                  onClose={() => setNotifOpen(false)}
-                />
-              )}
-            </AnimatePresence>
-          </div>
+          {/* ── Centre de notifications ── */}
+          <NotificationBell userId={profile.id} />
 
           {/* ── Menu utilisateur ── */}
           <div className="relative">
