@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import ClientSidebar from '@/components/client/ClientSidebar'
 import ClientHeader from '@/components/client/ClientHeader'
 import { ElinojaAI } from '@/components/ai/ElinojaAI'
+import PWARegister from '@/components/PWARegister'
 
 export default async function ClientLayout({
   children,
@@ -25,10 +26,7 @@ export default async function ClientLayout({
     <div
       className="flex"
       style={{ height: '100dvh', overflow: 'hidden', background: 'var(--noir-primary)' }}>
-      <div className="hidden md:block" style={{ height: '100%', flexShrink: 0 } as React.CSSProperties}>
-        <ClientSidebar profile={profile} />
-      </div>
-      <div className="md:hidden">
+      <div style={{ height: '100%', flexShrink: 0 } as React.CSSProperties}>
         <ClientSidebar profile={profile} />
       </div>
       <div className="flex-1 flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
@@ -36,6 +34,7 @@ export default async function ClientLayout({
         <main className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
       <ElinojaAI profile={profile} />
+      <PWARegister />
     </div>
   )
 }
