@@ -11,16 +11,36 @@ export default async function ClientLayout({
   children: React.ReactNode
 }) {
   const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/auth/login')
+  
+  // 1. Tentative sécurisée de récupération de session
+  let session = null
+  try {
+    const { data } = await supabase.auth.getSession()
+    session = data.session
+  } catch (error) {
+    // En cas d'erreur de cookie ou de token (refresh_token_not_found), 
+    // on ignore l'erreur pour forcer la redirection vers le login.
+    session = null
+  }
 
+  // 2. Vérification de l'utilisateur actif via le serveur (plus sécurisé)
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    redirect('/auth/login')
+  }
+
+  // 3. Récupération du profil
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
-  if (!profile || !profile.is_active) redirect('/auth/login?error=account_disabled')
+  // 4. Vérification de l'état du compte
+  if (!profile || !profile.is_active) {
+    redirect('/auth/login?error=account_disabled')
+  }
 
   return (
     <div
@@ -38,3 +58,4 @@ export default async function ClientLayout({
     </div>
   )
 }
+
