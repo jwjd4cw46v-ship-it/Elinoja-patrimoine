@@ -20,7 +20,7 @@ export default function AdminForumPage() {
 
   async function fetchPosts() {
     const { data } = await supabase.from('forum_posts')
-      .select('*, author:profiles(full_name, role)')
+      .select('*, author:profiles(full_name, role, badge)')
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
     if (data) setPosts(data as any)
@@ -29,7 +29,7 @@ export default function AdminForumPage() {
 
   async function fetchReplies(postId: string) {
     const { data } = await supabase.from('forum_replies')
-      .select('*, author:profiles(full_name, role)')
+      .select('*, author:profiles(full_name, role, badge)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
     if (data) setReplies(data as any)
@@ -83,6 +83,26 @@ export default function AdminForumPage() {
     fetchPosts()
   }
 
+  // ── Badges auteur (même logique que le forum client) ──────────
+  const BADGES: Record<string, { label: string; emoji: string; color: string }> = {
+    expert:      { label: 'Expert',     emoji: '⭐', color: '#D4AF37' },
+    moderateur:  { label: 'Modérateur', emoji: '🛡️', color: '#3B82F6' },
+    verifie:     { label: 'Vérifié',    emoji: '✓',  color: '#22C55E' },
+  }
+  function AuthorBadge({ role, badge }: { role?: string; badge?: string | null }) {
+    if (role === 'admin') {
+      return <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
+    }
+    const cfg = badge ? BADGES[badge] : null
+    if (!cfg) return null
+    return (
+      <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded"
+        style={{ color: cfg.color, background: `${cfg.color}18`, border: `1px solid ${cfg.color}30` }}>
+        {cfg.emoji} {cfg.label}
+      </span>
+    )
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -95,7 +115,7 @@ export default function AdminForumPage() {
           <div className="p-8 space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="skeleton h-10 w-full rounded-lg" />)}</div>
         ) : (
           <table className="table-premium">
-            <thead><tr><th>Discussion</th><th>Auteur</th><th>Réponses</th><th>Statut</th><th>Date</th><th style={{ width: 100 }}>Actions</th></tr></thead>
+            <thead><tr><th>Discussion</th><th>Auteur</th><th>Vues</th><th>Réponses</th><th>Statut</th><th>Date</th><th style={{ width: 100 }}>Actions</th></tr></thead>
             <tbody>
               {posts.map((post, i) => (
                 <motion.tr key={post.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
@@ -107,7 +127,13 @@ export default function AdminForumPage() {
                       <span className="text-sm font-medium line-clamp-1" style={{ color: '#F5F5F5', maxWidth: 280 }}>{post.title}</span>
                     </div>
                   </td>
-                  <td><span className="text-xs" style={{ color: '#A0A0A0' }}>{(post.author as any)?.full_name}</span></td>
+                  <td>
+                    <span className="text-xs" style={{ color: '#A0A0A0' }}>
+                      {(post.author as any)?.full_name}
+                      <AuthorBadge role={(post.author as any)?.role} badge={(post.author as any)?.badge} />
+                    </span>
+                  </td>
+                  <td><span className="text-xs" style={{ color: '#707070' }}>{post.views_count || 0}</span></td>
                   <td><span className="text-xs" style={{ color: '#707070' }}>{post.replies_count || 0}</span></td>
                   <td>
                     <div className="flex gap-1">
@@ -164,9 +190,7 @@ export default function AdminForumPage() {
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-medium" style={{ color: '#A0A0A0' }}>
                         {(r.author as any)?.full_name}
-                        {(r.author as any)?.role === 'admin' && (
-                          <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
-                        )}
+                        <AuthorBadge role={(r.author as any)?.role} badge={(r.author as any)?.badge} />
                       </span>
                       <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
                         {formatDistanceToNow(new Date(r.created_at), { locale: fr, addSuffix: true })}
