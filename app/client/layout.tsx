@@ -48,20 +48,18 @@ export default async function ClientLayout({
     redirect('/auth/login?error=account_disabled')
   }
 
-  return (
-    <div
-      className="flex"
-      style={{ height: '100dvh', overflow: 'hidden', background: 'var(--noir-primary)' }}>
-      <div style={{ height: '100%', flexShrink: 0 } as React.CSSProperties}>
+    return (
+    <div className="flex" style={{ height: '100dvh', background: 'var(--noir-primary)' }}>
+      <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      {/* 
         <ClientSidebar profile={profile} />
-      </div>
-      <div className="flex-1 flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
         <ClientHeader profile={profile} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
-      </div>
-      <ElinojaAI profile={profile} />
-      <PWARegister />
+        <ElinojaAI profile={profile} />
+        <PWARegister />
+      */}
     </div>
+  )
+
   )
 }
 
