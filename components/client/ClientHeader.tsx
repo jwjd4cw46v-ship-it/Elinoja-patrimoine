@@ -28,7 +28,6 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   if (!profile) return null
   
 
-export default function ClientHeader({ profile }: { profile: Profile }) {
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [markets,    setMarkets]    = useState<Market[]>([])
   const [loading,    setLoading]    = useState(true)
