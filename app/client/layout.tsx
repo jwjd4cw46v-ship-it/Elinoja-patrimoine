@@ -53,8 +53,8 @@ export default async function ClientLayout({
       <main className="flex-1 overflow-y-auto p-6">{children}</main>
       {
         <ClientSidebar profile={profile} />
-        /*
         <ClientHeader profile={profile} />
+      /*
         <ElinojaAI profile={profile} />
         <PWARegister />
       */}
