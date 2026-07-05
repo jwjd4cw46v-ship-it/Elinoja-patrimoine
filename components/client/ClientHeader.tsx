@@ -24,9 +24,9 @@ const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 
 // ... vos imports restent inchangés
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
-  // AJOUTEZ CETTE LIGNE JUSTE ICI (Ligne 24 environ, avant les hooks)
+  
   if (!profile) return null;
-  // ... reste de votre code
+  
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
   const [menuOpen,   setMenuOpen]   = useState(false)
