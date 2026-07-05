@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X } from 'lucide-react'
+import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
@@ -23,6 +23,26 @@ function categoryEmoji(cat?: string) {
   return CATEGORIES.find(c => c.key === cat)?.emoji ?? ''
 }
 
+// ── Badges auteur ────────────────────────────────────
+const BADGES: Record<string, { label: string; emoji: string; color: string }> = {
+  expert:      { label: 'Expert',     emoji: '⭐', color: '#D4AF37' },
+  moderateur:  { label: 'Modérateur', emoji: '🛡️', color: '#3B82F6' },
+  verifie:     { label: 'Vérifié',    emoji: '✓',  color: '#22C55E' },
+}
+function AuthorBadge({ role, badge }: { role?: string; badge?: string | null }) {
+  if (role === 'admin') {
+    return <span className="ml-1 text-[10px] font-bold badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
+  }
+  const cfg = badge ? BADGES[badge] : null
+  if (!cfg) return null
+  return (
+    <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded"
+      style={{ color: cfg.color, background: `${cfg.color}18`, border: `1px solid ${cfg.color}30` }}>
+      {cfg.emoji} {cfg.label}
+    </span>
+  )
+}
+
 export default function ForumPage() {
   const [posts, setPosts]           = useState<ForumPost[]>([])
   const [loading, setLoading]       = useState(true)
@@ -38,7 +58,7 @@ export default function ForumPage() {
   const fetchPosts = useCallback(async () => {
     const { data } = await supabase
       .from('forum_posts')
-      .select('*, author:profiles(full_name, role)')
+      .select('*, author:profiles(full_name, role, badge)')
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false })
     if (data) setPosts(data as any)
@@ -85,7 +105,7 @@ export default function ForumPage() {
   async function fetchReplies(postId: string) {
     const { data } = await supabase
       .from('forum_replies')
-      .select('*, author:profiles(full_name, role)')
+      .select('*, author:profiles(full_name, role, badge)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
     if (data) setReplies(data as any)
@@ -212,9 +232,7 @@ export default function ForumPage() {
             </div>
             <span className="text-xs" style={{ color: '#707070' }}>
               {(post.author as any)?.full_name}
-              {(post.author as any)?.role === 'admin' && (
-                <span className="ml-1 text-[10px] font-bold" style={{ color: '#D4AF37' }}>ADMIN</span>
-              )}
+              <AuthorBadge role={(post.author as any)?.role} badge={(post.author as any)?.badge} />
             </span>
           </div>
 
@@ -234,6 +252,10 @@ export default function ForumPage() {
 
           <div className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
             <Reply size={12} /> {post.replies_count || 0}
+          </div>
+
+          <div className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
+            <Eye size={12} /> {post.views_count || 0}
           </div>
         </div>
       </motion.div>
@@ -452,7 +474,10 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
               )}
               <span className="text-xs px-2 py-0.5 rounded"
                 style={{ background: 'var(--noir-elevated)', color: '#707070' }}>
-                {post.category}
+                {categoryEmoji(post.category)} {post.category}
+              </span>
+              <span className="flex items-center gap-1 text-xs" style={{ color: '#5C5C5C' }}>
+                <Eye size={12} /> {post.views_count || 0}
               </span>
             </div>
             <h2 className="font-semibold" style={{ color: '#F5F5F5' }}>{post.title}</h2>
@@ -471,9 +496,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
               </div>
               <span className="text-sm font-medium" style={{ color: '#A0A0A0' }}>
                 {(post.author as any)?.full_name}
-                {(post.author as any)?.role === 'admin' && (
-                  <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
-                )}
+                <AuthorBadge role={(post.author as any)?.role} badge={(post.author as any)?.badge} />
               </span>
               <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
                 {formatDistanceToNow(new Date(post.created_at), { locale: fr, addSuffix: true })}
@@ -520,9 +543,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
                 </div>
                 <span className="text-xs font-medium" style={{ color: '#A0A0A0' }}>
                   {(r.author as any)?.full_name}
-                  {(r.author as any)?.role === 'admin' && (
-                    <span className="ml-1 text-[10px] badge-watch px-1.5 py-0.5 rounded">ADMIN</span>
-                  )}
+                  <AuthorBadge role={(r.author as any)?.role} badge={(r.author as any)?.badge} />
                 </span>
                 <span className="text-xs ml-auto" style={{ color: '#3A3A3A' }}>
                   {formatDistanceToNow(new Date(r.created_at), { locale: fr, addSuffix: true })}
