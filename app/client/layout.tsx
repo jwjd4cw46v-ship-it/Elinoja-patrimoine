@@ -58,7 +58,7 @@ export default async function ClientLayout({
         <PWARegister />
       */}
     </div>
-  )
+  
 
   )
 }
