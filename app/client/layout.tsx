@@ -30,12 +30,18 @@ export default async function ClientLayout({
     redirect('/auth/login')
   }
 
-  // 3. Récupération du profil
-  const { data: profile } = await supabase
+    // 3. Récupération du profil
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
+
+  // Si une erreur survient (autre que "not found") ou si le profil est invalide
+  if (profileError || !profile || !profile.is_active) {
+    redirect('/auth/login?error=account_disabled')
+  }
+
 
   // 4. Vérification de l'état du compte
   if (!profile || !profile.is_active) {
