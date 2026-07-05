@@ -26,9 +26,6 @@ const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 
 export default function ClientHeader({ profile }: { profile: Profile }) {
   // AJOUTEZ CETTE LIGNE JUSTE ICI (Ligne 24 environ, avant les hooks)
   if (!profile) return null;
-
-  const [menuOpen,   setMenuOpen]   = useState(false)
-  const [markets,    setMarkets]    = useState<Market[]>([])
   // ... reste de votre code
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
