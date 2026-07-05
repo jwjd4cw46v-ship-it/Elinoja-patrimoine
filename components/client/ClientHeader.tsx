@@ -25,7 +25,7 @@ const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
   
-  if (!profile) return null;
+  if (!profile) return null
   
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
