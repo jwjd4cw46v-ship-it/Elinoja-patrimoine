@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye } from 'lucide-react'
+import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye, Award, Clock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
@@ -52,6 +52,7 @@ export default function ForumPage() {
   const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null)
   const [userId, setUserId]         = useState<string | null>(null)
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
+  const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const supabase = createClient()
 
   // ── Charger les posts ──────────────────────────────
@@ -225,7 +226,8 @@ export default function ForumPage() {
 
         <div className="flex items-center gap-4 mt-3 pt-3 border-t"
           style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 cursor-pointer"
+            onClick={e => { e.stopPropagation(); setProfileUserId(post.author_id) }}>
             <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
               style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
               {(post.author as any)?.full_name?.charAt(0) || '?'}
@@ -378,7 +380,14 @@ export default function ForumPage() {
             onSubmitReply={submitReply}
             onLike={() => toggleLike(selectedPost)}
             onClose={() => { setSelectedPost(null); setReplies([]) }}
+            onOpenProfile={setProfileUserId}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {profileUserId && (
+          <ProfileCardModal userId={profileUserId} onClose={() => setProfileUserId(null)} />
         )}
       </AnimatePresence>
     </div>
@@ -445,7 +454,7 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }
 
 // ── Detail Post ────────────────────────────────────────────
-function PostDetailModal({ post, replies, replyText, submitting, isLiked, onReplyChange, onSubmitReply, onLike, onClose }: {
+function PostDetailModal({ post, replies, replyText, submitting, isLiked, onReplyChange, onSubmitReply, onLike, onClose, onOpenProfile }: {
   post: ForumPost
   replies: ForumReply[]
   replyText: string
@@ -455,6 +464,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
   onSubmitReply: () => void
   onLike: () => void
   onClose: () => void
+  onOpenProfile: (userId: string) => void
 }) {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -489,7 +499,8 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
           {/* Post original */}
           <div className="p-4 rounded-xl"
             style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-3 cursor-pointer"
+              onClick={() => onOpenProfile(post.author_id)}>
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
                 {(post.author as any)?.full_name?.charAt(0)}
@@ -532,7 +543,8 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
                 border: `1px solid ${(r.author as any)?.role === 'admin'
                   ? 'rgba(212,175,55,0.2)' : 'var(--noir-border)'}`,
               }}>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2 cursor-pointer"
+                onClick={() => onOpenProfile(r.author_id)}>
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
                   style={{
                     background: (r.author as any)?.role === 'admin'
@@ -572,6 +584,98 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
                   ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                   : <Reply size={14} />}
               </motion.button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// ── Fiche profil membre (avatar, badge, ancienneté, publications, réputation, dernière connexion) ──
+function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => void }) {
+  const [profile, setProfile] = useState<{
+    full_name: string; role: string; badge: string | null
+    created_at: string; last_sign_in_at: string | null; avatar_url: string | null
+  } | null>(null)
+  const [stats, setStats] = useState<{ publications_count: number; reputation: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const supabase = createClient()
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      const [{ data: p }, { data: s }] = await Promise.all([
+        supabase.from('profiles')
+          .select('full_name, role, badge, created_at, last_sign_in_at, avatar_url')
+          .eq('id', userId).single(),
+        supabase.rpc('get_profile_stats', { p_user_id: userId }),
+      ])
+      if (!cancelled) {
+        setProfile(p as any)
+        setStats(s as any)
+        setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [userId])
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.85)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }}
+        className="w-full max-w-xs rounded-2xl border overflow-hidden"
+        style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }}>
+
+        <div className="px-5 py-3 border-b flex items-center justify-end" style={{ borderColor: 'var(--noir-border)' }}>
+          <button onClick={onClose}><X size={16} style={{ color: '#5C5C5C' }} /></button>
+        </div>
+
+        {loading || !profile ? (
+          <div className="p-8 space-y-3">
+            <div className="skeleton h-16 w-16 rounded-full mx-auto" />
+            <div className="skeleton h-4 w-32 mx-auto rounded" />
+          </div>
+        ) : (
+          <div className="p-6 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center text-xl font-bold overflow-hidden"
+              style={{ background: 'rgba(212,175,55,0.15)', color: '#D4AF37' }}>
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                : profile.full_name?.charAt(0)}
+            </div>
+
+            <div>
+              <div className="font-semibold" style={{ color: '#F5F5F5' }}>
+                {profile.full_name}
+                <AuthorBadge role={profile.role} badge={profile.badge} />
+              </div>
+              <div className="text-xs mt-1" style={{ color: '#5C5C5C' }}>
+                Membre depuis {formatDistanceToNow(new Date(profile.created_at), { locale: fr })}
+              </div>
+              {profile.last_sign_in_at && (
+                <div className="text-xs mt-0.5 flex items-center justify-center gap-1" style={{ color: '#5C5C5C' }}>
+                  <Clock size={11} />
+                  Vu {formatDistanceToNow(new Date(profile.last_sign_in_at), { locale: fr, addSuffix: true })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-6 pt-3 border-t" style={{ borderColor: 'var(--noir-border)' }}>
+              <div>
+                <div className="text-lg font-bold" style={{ color: '#F5F5F5' }}>{stats?.publications_count ?? 0}</div>
+                <div className="text-[10px]" style={{ color: '#707070' }}>Publications</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold flex items-center gap-1 justify-center" style={{ color: '#D4AF37' }}>
+                  <Award size={14} /> {stats?.reputation ?? 0}
+                </div>
+                <div className="text-[10px]" style={{ color: '#707070' }}>Réputation</div>
+              </div>
             </div>
           </div>
         )}
