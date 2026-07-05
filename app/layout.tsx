@@ -14,10 +14,22 @@ export const metadata: Metadata = {
   description: 'Plateforme d\'analyses financières institutionnelles — Marchés tunisiens et internationaux',
   keywords: ['analyses financières', 'bourse', 'investissement', 'patrimoine', 'Tunisie', 'CMF'],
   authors: [{ name: 'ELINOJA PATRIMOINE' }],
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Elinoja',
+  },
   openGraph: {
     title: 'ELINOJA PATRIMOINE',
     description: 'Plateforme d\'analyses financières premium',
     type: 'website',
+  },
+  themeColor: '#D4AF37',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
   },
 }
 
@@ -28,6 +40,16 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" className="dark">
+      <head>
+        {/* PWA */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#D4AF37" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Elinoja" />
+        {/* Icons Apple */}
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+      </head>
       <body className={`${inter.variable} antialiased`}>
         {children}
         <Toaster
