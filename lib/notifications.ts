@@ -1,18 +1,29 @@
 import webpush from 'web-push'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-// VAPID keys — générer avec : npx web-push generate-vapid-keys
-// Ajouter dans Vercel : VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_MAILTO
-webpush.setVapidDetails(
-  process.env.VAPID_MAILTO!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
+// 1. Nettoyage et sécurisation des clés VAPID pour le processus de build
+const vapidMailto = process.env.VAPID_MAILTO || 'mailto:contact@example.com';
+const vapidPublicKey = (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '').trim().replace(/=+$/, '');
+const vapidPrivateKey = (process.env.VAPID_PRIVATE_KEY || '').trim().replace(/=+$/, '');
+
+// 2. Initialisation sécurisée uniquement si les clés sont présentes et valides
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webpush.setVapidDetails(
+      vapidMailto,
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+  } catch (error) {
+    console.error("Erreur lors de la configuration de web-push:", error);
+  }
+}
 
 const service = () => createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
 
 export type NotifType =
   | 'STOP_LOSS' | 'TAKE_PROFIT_R1' | 'TAKE_PROFIT_R2' | 'TAKE_PROFIT_R3'
