@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import {
   calculerRepartition, calculerStops, calculerPnlVente,
-  detecterAlertes, labelAlerte, messageCloture, prochainStop,
+  labelAlerte, messageCloture, prochainStop,
   type Position, type AlertePosition,
 } from '@/lib/positions-engine'
 import Link from 'next/link'
@@ -1230,6 +1230,12 @@ export default function PositionsDashboard() {
     setLoading(false)
   }
 
+  // NOTE : la détection des franchissements (stop, R1/R2/R3, runner) ne se
+  // fait plus ici. Elle est déléguée au job serveur `/api/cron/check-alerts`
+  // (appelé périodiquement par cron-job.org), qui écrit dans
+  // `position_alertes` et envoie les push. Ce composant ne fait plus que
+  // récupérer les cours pour l'affichage (P&L, %) et refléter en temps réel
+  // les lignes `position_alertes` créées côté serveur via Supabase Realtime.
   async function fetchCotations() {
     try {
       const res = await fetch('/api/cotations')
@@ -1243,61 +1249,7 @@ export default function PositionsDashboard() {
         if (nom && last != null) map[nom] = last
       })
       setCotations(map)
-      // Détecter et créer les alertes pour chaque position
-      await detecterEtCreerAlertes(map)
     } catch (err) { console.error('fetchCotations error:', err) }
-  }
-
-  async function detecterEtCreerAlertes(cotationsMap: Record<string, number>) {
-    try {
-      const { data: pos } = await supabase
-        .from('positions').select('*').neq('state', 'CLOSED')
-      const { data: alertesExist } = await supabase
-        .from('position_alertes').select('*').eq('is_acted', false)
-      if (!pos) return
-
-      for (const p of pos as Position[]) {
-        const prix = cotationsMap[p.ticker.toUpperCase()]
-        if (!prix) continue
-
-        const alertesDeja = (alertesExist || []).filter(a => a.position_id === p.id) as AlertePosition[]
-        const nouvelles   = detecterAlertes(p, prix, alertesDeja)
-
-        // Supprimer les alertes qui ne sont plus valides
-        // (le prix est revenu dans la zone normale depuis la dernière cotation)
-        for (const alerteDeja of alertesDeja) {
-          const encoreValide =
-            (alerteDeja.type === 'STOP_LOSS'      && prix <= alerteDeja.prix_trigger) ||
-            (alerteDeja.type === 'RUNNER_STOP'    && prix <= alerteDeja.prix_trigger) ||
-            (alerteDeja.type === 'TAKE_PROFIT_R1' && prix >= alerteDeja.prix_trigger) ||
-            (alerteDeja.type === 'TAKE_PROFIT_R2' && prix >= alerteDeja.prix_trigger) ||
-            (alerteDeja.type === 'TAKE_PROFIT_R3' && prix >= alerteDeja.prix_trigger)
-
-          if (!encoreValide) {
-            await supabase
-              .from('position_alertes')
-              .delete()
-              .eq('id', alerteDeja.id)
-          }
-        }
-
-        // Insérer les nouvelles alertes valides
-        for (const a of nouvelles) {
-          const { data: { user } } = await supabase.auth.getUser()
-          const { error: insErr } = await supabase.from('position_alertes').insert({
-            position_id:  p.id,
-            user_id:      user?.id ?? null,
-            type:         a.type,
-            prix_trigger: a.prix_trigger,
-            prix_marche:  prix,
-            is_read:      false,
-            is_acted:     false,
-          })
-          if (insErr) console.error('insert alerte error:', insErr.message, insErr.code)
-        }
-      }
-      if (pos.length > 0) fetchAll()
-    } catch (err) { console.error('detecterAlertes error:', err) }
   }
 
   useEffect(() => {
@@ -1306,7 +1258,8 @@ export default function PositionsDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'positions' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'position_alertes' }, fetchAll)
       .subscribe()
-    const timer = setInterval(fetchCotations, 15 * 60 * 1000)
+    // Rafraîchissement de l'affichage des cours uniquement (pas de détection ici)
+    const timer = setInterval(fetchCotations, 60 * 1000)
     return () => { supabase.removeChannel(ch); clearInterval(timer) }
   }, [])
 
