@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { AnimatePresence, motion } from 'framer-motion'
 import { LogOut, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import type { Profile } from '@/types'
-import NotificationBell from '@/components/notifications/NotificationBell'
 
 interface Market {
   isin:       string
@@ -31,7 +29,6 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   const router   = useRouter()
   const supabase = createClient()
 
-  // 1. Protection contre les erreurs d'hydratation sur Mobile
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -42,7 +39,6 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
       if (!res.ok) return
       const data = await res.json()
       if (!data || !Array.isArray(data.markets)) return
-
       setMarkets(data.markets)
       setLoading(false)
     } catch {
@@ -67,7 +63,6 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     router.push('/auth/login')
   }
 
-  // 2. Tri hautement sécurisé contre les valeurs null/undefined
   const sorted = [
     ...PRIORITY
       .map(p => markets.find(m => m?.referentiel?.ticker?.toUpperCase() === p))
@@ -131,8 +126,8 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Appel à la cloche sécurisé par l'existence de l'ID */}
-          {profile?.id && <NotificationBell userId={profile.id} />}
+          {/* NotificationBell commenté pour test */}
+          {/* {profile?.id && <NotificationBell userId={profile.id} />} */}
 
           <div className="relative">
             <button
@@ -145,20 +140,15 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
               <ChevronDown size={12} style={{ color: '#5C5C5C' }} />
             </button>
 
-            <AnimatePresence>
-              {menuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  className="absolute right-0 top-full mt-2 w-44 rounded-xl border z-50 py-1"
-                  style={{ background: 'var(--noir-elevated)', borderColor: 'var(--noir-border)' }}>
-                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-3 py-2 text-sm" style={{ color: '#FF1744' }}>
-                    <LogOut size={13} /> Déconnexion
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {menuOpen && (
+              <div
+                className="absolute right-0 top-full mt-2 w-44 rounded-xl border z-50 py-1"
+                style={{ background: 'var(--noir-elevated)', borderColor: 'var(--noir-border)' }}>
+                <button onClick={handleLogout} className="flex items-center gap-2 w-full px-3 py-2 text-sm" style={{ color: '#FF1744' }}>
+                  <LogOut size={13} /> Déconnexion
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
