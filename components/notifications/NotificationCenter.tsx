@@ -25,7 +25,6 @@ interface Props {
 }
 
 export default function NotificationCenter({ userId, open, onClose }: Props) {
-  // Sécurité : Délai de 100ms pour éviter le conflit sur Safari
   const [shouldRender, setShouldRender] = useState(false)
   const { notifications, unread, loading, markRead, markAllRead, remove } = useNotifications(userId)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -69,8 +68,6 @@ export default function NotificationCenter({ userId, open, onClose }: Props) {
           flexDirection: 'column',
           overflow:    'hidden',
         }}>
-        
-        {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Bell size={15} style={{ color: '#D4AF37' }} />
@@ -79,7 +76,7 @@ export default function NotificationCenter({ userId, open, onClose }: Props) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {unread > 0 && (
-              <button onClick={markAllRead} title="Tout marquer comme lu" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5C5C5C', display: 'flex', padding: 4 }}>
+              <button onClick={markAllRead} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5C5C5C', display: 'flex', padding: 4 }}>
                 <CheckCheck size={15} />
               </button>
             )}
@@ -88,8 +85,6 @@ export default function NotificationCenter({ userId, open, onClose }: Props) {
             </button>
           </div>
         </div>
-
-        {/* Liste */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {loading ? (
             <div style={{ padding: 24, textAlign: 'center', color: '#3A3A3A', fontSize: 13 }}>Chargement…</div>
