@@ -21,13 +21,9 @@ interface Market {
 }
 
 const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 'BT', 'PGH', 'STB']
-// ... vos imports restent inchangés
 
 export default function ClientHeader({ profile }: { profile: Profile }) {
-  
-  if (!profile) return null
-  
-
+  const [mounted,    setMounted]    = useState(false)
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [markets,    setMarkets]    = useState<Market[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -35,25 +31,35 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   const router   = useRouter()
   const supabase = createClient()
 
+  // 1. Protection contre les erreurs d'hydratation sur Mobile
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   async function fetchMarkets() {
     try {
-      const res  = await fetch('/api/cotations', { cache: 'no-store' })
+      const res = await fetch('/api/cotations', { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
-      if (!data.markets?.length) return
+      if (!data || !Array.isArray(data.markets)) return
 
       setMarkets(data.markets)
       setLoading(false)
     } catch {
-      // Échec silencieux pour éviter le crash
+      // Échec silencieux
     }
   }
 
   useEffect(() => {
+    if (!mounted) return
     fetchMarkets()
     const interval = setInterval(fetchMarkets, 60 * 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [mounted])
+
+  if (!mounted || !profile) {
+    return <header className="h-14 border-b" style={{ background: 'var(--noir-surface)', borderColor: 'var(--noir-border)' }} />
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -61,13 +67,16 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     router.push('/auth/login')
   }
 
-  // Tri sécurisé
+  // 2. Tri hautement sécurisé contre les valeurs null/undefined
   const sorted = [
     ...PRIORITY
-      .map(p => markets.find(m => m.referentiel?.ticker?.toUpperCase() === p))
-      .filter(Boolean),
-    ...markets.filter(m => !PRIORITY.includes(m.referentiel?.ticker?.toUpperCase())),
-  ] as Market[]
+      .map(p => markets.find(m => m?.referentiel?.ticker?.toUpperCase() === p))
+      .filter((m): m is Market => !!m),
+    ...markets.filter(m => {
+      const ticker = m?.referentiel?.ticker?.toUpperCase()
+      return ticker ? !PRIORITY.includes(ticker) : false
+    }),
+  ]
 
   const tickerItems  = sorted.length > 0 ? [...sorted, ...sorted] : []
   const animDuration = Math.max(40, sorted.length * 3)
@@ -99,15 +108,15 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
             <div className="overflow-hidden flex-1">
               <div className="ticker-track" style={{ animationDuration: `${animDuration}s`, gap: '20px' }}>
                 {tickerItems.map((m, i) => {
-                  if (!m) return null; // Sécurité ajoutée
-                  const change = m.change || 0;
-                  const color = change > 0 ? '#00C853' : change < 0 ? '#FF1744' : '#707070';
+                  if (!m || !m.referentiel) return null
+                  const change = m.change || 0
+                  const color = change > 0 ? '#00C853' : change < 0 ? '#FF1744' : '#707070'
                   
                   return (
-                    <span key={`${m.isin}-${i}`} className="inline-flex items-center flex-shrink-0" style={{ gap: '6px' }}>
-                      <span className="text-xs font-semibold" style={{ color: '#C0C0C0' }}>{m.referentiel?.ticker}</span>
+                    <span key={`${m.isin || i}-${i}`} className="inline-flex items-center flex-shrink-0" style={{ gap: '6px' }}>
+                      <span className="text-xs font-semibold" style={{ color: '#C0C0C0' }}>{m.referentiel.ticker || '—'}</span>
                       <span className="text-xs font-mono font-bold" style={{ color: '#F5F5F5' }}>
-                        {m.last?.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) ?? '0.00'}
+                        {typeof m.last === 'number' ? m.last.toLocaleString('fr-TN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                       </span>
                       <span className="text-xs flex items-center font-medium" style={{ color, gap: '2px' }}>
                         {change > 0 ? <TrendingUp size={10} /> : change < 0 ? <TrendingDown size={10} /> : null}
@@ -122,7 +131,8 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          <NotificationBell userId={profile?.id} />
+          {/* Appel à la cloche sécurisé par l'existence de l'ID */}
+          {profile?.id && <NotificationBell userId={profile.id} />}
 
           <div className="relative">
             <button
@@ -155,4 +165,3 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     </>
   )
 }
-
