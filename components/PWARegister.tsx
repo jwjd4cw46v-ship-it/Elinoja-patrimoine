@@ -1,43 +1,28 @@
 'use client'
 
 import { useEffect } from 'react'
+import { Bell } from 'lucide-react'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 
 export default function PWARegister() {
   const { supported, permission, subscribe } = usePushNotifications()
 
-  // 1. Enregistrement automatique du Service Worker
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
-        .catch(err => console.warn('SW registration failed:', err))
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {})
     }
   }, [])
 
-  // 2. Si le navigateur ne supporte pas les notifications ou si elles sont déjà activées, on n'affiche rien
   if (!supported || permission === 'granted') return null
 
-  // 3. Bouton affiché uniquement si la permission n'est pas encore accordée
   return (
     <button 
       onClick={subscribe}
-      style={{
-        background: 'transparent',
-        border: '1px solid #D4AF37',
-        color: '#D4AF37',
-        padding: '6px 12px',
-        borderRadius: 6,
-        fontSize: 11,
-        cursor: 'pointer',
-        marginTop: 12,
-        fontWeight: 600,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px'
-      }}
+      className="absolute top-4 right-4 p-2 rounded-full transition-all hover:bg-white/10"
+      style={{ background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)' }}
+      title="Activer les notifications"
     >
-      🔔 Activer les alertes
+      <Bell size={16} style={{ color: '#D4AF37' }} />
     </button>
   )
 }
