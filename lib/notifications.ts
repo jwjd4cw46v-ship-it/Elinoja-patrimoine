@@ -1,44 +1,29 @@
 import webpush from 'web-push'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-// VAPID keys — générer avec : npx web-push generate-vapid-keys
-// Ajouter dans Vercel : VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_MAILTO
-// Nettoyage de la clé publique pour supprimer le padding '=' invalide dans web-push
-// Remplacez cette section dans votre fichier notifications.ts
+// Nettoyage de la clé publique
 const rawVapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
-// Suppression du padding et nettoyage des espaces éventuels
 const cleanVapidPublicKey = rawVapidPublicKey.replace(/=+$/, '').trim();
 
-// ... (le reste de votre code)
-
-// On encapsule l'initialisation pour éviter qu'elle ne s'exécute brutalement
-// lors de la collecte des données de build si la clé est vide/invalide
-if (cleanVapidPublicKey && process.env.VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(
-    vapidSubject,
-    cleanVapidPublicKey,
-    process.env.VAPID_PRIVATE_KEY
-  );
-}
-
-// NOTE : web-push exige un "subject" au format URL (mailto:... ou https://...).
-// On normalise ici pour éviter un crash de build si la variable ne contient
-// qu'une adresse email brute (ex: VAPID_MAILTO="iteb.ouerghi@neuf.fr").
+// Déclaration de vapidSubject AVANT toute utilisation
 const rawSubject = process.env.VAPID_MAILTO ?? ''
 const vapidSubject = /^(mailto:|https?:\/\/)/i.test(rawSubject)
   ? rawSubject
   : `mailto:${rawSubject}`
 
-webpush.setVapidDetails(
-  vapidSubject,
-  cleanVapidPublicKey,
-  process.env.VAPID_PRIVATE_KEY!
-)
-
 const service = () => createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
+
+// Initialisation sécurisée
+if (cleanVapidPublicKey && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    vapidSubject,
+    cleanVapidPublicKey,
+    process.env.VAPID_PRIVATE_KEY
+  )
+}
 
 export type NotifType =
   | 'STOP_LOSS' | 'TAKE_PROFIT_R1' | 'TAKE_PROFIT_R2' | 'TAKE_PROFIT_R3'
@@ -92,7 +77,6 @@ export async function sendNotification(p: NotifPayload): Promise<void> {
         payload,
         { TTL: 3600, urgency: 'high' }
       ).catch(async err => {
-        // Abonnement expiré → nettoyage
         if (err.statusCode === 410 || err.statusCode === 404) {
           await db.from('push_subscriptions').delete().eq('endpoint', s.endpoint)
         }
@@ -101,13 +85,7 @@ export async function sendNotification(p: NotifPayload): Promise<void> {
   )
 }
 
-/**
- * Templates de messages — strictement factuels et neutres.
- * Ils décrivent un franchissement de seuil que l'utilisateur a lui-même
- * enregistré ; ils ne recommandent, ne suggèrent et n'impliquent aucune
- * action d'achat ou de vente. C'est une aide à la décision, la décision
- * reste entièrement celle de l'utilisateur.
- */
+/** Templates de messages */
 export const NOTIF_TEMPLATES: Record<NotifType, (ticker?: string) => { title: string; body: string }> = {
   STOP_LOSS:      t => ({
     title: `🔔 Niveau enregistré atteint — ${t}`,
