@@ -7,22 +7,11 @@ import NotificationCenter from './NotificationCenter'
 
 interface Props { userId: string }
 
-export default function NotificationBell({ userId }: Props) {
-  const [mounted, setMounted] = useState(false)
+// 1. Le composant interne qui gère le hook une fois qu'on est SÛR d'être sur le client
+function ActiveNotificationBell({ userId }: Props) {
   const [open, setOpen] = useState(false)
-  
-  // On passe 'mounted' au hook pour qu'il ne s'exécute que lorsque le composant est stable
-  const { unread } = useNotifications(mounted ? userId : "")
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
+  const { unread } = useNotifications(userId)
   const safeUnread = typeof unread === 'number' ? unread : 0
-
-  if (!mounted) {
-    return <div style={{ width: 32, height: 32 }} />
-  }
 
   return (
     <>
@@ -54,4 +43,26 @@ export default function NotificationBell({ userId }: Props) {
       <NotificationCenter userId={userId} open={open} onClose={() => setOpen(false)} />
     </>
   )
+}
+
+// 2. Le composant principal exporté qui sert de barrière de sécurité (Hydration Gate)
+export default function NotificationBell({ userId }: Props) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Tant que ce n'est pas monté sur le client, on affiche juste une cloche statique grise.
+  // Le hook useNotifications n'est PAS importé ni exécuté, évitant TOUT crash sur Safari.
+  if (!mounted) {
+    return (
+      <button style={{ background: 'none', border: 'none', padding: 8, color: '#707070', display: 'flex' }}>
+        <Bell size={16} />
+      </button>
+    )
+  }
+
+  // Une fois monté, on passe le relais au vrai composant dynamique
+  return <ActiveNotificationBell userId={userId} />
 }
