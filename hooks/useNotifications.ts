@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/utils/supabase/client' // Ajustez le chemin selon votre structure
+import { createClient } from '@/lib/supabase/client'
 
 export interface AppNotification {
   id: string
@@ -29,7 +29,7 @@ export function useNotifications(userId: string) {
   useEffect(() => {
     if (!userId) return
 
-    // Délai de 500ms pour éviter le conflit avec la Watchlist au démarrage
+    // Délai de 500ms pour éviter le conflit de connexion avec la Watchlist au démarrage
     const timer = setTimeout(() => {
       load()
       
