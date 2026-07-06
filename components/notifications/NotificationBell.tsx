@@ -17,14 +17,13 @@ export default function NotificationBell({ userId }: Props) {
     setMounted(true)
   }, [])
 
-  // On crée une variable sécurisée pour TypeScript
-  // Si mounted est faux, on passe une chaîne vide "" au hook
-  const safeUserId = mounted ? userId : ""
-  
-  // Le hook est maintenant satisfait car il reçoit toujours une string
-  const { unread } = useNotifications(safeUserId)
+  // On appelle le hook directement. 
+  // Grâce à la sécurité ajoutée dans le hook (if (!userId) return), 
+  // le fetch ne se lancera pas tant que userId est vide ou invalide.
+  const { unread } = useNotifications(userId)
 
-  // Rendu de sécurité : on affiche le bouton neutre tant que ce n'est pas monté
+  // Rendu de protection : tant que le composant n'est pas monté côté client, 
+  // on affiche une version fixe pour éviter les erreurs d'hydratation.
   if (!mounted) {
     return (
       <button style={{ background: 'none', border: 'none', padding: 8, color: '#707070', display: 'flex' }}>
