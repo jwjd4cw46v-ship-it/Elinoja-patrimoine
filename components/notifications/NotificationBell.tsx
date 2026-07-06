@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Bell } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import NotificationCenter from './NotificationCenter'
@@ -8,8 +8,26 @@ import NotificationCenter from './NotificationCenter'
 interface Props { userId: string }
 
 export default function NotificationBell({ userId }: Props) {
+  const [mounted, setMounted] = useState(false)
   const [open, setOpen] = useState(false)
+  
+  // Le hook est appelé, mais nous allons sécuriser la lecture de 'unread'
   const { unread } = useNotifications(userId)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // On sécurise le calcul de la valeur à afficher
+  const safeUnread = typeof unread === 'number' ? unread : 0
+
+  if (!mounted) {
+    return (
+      <button style={{ background: 'none', border: 'none', padding: 8, color: '#707070' }}>
+        <Bell size={16} />
+      </button>
+    )
+  }
 
   return (
     <>
@@ -17,11 +35,11 @@ export default function NotificationBell({ userId }: Props) {
         onClick={() => setOpen(o => !o)}
         style={{
           position: 'relative', background: 'none', border: 'none',
-          cursor: 'pointer', padding: 8, color: unread > 0 ? '#D4AF37' : '#707070',
+          cursor: 'pointer', padding: 8, color: safeUnread > 0 ? '#D4AF37' : '#707070',
           display: 'flex',
         }}>
         <Bell size={16} />
-        {unread > 0 && (
+        {safeUnread > 0 && (
           <span style={{
             position: 'absolute', top: 2, right: 2,
             background: '#FF3B3B', color: '#fff',
@@ -33,7 +51,7 @@ export default function NotificationBell({ userId }: Props) {
             border: '1.5px solid #111',
             animation: 'pulse 2s ease-in-out infinite',
           }}>
-            {unread > 9 ? '9+' : unread}
+            {safeUnread > 9 ? '9+' : safeUnread}
           </span>
         )}
       </button>
