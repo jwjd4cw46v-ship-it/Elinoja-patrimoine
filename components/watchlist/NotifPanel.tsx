@@ -1,11 +1,35 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import type { AlertLog } from '@/types/watchlist'
+
+/**
+ * Format consommé depuis la table `notifications` (source de vérité côté
+ * serveur, remplace l'ancien AlertLog basé sur current/low/high qui ne
+ * fonctionnait qu'avec les seuils watchlist calculés côté client).
+ */
+export interface NotifItem {
+  id:      string
+  type:    string   // NotifType complet : STOP_LOSS, TAKE_PROFIT_R1, WATCHLIST_LOW, ...
+  ticker?: string | null
+  title:   string
+  body:    string
+  time:    string
+  isRead?: boolean
+}
 
 interface Props {
-  logs:     AlertLog[]
-  onClose:  () => void
+  logs:    NotifItem[]
+  onClose: () => void
+}
+
+// Types "bas / danger" → rouge ; types "haut / objectif" → vert ; le reste → doré neutre
+const DOWN_TYPES = new Set(['STOP_LOSS', 'RUNNER_STOP', 'WATCHLIST_LOW'])
+const UP_TYPES   = new Set(['TAKE_PROFIT_R1', 'TAKE_PROFIT_R2', 'TAKE_PROFIT_R3', 'WATCHLIST_HIGH', 'BREAK_EVEN'])
+
+function badgeFor(type: string) {
+  if (DOWN_TYPES.has(type)) return { label: 'SEUIL BAS',  color: '#FF3B3B', bg: 'rgba(255,59,59,0.12)' }
+  if (UP_TYPES.has(type))   return { label: 'SEUIL HAUT', color: '#00C853', bg: 'rgba(0,200,83,0.1)'  }
+  return { label: 'INFO', color: '#D4AF37', bg: 'rgba(212,175,55,0.12)' }
 }
 
 export function NotifPanel({ logs, onClose }: Props) {
@@ -38,7 +62,7 @@ export function NotifPanel({ logs, onClose }: Props) {
         alignItems:    'center',
       }}>
         <span style={{ fontSize: '10px', letterSpacing: '0.12em', color: '#5C5C5C', fontWeight: 600, textTransform: 'uppercase' }}>
-          Alertes Prix
+          Notifications
         </span>
         <button
           onClick={onClose}
@@ -50,45 +74,58 @@ export function NotifPanel({ logs, onClose }: Props) {
       {/* Liste */}
       {logs.length === 0 ? (
         <div style={{ padding: '28px 16px', textAlign: 'center', color: '#3A3A3A', fontSize: '12px' }}>
-          Aucune alerte active
+          Aucune notification
         </div>
       ) : (
-        [...logs].reverse().map((log, i) => (
-          <div
-            key={i}
-            style={{
-              padding:      '10px 14px',
-              borderBottom: '1px solid var(--noir-border)',
-              display:      'flex',
-              alignItems:   'center',
-              gap:          '10px',
-            }}>
-            {/* Badge type */}
-            <span style={{
-              fontSize:    '8px',
-              fontWeight:  700,
-              padding:     '2px 6px',
-              borderRadius: '4px',
-              background:  log.type === 'low' ? 'rgba(255,59,59,0.12)' : 'rgba(0,200,83,0.1)',
-              color:       log.type === 'low' ? '#FF3B3B' : '#00C853',
-              letterSpacing: '0.08em',
-              flexShrink:  0,
-            }}>
-              {log.type === 'low' ? '▼ BAS' : '▲ HAUT'}
-            </span>
+        logs.map(log => {
+          const badge = badgeFor(log.type)
+          return (
+            <div
+              key={log.id}
+              style={{
+                padding:      '10px 14px',
+                borderBottom: '1px solid var(--noir-border)',
+                display:      'flex',
+                alignItems:   'flex-start',
+                gap:          '10px',
+                background:   log.isRead === false ? 'rgba(212,175,55,0.04)' : 'transparent',
+              }}>
+              {/* Badge type */}
+              <span style={{
+                fontSize:    '8px',
+                fontWeight:  700,
+                padding:     '2px 6px',
+                borderRadius: '4px',
+                background:  badge.bg,
+                color:       badge.color,
+                letterSpacing: '0.08em',
+                flexShrink:  0,
+                marginTop:   '2px',
+              }}>
+                {badge.label}
+              </span>
 
-            {/* Infos */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '12px', color: '#E0E0E0', fontWeight: 600 }}>{log.id}</div>
-              <div style={{ fontSize: '10px', color: '#5C5C5C', marginTop: '2px' }}>
-                Cours {log.current.toFixed(3)} · Seuil {log.type === 'low' ? log.low.toFixed(3) : log.high.toFixed(3)}
+              {/* Infos */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '12px', color: '#E0E0E0', fontWeight: 600 }}>
+                  {log.title}
+                </div>
+                <div style={{
+                  fontSize: '10px', color: '#5C5C5C', marginTop: '2px',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                }}>
+                  {log.body}
+                </div>
               </div>
-            </div>
 
-            {/* Heure */}
-            <span style={{ fontSize: '9px', color: '#3A3A3A', flexShrink: 0 }}>{log.time}</span>
-          </div>
-        ))
+              {/* Heure */}
+              <span style={{ fontSize: '9px', color: '#3A3A3A', flexShrink: 0, marginTop: '2px' }}>
+                {log.time}
+              </span>
+            </div>
+          )
+        })
       )}
     </motion.div>
   )
