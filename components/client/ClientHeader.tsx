@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { AnimatePresence, motion } from 'framer-motion'
 import { LogOut, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
@@ -126,7 +127,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* NotificationBell commenté pour test */}
+          {/* NotificationBell maintenu commenté pour la stabilité */}
           {/* {profile?.id && <NotificationBell userId={profile.id} />} */}
 
           <div className="relative">
@@ -140,15 +141,20 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
               <ChevronDown size={12} style={{ color: '#5C5C5C' }} />
             </button>
 
-            {menuOpen && (
-              <div
-                className="absolute right-0 top-full mt-2 w-44 rounded-xl border z-50 py-1"
-                style={{ background: 'var(--noir-elevated)', borderColor: 'var(--noir-border)' }}>
-                <button onClick={handleLogout} className="flex items-center gap-2 w-full px-3 py-2 text-sm" style={{ color: '#FF1744' }}>
-                  <LogOut size={13} /> Déconnexion
-                </button>
-              </div>
-            )}
+            <AnimatePresence>
+              {menuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="absolute right-0 top-full mt-2 w-44 rounded-xl border z-50 py-1"
+                  style={{ background: 'var(--noir-elevated)', borderColor: 'var(--noir-border)' }}>
+                  <button onClick={handleLogout} className="flex items-center gap-2 w-full px-3 py-2 text-sm" style={{ color: '#FF1744' }}>
+                    <LogOut size={13} /> Déconnexion
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
