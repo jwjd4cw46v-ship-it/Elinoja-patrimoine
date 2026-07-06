@@ -18,9 +18,8 @@ export function useNotifications(userId: string) {
   const [unread,        setUnread]        = useState(0)
   const [loading,       setLoading]       = useState(true)
   
-  // Remplacement de window.fetch par fetch (native)
   const load = useCallback(async () => {
-    if (!userId) return; // Sécurité ajoutée
+    if (!userId) return
     try {
       const res = await fetch('/api/notifications')
       if (!res.ok) throw new Error('Failed to fetch')
@@ -48,7 +47,7 @@ export function useNotifications(userId: string) {
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'notifications',
         filter: `user_id=eq.${userId}`,
-      }, () => load()) // Simplification : on recharge tout pour éviter les décalages d'état
+      }, () => load())
       .subscribe()
 
     return () => { 
@@ -56,7 +55,6 @@ export function useNotifications(userId: string) {
     }
   }, [userId, load])
 
-  // Fonctions markRead, markAllRead, remove : utilisez 'fetch' au lieu de 'window.fetch'
   async function markRead(id: string) {
     try {
       await fetch('/api/notifications', {
@@ -69,7 +67,30 @@ export function useNotifications(userId: string) {
     } catch {}
   }
 
-  // ... (Appliquez le même changement 'fetch' pour markAllRead et remove)
+  async function markAllRead() {
+    try {
+      await fetch('/api/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      })
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+      setUnread(0)
+    } catch {}
+  }
 
-  return { notifications, unread, loading, refresh: load, markRead }
+  async function remove(id: string) {
+    const wasUnread = notifications.find(n => n.id === id)?.is_read === false
+    try {
+      await fetch('/api/notifications', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      setNotifications(prev => prev.filter(n => n.id !== id))
+      if (wasUnread) setUnread(u => Math.max(0, u - 1))
+    } catch {}
+  }
+
+  return { notifications, unread, loading, refresh: load, markRead, markAllRead, remove }
 }
