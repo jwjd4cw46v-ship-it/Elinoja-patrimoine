@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Bell, X, CheckCheck, Trash2 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '@/hooks/useNotifications'
@@ -25,12 +25,13 @@ interface Props {
 }
 
 export default function NotificationCenter({ userId, open, onClose }: Props) {
-  // C'est ici que l'erreur se produit si le hook ne renvoie pas tout.
-  // Puisque nous avons mis à jour le hook avec markAllRead et remove, 
-  // cette ligne est maintenant correcte.
+  const [mounted, setMounted] = useState(false)
   const { notifications, unread, loading, markRead, markAllRead, remove } = useNotifications(userId)
-  
   const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Fermer au clic extérieur
   useEffect(() => {
@@ -41,83 +42,84 @@ export default function NotificationCenter({ userId, open, onClose }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [open, onClose])
 
+  // Sécurité : On ne rend rien tant que ce n'est pas monté ou si ce n'est pas ouvert
+  if (!mounted || !open) return null
+
   return (
     <AnimatePresence>
-      {open && (
-        <motion.div
-          ref={panelRef}
-          initial={{ opacity: 0, y: -8, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.97 }}
-          transition={{ duration: 0.18 }}
-          style={{
-            position:    'fixed',
-            top:         60,
-            right:       12,
-            width:       340,
-            maxWidth:    'calc(100vw - 24px)',
-            maxHeight:   '80dvh',
-            background:  '#111',
-            border:      '1px solid #222',
-            borderRadius: 16,
-            boxShadow:   '0 16px 48px rgba(0,0,0,0.7)',
-            zIndex:      200,
-            display:     'flex',
-            flexDirection: 'column',
-            overflow:    'hidden',
-          }}>
+      <motion.div
+        ref={panelRef}
+        initial={{ opacity: 0, y: -8, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.97 }}
+        transition={{ duration: 0.18 }}
+        style={{
+          position:    'fixed',
+          top:         60,
+          right:       12,
+          width:       340,
+          maxWidth:    'calc(100vw - 24px)',
+          maxHeight:   '80dvh',
+          background:  '#111',
+          border:      '1px solid #222',
+          borderRadius: 16,
+          boxShadow:   '0 16px 48px rgba(0,0,0,0.7)',
+          zIndex:      200,
+          display:     'flex',
+          flexDirection: 'column',
+          overflow:    'hidden',
+        }}>
 
-          {/* Header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '14px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Bell size={15} style={{ color: '#D4AF37' }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#F5F5F5' }}>Notifications</span>
-              {unread > 0 && (
-                <span style={{
-                  background: '#D4AF37', color: '#000', fontSize: 10,
-                  fontWeight: 700, padding: '1px 6px', borderRadius: 10,
-                }}>{unread}</span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {unread > 0 && (
-                <button onClick={markAllRead}
-                  title="Tout marquer comme lu"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer',
-                    color: '#5C5C5C', display: 'flex', padding: 4 }}>
-                  <CheckCheck size={15} />
-                </button>
-              )}
-              <button onClick={onClose}
-                style={{ background: 'none', border: 'none', cursor: 'pointer',
-                  color: '#5C5C5C', display: 'flex', padding: 4 }}>
-                <X size={15} />
-              </button>
-            </div>
-          </div>
-
-          {/* Liste */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {loading ? (
-              <div style={{ padding: 24, textAlign: 'center', color: '#3A3A3A', fontSize: 13 }}>
-                Chargement…
-              </div>
-            ) : notifications.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center' }}>
-                <Bell size={32} style={{ color: '#222', margin: '0 auto 12px', display: 'block' }} />
-                <div style={{ fontSize: 13, color: '#3A3A3A' }}>Aucune notification</div>
-              </div>
-            ) : (
-              notifications.map(n => (
-                <NotifItem key={n.id} n={n} onRead={markRead} onDelete={remove} />
-              ))
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 16px', borderBottom: '1px solid #1E1E1E', flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Bell size={15} style={{ color: '#D4AF37' }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: '#F5F5F5' }}>Notifications</span>
+            {unread > 0 && (
+              <span style={{
+                background: '#D4AF37', color: '#000', fontSize: 10,
+                fontWeight: 700, padding: '1px 6px', borderRadius: 10,
+              }}>{unread}</span>
             )}
           </div>
-        </motion.div>
-      )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {unread > 0 && (
+              <button onClick={markAllRead}
+                title="Tout marquer comme lu"
+                style={{ background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#5C5C5C', display: 'flex', padding: 4 }}>
+                <CheckCheck size={15} />
+              </button>
+            )}
+            <button onClick={onClose}
+              style={{ background: 'none', border: 'none', cursor: 'pointer',
+                color: '#5C5C5C', display: 'flex', padding: 4 }}>
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+
+        {/* Liste */}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {loading ? (
+            <div style={{ padding: 24, textAlign: 'center', color: '#3A3A3A', fontSize: 13 }}>
+              Chargement…
+            </div>
+          ) : notifications.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center' }}>
+              <Bell size={32} style={{ color: '#222', margin: '0 auto 12px', display: 'block' }} />
+              <div style={{ fontSize: 13, color: '#3A3A3A' }}>Aucune notification</div>
+            </div>
+          ) : (
+            notifications.map(n => (
+              <NotifItem key={n.id} n={n} onRead={markRead} onDelete={remove} />
+            ))
+          )}
+        </div>
+      </motion.div>
     </AnimatePresence>
   )
 }
@@ -142,7 +144,6 @@ function NotifItem({ n, onRead, onDelete }: {
         cursor:     n.is_read ? 'default' : 'pointer',
         transition: 'background 0.15s',
       }}>
-      {/* Icône */}
       <div style={{
         fontSize: 20, flexShrink: 0, width: 36, height: 36,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -151,7 +152,6 @@ function NotifItem({ n, onRead, onDelete }: {
         {icon}
       </div>
 
-      {/* Contenu */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: 13, fontWeight: n.is_read ? 500 : 700,
@@ -166,7 +166,6 @@ function NotifItem({ n, onRead, onDelete }: {
         <div style={{ fontSize: 10, color: '#3A3A3A' }}>{ago}</div>
       </div>
 
-      {/* Actions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 }}>
         {!n.is_read && (
           <div style={{
