@@ -1,11 +1,11 @@
 import webpush from 'web-push'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-// Nettoyage de la clé publique
-const rawVapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
-const cleanVapidPublicKey = rawVapidPublicKey.replace(/=+$/, '').trim();
+// VAPID keys — générer avec : npx web-push generate-vapid-keys
+// ATTENTION : Ne modifiez pas la clé publique (ne supprimez pas le padding '=').
+// Elle doit faire exactement 65 octets après décodage[span_0](start_span)[span_0](end_span).
+const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''
 
-// Déclaration de vapidSubject AVANT toute utilisation
 const rawSubject = process.env.VAPID_MAILTO ?? ''
 const vapidSubject = /^(mailto:|https?:\/\/)/i.test(rawSubject)
   ? rawSubject
@@ -16,11 +16,11 @@ const service = () => createServiceClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Initialisation sécurisée
-if (cleanVapidPublicKey && process.env.VAPID_PRIVATE_KEY) {
+// Initialisation sécurisée pour éviter le crash lors du build Next.js
+if (vapidPublicKey && process.env.VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(
     vapidSubject,
-    cleanVapidPublicKey,
+    vapidPublicKey,
     process.env.VAPID_PRIVATE_KEY
   )
 }
@@ -77,6 +77,7 @@ export async function sendNotification(p: NotifPayload): Promise<void> {
         payload,
         { TTL: 3600, urgency: 'high' }
       ).catch(async err => {
+        // Abonnement expiré → nettoyage
         if (err.statusCode === 410 || err.statusCode === 404) {
           await db.from('push_subscriptions').delete().eq('endpoint', s.endpoint)
         }
@@ -85,7 +86,9 @@ export async function sendNotification(p: NotifPayload): Promise<void> {
   )
 }
 
-/** Templates de messages */
+/**
+ * Templates de messages — strictement factuels et neutres.
+ */
 export const NOTIF_TEMPLATES: Record<NotifType, (ticker?: string) => { title: string; body: string }> = {
   STOP_LOSS:      t => ({
     title: `🔔 Niveau enregistré atteint — ${t}`,
