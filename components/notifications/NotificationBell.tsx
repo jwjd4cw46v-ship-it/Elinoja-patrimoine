@@ -21,9 +21,13 @@ export default function NotificationBell({ userId }: Props) {
   // On sécurise le calcul de la valeur à afficher
   const safeUnread = typeof unread === 'number' ? unread : 0
 
+  // Rendu de sécurité pendant l'hydratation (évite le crash Safari)
   if (!mounted) {
     return (
-      <button style={{ background: 'none', border: 'none', padding: 8, color: '#707070' }}>
+      <button 
+        style={{ 
+          background: 'none', border: 'none', padding: 8, color: '#707070', display: 'flex' 
+        }}>
         <Bell size={16} />
       </button>
     )
