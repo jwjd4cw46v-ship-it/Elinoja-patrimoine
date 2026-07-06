@@ -17,10 +17,14 @@ export default function NotificationBell({ userId }: Props) {
     setMounted(true)
   }, [])
 
-  // On appelle le hook normalement, mais on le rend "silencieux" via une condition
-  // dans le composant si mounted est faux.
-  const { unread } = useNotifications(userId)
+  // On crée une variable sécurisée pour TypeScript
+  // Si mounted est faux, on passe une chaîne vide "" au hook
+  const safeUserId = mounted ? userId : ""
+  
+  // Le hook est maintenant satisfait car il reçoit toujours une string
+  const { unread } = useNotifications(safeUserId)
 
+  // Rendu de sécurité : on affiche le bouton neutre tant que ce n'est pas monté
   if (!mounted) {
     return (
       <button style={{ background: 'none', border: 'none', padding: 8, color: '#707070', display: 'flex' }}>
