@@ -29,10 +29,8 @@ export function useNotifications(userId: string) {
   useEffect(() => {
     if (!userId) return
 
-    // Délai de 500ms pour éviter le conflit de connexion avec la Watchlist au démarrage
     const timer = setTimeout(() => {
       load()
-      
       const supabase = createClient()
       const channel = supabase
         .channel(`notif-${userId}`)
@@ -44,9 +42,7 @@ export function useNotifications(userId: string) {
         }, () => load())
         .subscribe()
 
-      return () => {
-        supabase.removeChannel(channel)
-      }
+      return () => { supabase.removeChannel(channel) }
     }, 500)
 
     return () => clearTimeout(timer)
@@ -70,12 +66,5 @@ export function useNotifications(userId: string) {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
-  return {
-    notifications,
-    unread: notifications.filter(n => !n.is_read).length,
-    loading,
-    markRead,
-    markAllRead,
-    remove
-  }
+  return { notifications, unread: notifications.filter(n => !n.is_read).length, loading, markRead, markAllRead, remove }
 }
