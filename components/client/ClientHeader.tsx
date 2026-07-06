@@ -7,6 +7,8 @@ import { LogOut, ChevronDown, TrendingUp, TrendingDown } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import type { Profile } from '@/types'
+// Importation ajoutée pour que la cloche fonctionne
+import NotificationBell from '@/components/notifications/NotificationBell'
 
 interface Market {
   isin:       string
@@ -127,7 +129,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* NotificationBell maintenu commenté pour la stabilité */}
+          {/* NotificationBell maintenant actif et importé */}
           {profile?.id && <NotificationBell userId={profile.id} />} 
 
           <div className="relative">
@@ -161,3 +163,4 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     </>
   )
 }
+
