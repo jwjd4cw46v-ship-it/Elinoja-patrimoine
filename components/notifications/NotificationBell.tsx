@@ -12,7 +12,7 @@ export default function NotificationBell({ userId }: Props) {
   const [open, setOpen] = useState(false)
   
   // On passe 'mounted' au hook pour qu'il ne s'exécute que lorsque le composant est stable
-  const { unread } = useNotifications(mounted ? userId : null)
+  const { unread } = useNotifications(mounted ? userId : "")
 
   useEffect(() => {
     setMounted(true)
