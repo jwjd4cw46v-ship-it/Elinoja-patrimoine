@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import Link from 'next/link'
+import PWARegister from '@/components/PWARegister'
 import type { TechnicalAnalysis, Announcement } from '@/types'
 
 export default function ClientDashboard() {
@@ -69,7 +70,6 @@ export default function ClientDashboard() {
   useEffect(() => {
     fetchData()
 
-    // Realtime — clients see updates instantly
     const channel = supabase
       .channel('client-dashboard')
       .on('postgres_changes',
@@ -101,7 +101,7 @@ export default function ClientDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome banner */}
+      {/* Welcome banner modifiée avec le bouton PWARegister */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -120,9 +120,11 @@ export default function ClientDashboard() {
             <h1 className="text-xl font-semibold mb-1" style={{ color: '#F5F5F5' }}>
               Bonjour, bienvenus sur votre espace
             </h1>
-            <p className="text-sm" style={{ color: '#707070' }}>
+            <p className="text-sm mb-3" style={{ color: '#707070' }}>
               {format(new Date(), "EEEE d MMMM yyyy", { locale: fr })} · Données en temps réel
             </p>
+            {/* Intégration du composant d'activation des alertes */}
+            <PWARegister />
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium hidden sm:flex"
             style={{ background: 'rgba(0,200,83,0.1)', color: '#00C853', border: '1px solid rgba(0,200,83,0.2)' }}>
