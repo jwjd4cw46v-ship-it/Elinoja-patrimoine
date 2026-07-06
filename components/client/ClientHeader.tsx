@@ -128,7 +128,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {/* NotificationBell maintenu commenté pour la stabilité */}
-          {{profile?.id && <NotificationBell userId={profile.id} />} }
+          {profile?.id && <NotificationBell userId={profile.id} />} 
 
           <div className="relative">
             <button
