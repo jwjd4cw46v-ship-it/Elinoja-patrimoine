@@ -3,8 +3,16 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 // VAPID keys — générer avec : npx web-push generate-vapid-keys
 // Ajouter dans Vercel : VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_MAILTO
+// NOTE : web-push exige un "subject" au format URL (mailto:... ou https://...).
+// On normalise ici pour éviter un crash de build si la variable ne contient
+// qu'une adresse email brute (ex: VAPID_MAILTO="iteb.ouerghi@neuf.fr").
+const rawSubject = process.env.VAPID_MAILTO ?? ''
+const vapidSubject = /^(mailto:|https?:\/\/)/i.test(rawSubject)
+  ? rawSubject
+  : `mailto:${rawSubject}`
+
 webpush.setVapidDetails(
-  process.env.VAPID_MAILTO!,
+  vapidSubject,
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
   process.env.VAPID_PRIVATE_KEY!
 )
