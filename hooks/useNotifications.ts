@@ -1,96 +1,81 @@
-'use client'
-
-import { useCallback, useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/utils/supabase/client' // Ajustez le chemin selon votre structure
 
 export interface AppNotification {
-  id:         string
-  type:       string
-  ticker:     string | null
-  title:      string
-  body:       string
-  is_read:    boolean
+  id: string
+  title: string
+  body: string
+  type: string
+  is_read: boolean
   created_at: string
 }
 
 export function useNotifications(userId: string) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
-  const [unread,        setUnread]        = useState(0)
-  const [loading,       setLoading]       = useState(true)
-  
+  const [loading, setLoading] = useState(true)
+
   const load = useCallback(async () => {
-    if (!userId) return
-    try {
-      const res = await fetch('/api/notifications')
-      if (!res.ok) throw new Error('Failed to fetch')
-      
-      const json = await res.json()
-      setNotifications(Array.isArray(json?.notifications) ? json.notifications : [])
-      setUnread(typeof json?.unread === 'number' ? json.unread : 0)
-    } catch (e) {
-      console.error("Notification load error:", e)
-      setNotifications([])
-      setUnread(0)
-    } finally {
-      setLoading(false)
-    }
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    
+    if (data) setNotifications(data)
+    setLoading(false)
   }, [userId])
 
   useEffect(() => {
     if (!userId) return
 
-    load()
+    // Délai de 500ms pour éviter le conflit avec la Watchlist au démarrage
+    const timer = setTimeout(() => {
+      load()
+      
+      const supabase = createClient()
+      const channel = supabase
+        .channel(`notif-${userId}`)
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        }, () => load())
+        .subscribe()
 
-    const supabase = createClient()
-    const channel = supabase
-      .channel(`notif-${userId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'notifications',
-        filter: `user_id=eq.${userId}`,
-      }, () => load())
-      .subscribe()
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }, 500)
 
-    return () => { 
-      supabase.removeChannel(channel) 
-    }
+    return () => clearTimeout(timer)
   }, [userId, load])
 
-  async function markRead(id: string) {
-    try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
-      setUnread(u => Math.max(0, u - 1))
-    } catch {}
+  const markRead = async (id: string) => {
+    const supabase = createClient()
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
   }
 
-  async function markAllRead() {
-    try {
-      await fetch('/api/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ all: true }),
-      })
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
-      setUnread(0)
-    } catch {}
+  const markAllRead = async () => {
+    const supabase = createClient()
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId)
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
-  async function remove(id: string) {
-    const wasUnread = notifications.find(n => n.id === id)?.is_read === false
-    try {
-      await fetch('/api/notifications', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      setNotifications(prev => prev.filter(n => n.id !== id))
-      if (wasUnread) setUnread(u => Math.max(0, u - 1))
-    } catch {}
+  const remove = async (id: string) => {
+    const supabase = createClient()
+    await supabase.from('notifications').delete().eq('id', id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
-  return { notifications, unread, loading, refresh: load, markRead, markAllRead, remove }
+  return {
+    notifications,
+    unread: notifications.filter(n => !n.is_read).length,
+    loading,
+    markRead,
+    markAllRead,
+    remove
+  }
 }
