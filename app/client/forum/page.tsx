@@ -43,6 +43,18 @@ function AuthorBadge({ role, badge }: { role?: string; badge?: string | null }) 
   )
 }
 
+// ── Niveaux de réputation (automatiques, distincts des badges manuels) ──
+// 🥉 Investisseur 0–99 · 🥈 Analyste 100–499 · 🥇 Expert 500–1999 · 💎 Mentor 2000+
+const LEVELS = [
+  { min: 2000, emoji: '💎', label: 'Mentor' },
+  { min: 500,  emoji: '🥇', label: 'Expert' },
+  { min: 100,  emoji: '🥈', label: 'Analyste' },
+  { min: 0,    emoji: '🥉', label: 'Investisseur' },
+]
+function getLevel(reputation: number) {
+  return LEVELS.find(l => reputation >= l.min)!
+}
+
 export default function ForumPage() {
   const [posts, setPosts]           = useState<ForumPost[]>([])
   const [loading, setLoading]       = useState(true)
@@ -52,6 +64,7 @@ export default function ForumPage() {
   const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null)
   const [userId, setUserId]         = useState<string | null>(null)
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
+  const [likedReplies, setLikedReplies] = useState<Set<string>>(new Set())
   const [profileUserId, setProfileUserId] = useState<string | null>(null)
   const supabase = createClient()
 
@@ -66,15 +79,15 @@ export default function ForumPage() {
     setLoading(false)
   }, [])
 
-  // ── Charger les likes de l'utilisateur ────────────
+  // ── Charger les likes de l'utilisateur (posts + réponses) ────────────
   async function fetchUserLikes(uid: string) {
     const { data } = await supabase
       .from('forum_likes')
-      .select('post_id')
+      .select('post_id, reply_id')
       .eq('user_id', uid)
-      .not('post_id', 'is', null)
     if (data) {
       setLikedPosts(new Set(data.map(l => l.post_id).filter(Boolean)))
+      setLikedReplies(new Set(data.map(l => l.reply_id).filter(Boolean)))
     }
   }
 
@@ -102,6 +115,7 @@ export default function ForumPage() {
   const [replyText, setReplyText]   = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [likingPost, setLikingPost] = useState<string | null>(null)
+  const [likingReply, setLikingReply] = useState<string | null>(null)
 
   async function fetchReplies(postId: string) {
     const { data } = await supabase
@@ -171,6 +185,38 @@ export default function ForumPage() {
       }
     }
     setLikingPost(null)
+  }
+
+  // ── Toggle like sur une réponse (nouveau — nécessaire pour la
+  // réputation "réponses utiles") ────────────────────────────────────
+  async function toggleReplyLike(reply: ForumReply) {
+    if (!userId) { toast.error('Connectez-vous pour liker'); return }
+    if (likingReply === reply.id) return
+    setLikingReply(reply.id)
+
+    const { data, error } = await supabase.rpc('toggle_reply_like', {
+      p_reply_id: reply.id,
+      p_user_id:  userId,
+    })
+
+    if (error) {
+      toast.error('Erreur')
+    } else {
+      const isNowLiked = data.liked as boolean
+      const newCount   = data.likes_count as number
+
+      setLikedReplies(prev => {
+        const next = new Set(prev)
+        if (isNowLiked) next.add(reply.id)
+        else next.delete(reply.id)
+        return next
+      })
+
+      setReplies(prev => prev.map(r =>
+        r.id === reply.id ? { ...r, likes_count: newCount } : r
+      ))
+    }
+    setLikingReply(null)
   }
 
   const filtered = posts.filter(p =>
@@ -376,9 +422,11 @@ export default function ForumPage() {
             replyText={replyText}
             submitting={submitting}
             isLiked={likedPosts.has(selectedPost.id)}
+            likedReplies={likedReplies}
             onReplyChange={setReplyText}
             onSubmitReply={submitReply}
             onLike={() => toggleLike(selectedPost)}
+            onLikeReply={toggleReplyLike}
             onClose={() => { setSelectedPost(null); setReplies([]) }}
             onOpenProfile={setProfileUserId}
           />
@@ -454,15 +502,17 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }
 
 // ── Detail Post ────────────────────────────────────────────
-function PostDetailModal({ post, replies, replyText, submitting, isLiked, onReplyChange, onSubmitReply, onLike, onClose, onOpenProfile }: {
+function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, onReplyChange, onSubmitReply, onLike, onLikeReply, onClose, onOpenProfile }: {
   post: ForumPost
   replies: ForumReply[]
   replyText: string
   submitting: boolean
   isLiked: boolean
+  likedReplies: Set<string>
   onReplyChange: (t: string) => void
   onSubmitReply: () => void
   onLike: () => void
+  onLikeReply: (reply: ForumReply) => void
   onClose: () => void
   onOpenProfile: (userId: string) => void
 }) {
@@ -564,6 +614,17 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, onRepl
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
                 {r.content}
               </p>
+              <button
+                onClick={() => onLikeReply(r)}
+                className="flex items-center gap-1 text-xs mt-2 px-2 py-1 rounded-lg transition-all"
+                style={{
+                  color:      likedReplies.has(r.id) ? '#D4AF37' : '#5C5C5C',
+                  background: likedReplies.has(r.id) ? 'rgba(212,175,55,0.1)' : 'transparent',
+                  border:     likedReplies.has(r.id) ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+                }}>
+                <ThumbsUp size={11} fill={likedReplies.has(r.id) ? '#D4AF37' : 'none'} />
+                <span>{(r as any).likes_count || 0}</span>
+              </button>
             </motion.div>
           ))}
         </div>
@@ -654,6 +715,14 @@ function ProfileCardModal({ userId, onClose }: { userId: string; onClose: () => 
                 {profile.full_name}
                 <AuthorBadge role={profile.role} badge={profile.badge} />
               </div>
+              {(() => {
+                const level = getLevel(stats?.reputation ?? 0)
+                return (
+                  <div className="text-xs mt-1 font-medium" style={{ color: '#D4AF37' }}>
+                    {level.emoji} {level.label}
+                  </div>
+                )
+              })()}
               <div className="text-xs mt-1" style={{ color: '#5C5C5C' }}>
                 Membre depuis {formatDistanceToNow(new Date(profile.created_at), { locale: fr })}
               </div>
