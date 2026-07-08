@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { Suspense, useEffect, useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Bell, TrendingUp, TrendingDown, Shield,
@@ -12,11 +12,12 @@ import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import {
   calculerRepartition, calculerStops, calculerPnlVente,
-  labelAlerte, messageCloture, prochainStop,
+  detecterAlertes, labelAlerte, messageCloture, prochainStop,
   type Position, type AlertePosition,
 } from '@/lib/positions-engine'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 // Donut 3D (WebGL réel — React Three Fiber). Chargé côté client uniquement :
 // le Canvas ne peut pas être rendu côté serveur.
@@ -1210,7 +1211,7 @@ function ConcentrationRow({ r, i, total }: {
   )
 }
 
-export default function PositionsDashboard() {
+function PositionsDashboardContent() {
   const [positions,  setPositions]  = useState<Position[]>([])
   const [alertes,    setAlertes]    = useState<AlertePosition[]>([])
   const [cotations,  setCotations]  = useState<Record<string, number>>({})
@@ -1218,7 +1219,34 @@ export default function PositionsDashboard() {
   const [showForm,   setShowForm]   = useState(false)
   const [detailPos,  setDetailPos]  = useState<Position | null>(null)
   const [venteData,  setVenteData]  = useState<{ pos: Position; alerte: AlertePosition | null } | null>(null)
+  const [prefillNew, setPrefillNew] = useState<{
+    ticker?: string; support?: string; r1?: string; r2?: string; r3?: string; note?: string
+  } | null>(null)
   const supabase = createClient()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // Ouverture automatique du formulaire "Nouvelle position" quand on
+  // arrive depuis la page Analyses (bouton "Ouvrir une position sur X"),
+  // qui redirige vers /client/positions?nouvelle=1&ticker=...&support=...
+  // Sans ce useEffect, ces paramètres d'URL n'étaient jamais lus : on
+  // atterrissait sur la page positions sans que rien ne s'ouvre.
+  useEffect(() => {
+    if (searchParams.get('nouvelle') === '1') {
+      setPrefillNew({
+        ticker:  searchParams.get('ticker')  ?? undefined,
+        support: searchParams.get('support') ?? undefined,
+        r1:      searchParams.get('r1')      ?? undefined,
+        r2:      searchParams.get('r2')      ?? undefined,
+        r3:      searchParams.get('r3')      ?? undefined,
+        note:    searchParams.get('note')    ?? undefined,
+      })
+      setShowForm(true)
+      // Nettoie l'URL pour ne pas rouvrir le formulaire à chaque refresh
+      router.replace('/client/positions', { scroll: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   async function fetchAll() {
     const [{ data: pos }, { data: al }] = await Promise.all([
@@ -1230,12 +1258,6 @@ export default function PositionsDashboard() {
     setLoading(false)
   }
 
-  // NOTE : la détection des franchissements (stop, R1/R2/R3, runner) ne se
-  // fait plus ici. Elle est déléguée au job serveur `/api/cron/check-alerts`
-  // (appelé périodiquement par cron-job.org), qui écrit dans
-  // `position_alertes` et envoie les push. Ce composant ne fait plus que
-  // récupérer les cours pour l'affichage (P&L, %) et refléter en temps réel
-  // les lignes `position_alertes` créées côté serveur via Supabase Realtime.
   async function fetchCotations() {
     try {
       const res = await fetch('/api/cotations')
@@ -1249,7 +1271,61 @@ export default function PositionsDashboard() {
         if (nom && last != null) map[nom] = last
       })
       setCotations(map)
+      // Détecter et créer les alertes pour chaque position
+      await detecterEtCreerAlertes(map)
     } catch (err) { console.error('fetchCotations error:', err) }
+  }
+
+  async function detecterEtCreerAlertes(cotationsMap: Record<string, number>) {
+    try {
+      const { data: pos } = await supabase
+        .from('positions').select('*').neq('state', 'CLOSED')
+      const { data: alertesExist } = await supabase
+        .from('position_alertes').select('*').eq('is_acted', false)
+      if (!pos) return
+
+      for (const p of pos as Position[]) {
+        const prix = cotationsMap[p.ticker.toUpperCase()]
+        if (!prix) continue
+
+        const alertesDeja = (alertesExist || []).filter(a => a.position_id === p.id) as AlertePosition[]
+        const nouvelles   = detecterAlertes(p, prix, alertesDeja)
+
+        // Supprimer les alertes qui ne sont plus valides
+        // (le prix est revenu dans la zone normale depuis la dernière cotation)
+        for (const alerteDeja of alertesDeja) {
+          const encoreValide =
+            (alerteDeja.type === 'STOP_LOSS'      && prix <= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'RUNNER_STOP'    && prix <= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'TAKE_PROFIT_R1' && prix >= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'TAKE_PROFIT_R2' && prix >= alerteDeja.prix_trigger) ||
+            (alerteDeja.type === 'TAKE_PROFIT_R3' && prix >= alerteDeja.prix_trigger)
+
+          if (!encoreValide) {
+            await supabase
+              .from('position_alertes')
+              .delete()
+              .eq('id', alerteDeja.id)
+          }
+        }
+
+        // Insérer les nouvelles alertes valides
+        for (const a of nouvelles) {
+          const { data: { user } } = await supabase.auth.getUser()
+          const { error: insErr } = await supabase.from('position_alertes').insert({
+            position_id:  p.id,
+            user_id:      user?.id ?? null,
+            type:         a.type,
+            prix_trigger: a.prix_trigger,
+            prix_marche:  prix,
+            is_read:      false,
+            is_acted:     false,
+          })
+          if (insErr) console.error('insert alerte error:', insErr.message, insErr.code)
+        }
+      }
+      if (pos.length > 0) fetchAll()
+    } catch (err) { console.error('detecterAlertes error:', err) }
   }
 
   useEffect(() => {
@@ -1258,8 +1334,7 @@ export default function PositionsDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'positions' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'position_alertes' }, fetchAll)
       .subscribe()
-    // Rafraîchissement de l'affichage des cours uniquement (pas de détection ici)
-    const timer = setInterval(fetchCotations, 60 * 1000)
+    const timer = setInterval(fetchCotations, 15 * 60 * 1000)
     return () => { supabase.removeChannel(ch); clearInterval(timer) }
   }, [])
 
@@ -1409,8 +1484,9 @@ export default function PositionsDashboard() {
       <AnimatePresence>
         {showForm && (
           <NouvellePositionModal
-            onClose={() => setShowForm(false)}
-            onSaved={() => { fetchAll(); setShowForm(false) }}
+            initialData={prefillNew}
+            onClose={() => { setShowForm(false); setPrefillNew(null) }}
+            onSaved={() => { fetchAll(); setShowForm(false); setPrefillNew(null) }}
           />
         )}
         {detailPos && (
@@ -1434,9 +1510,33 @@ export default function PositionsDashboard() {
   )
 }
 
+// Next.js exige que tout composant utilisant useSearchParams() soit
+// entouré d'un <Suspense>, sans quoi le build échoue (ou l'hydratation
+// se comporte de façon incohérente). C'est ce wrapper qui manquait.
+export default function PositionsDashboard() {
+  return (
+    <Suspense fallback={null}>
+      <PositionsDashboardContent />
+    </Suspense>
+  )
+}
+
 /* ─── Nouvelle Position Modal ─────────────────────────────────── */
-function NouvellePositionModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ ticker:'', p0:'', quantite:'', support:'', r1:'', r2:'', r3:'', note:'' })
+function NouvellePositionModal({ onClose, onSaved, initialData }: {
+  onClose: () => void
+  onSaved: () => void
+  initialData?: { ticker?: string; support?: string; r1?: string; r2?: string; r3?: string; note?: string } | null
+}) {
+  const [form, setForm] = useState({
+    ticker:    initialData?.ticker  ?? '',
+    p0:        '',
+    quantite:  '',
+    support:   initialData?.support ?? '',
+    r1:        initialData?.r1      ?? '',
+    r2:        initialData?.r2      ?? '',
+    r3:        initialData?.r3      ?? '',
+    note:      initialData?.note    ?? '',
+  })
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }))
