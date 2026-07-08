@@ -18,6 +18,11 @@
     les tranches (notamment au point de couture dernière/première tranche).
   - Couleurs éclaircies (face du dessus) et parois moins assombries pour
     un rendu plus lumineux.
+  - Cas particulier "une seule position" (slice = 100%) : on ne rajoute
+    plus l'OVERLAP/WALL_OVERLAP de séparation entre tranches, car sur un
+    cercle complet ça faisait dépasser l'arc au-delà de 2π (angle de fin
+    < angle de départ visuellement), ce qui produisait une ellipse
+    dégénérée géante flottant au-dessus du donut au lieu d'un anneau plein.
 */
 
 import { useId, useState } from 'react'
@@ -161,13 +166,25 @@ export default function Donut3D({
           const isA = active === s.ticker
           const ex = isA ? Math.cos(s.mid + ROT) * EXPLODE : 0
           const ey = isA ? Math.sin(s.mid + ROT) * EXPLODE : 0
+
+          // Cas particulier : une tranche qui couvre (quasi) tout le
+          // cercle (position unique à 100%). Il n'y a alors aucune
+          // tranche voisine avec laquelle chevaucher : ajouter
+          // OVERLAP/WALL_OVERLAP des deux côtés ferait dépasser 2π et
+          // produirait un arc dégénéré (l'ellipse géante observée).
+          // On dessine donc un anneau plein, sans chevauchement ajouté.
+          const isFullCircle = (s.end - s.start) >= 2 * Math.PI - 0.01
+
           // Léger chevauchement (pas juste un espace réduit) : élimine tout
           // filet d'anti-aliasing entre tranches adjacentes, quel que soit
           // l'endroit où il se produirait sur le cercle.
-          const OVERLAP = 0.05
-          const WALL_OVERLAP = 0.05
-          const rs = s.start - OVERLAP, re = s.end + OVERLAP
-          const ws = s.start - WALL_OVERLAP, we = s.end + WALL_OVERLAP
+          const OVERLAP = isFullCircle ? 0 : 0.05
+          const WALL_OVERLAP = isFullCircle ? 0 : 0.05
+          const fullStart = 0.0005, fullEnd = 2 * Math.PI - 0.0005
+          const rs = isFullCircle ? fullStart : s.start - OVERLAP
+          const re = isFullCircle ? fullEnd   : s.end + OVERLAP
+          const ws = isFullCircle ? fullStart : s.start - WALL_OVERLAP
+          const we = isFullCircle ? fullEnd   : s.end + WALL_OVERLAP
           const outerD = pieOuter(ws, we, RX, RY, H, ROT)
           const innerD = pieInner(ws, we, rxi, ryi, H, ROT)
           const topD = pieTop(rs, re, RX, RY, rxi, ryi, ROT)
