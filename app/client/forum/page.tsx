@@ -64,6 +64,28 @@ async function uploadForumMedia(supabase: ReturnType<typeof createClient>, userI
   return data.publicUrl
 }
 
+// Safari (iOS/macOS) ne supporte PAS l'enregistrement en 'audio/webm' via
+// MediaRecorder — seul 'audio/mp4' fonctionne. Sans ce choix explicite,
+// le Blob était étiqueté "audio/webm" en dur alors que le contenu réel
+// pouvait être autre chose selon le navigateur, ce qui cassait la lecture
+// (locale ET après upload) avec un état "Erreur" sur iPhone.
+function pickAudioMimeType(): string {
+  const candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(c)) return c
+  }
+  return '' // laisser le navigateur choisir son défaut si aucun candidat n'est supporté
+}
+
+// Déduit une extension de fichier cohérente avec le mimeType réel du Blob,
+// au lieu de forcer 'webm' pour tout le monde.
+function extFromMime(mime: string): string {
+  if (mime.includes('mp4')) return 'm4a'
+  if (mime.includes('webm')) return 'webm'
+  if (mime.includes('ogg')) return 'ogg'
+  return 'webm'
+}
+
 /** Bouton d'enregistrement vocal — composant contrôlé (value/onChange). */
 function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange: (b: Blob | null) => void }) {
   const [recording, setRecording] = useState(false)
@@ -71,6 +93,7 @@ function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
+  const mimeTypeRef = useRef<string>('')
 
   useEffect(() => {
     if (!value) { setPreviewUrl(null); return }
@@ -84,10 +107,16 @@ function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       chunksRef.current = []
-      const mr = new MediaRecorder(stream)
+      const mimeType = pickAudioMimeType()
+      mimeTypeRef.current = mimeType
+      const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       mr.onstop = () => {
-        onChange(new Blob(chunksRef.current, { type: 'audio/webm' }))
+        // On utilise le mimeType réellement employé par l'enregistreur
+        // (mr.mimeType), pas une valeur supposée à l'avance — c'est ce
+        // qui garantit que le Blob correspond vraiment à son contenu.
+        const actualType = mr.mimeType || mimeTypeRef.current || 'audio/webm'
+        onChange(new Blob(chunksRef.current, { type: actualType }))
         stream.getTracks().forEach(t => t.stop())
       }
       mr.start()
@@ -213,7 +242,7 @@ export default function ForumPage() {
       let image_url: string | null = null
       let audio_url: string | null = null
       if (replyImage) image_url = await uploadForumMedia(supabase, userId, replyImage, replyImage.name.split('.').pop() || 'jpg')
-      if (replyAudio) audio_url = await uploadForumMedia(supabase, userId, replyAudio, 'webm')
+      if (replyAudio) audio_url = await uploadForumMedia(supabase, userId, replyAudio, extFromMime(replyAudio.type))
 
       const { error } = await supabase.from('forum_replies').insert({
         post_id:   selectedPost.id,
@@ -553,7 +582,7 @@ function NewPostModal({ userId, onClose, onCreated }: {
       let image_url: string | null = null
       let audio_url: string | null = null
       if (imageFile) image_url = await uploadForumMedia(supabase, userId, imageFile, imageFile.name.split('.').pop() || 'jpg')
-      if (audioBlob) audio_url = await uploadForumMedia(supabase, userId, audioBlob, 'webm')
+      if (audioBlob) audio_url = await uploadForumMedia(supabase, userId, audioBlob, extFromMime(audioBlob.type))
 
       const { error } = await supabase.from('forum_posts').insert({
         ...form, author_id: userId, ticker: form.ticker || null, image_url, audio_url,
