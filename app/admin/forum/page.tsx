@@ -60,9 +60,24 @@ export default function AdminForumPage() {
     toast.success(post.is_locked ? 'Discussion ouverte' : 'Discussion verrouillée')
   }
 
+  // Supprime un sujet ET ses réponses. On supprime d'abord les réponses
+  // explicitement (avant le post) : même si la contrainte de clé étrangère
+  // côté base est corrigée en ON DELETE CASCADE (voir migration SQL), ce
+  // filet de sécurité applicatif évite toute dépendance silencieuse à la
+  // config exacte de la base. On vérifie aussi vraiment l'erreur retournée
+  // par Supabase au lieu d'afficher un succès inconditionnel.
   async function deletePost(id: string) {
-    if (!confirm('Supprimer cette discussion ?')) return
-    await supabase.from('forum_posts').delete().eq('id', id)
+    if (!confirm('Supprimer cette discussion et toutes ses réponses ?')) return
+    const { error: repliesError } = await supabase.from('forum_replies').delete().eq('post_id', id)
+    if (repliesError) {
+      toast.error(`Échec de la suppression des réponses : ${repliesError.message}`)
+      return
+    }
+    const { error } = await supabase.from('forum_posts').delete().eq('id', id)
+    if (error) {
+      toast.error(`Échec de la suppression : ${error.message}`)
+      return
+    }
     toast.success('Discussion supprimée')
     fetchPosts()
     if (selected?.id === id) setSelected(null)
@@ -75,10 +90,14 @@ export default function AdminForumPage() {
       author_id: userId, is_admin_reply: true,
     })
     if (!error) { setReplyText(''); fetchReplies(selected.id); toast.success('Réponse publiée') }
+    else toast.error(`Échec de l'envoi : ${error.message}`)
   }
 
   async function deleteReply(id: string) {
-    await supabase.from('forum_replies').delete().eq('id', id)
+    if (!confirm('Supprimer cette réponse ?')) return
+    const { error } = await supabase.from('forum_replies').delete().eq('id', id)
+    if (error) { toast.error(`Échec de la suppression : ${error.message}`); return }
+    toast.success('Réponse supprimée')
     if (selected) fetchReplies(selected.id)
     fetchPosts()
   }
@@ -173,7 +192,15 @@ export default function AdminForumPage() {
 
               <div className="px-5 py-4 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
                 <h2 className="font-semibold text-sm line-clamp-1 pr-4" style={{ color: '#F5F5F5' }}>{selected.title}</h2>
-                <button onClick={() => setSelected(null)}><X size={16} style={{ color: '#5C5C5C' }} /></button>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <button onClick={() => deletePost(selected.id)} title="Supprimer cette discussion"
+                    className="p-1.5 rounded-lg" style={{ color: '#5C5C5C' }}
+                    onMouseOver={e => (e.currentTarget.style.color = '#FF1744')}
+                    onMouseOut={e => (e.currentTarget.style.color = '#5C5C5C')}>
+                    <Trash2 size={14} />
+                  </button>
+                  <button onClick={() => setSelected(null)}><X size={16} style={{ color: '#5C5C5C' }} /></button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto p-5 space-y-3">
