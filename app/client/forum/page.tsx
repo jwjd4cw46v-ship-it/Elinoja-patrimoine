@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye, Award, Clock } from 'lucide-react'
+import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye, Award, Clock, Image as ImageIcon, Mic, Square, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
@@ -53,6 +53,75 @@ const LEVELS = [
 ]
 function getLevel(reputation: number) {
   return LEVELS.find(l => reputation >= l.min)!
+}
+
+// ── Pièces jointes (image + message vocal) ──────────────────────────
+async function uploadForumMedia(supabase: ReturnType<typeof createClient>, userId: string, file: File | Blob, ext: string): Promise<string> {
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('forum-media').upload(path, file)
+  if (error) throw error
+  const { data } = supabase.storage.from('forum-media').getPublicUrl(path)
+  return data.publicUrl
+}
+
+/** Bouton d'enregistrement vocal — composant contrôlé (value/onChange). */
+function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange: (b: Blob | null) => void }) {
+  const [recording, setRecording] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+  const streamRef = useRef<MediaStream | null>(null)
+
+  useEffect(() => {
+    if (!value) { setPreviewUrl(null); return }
+    const url = URL.createObjectURL(value)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [value])
+
+  async function start() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
+      chunksRef.current = []
+      const mr = new MediaRecorder(stream)
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      mr.onstop = () => {
+        onChange(new Blob(chunksRef.current, { type: 'audio/webm' }))
+        stream.getTracks().forEach(t => t.stop())
+      }
+      mr.start()
+      recorderRef.current = mr
+      setRecording(true)
+    } catch {
+      toast.error("Micro inaccessible — vérifie l'autorisation du navigateur")
+    }
+  }
+  function stop() {
+    recorderRef.current?.stop()
+    setRecording(false)
+  }
+
+  if (value && previewUrl) {
+    return (
+      <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg" style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
+        <audio controls src={previewUrl} style={{ height: 28, maxWidth: 180 }} />
+        <button type="button" onClick={() => onChange(null)}><Trash2 size={13} style={{ color: '#FF1744' }} /></button>
+      </div>
+    )
+  }
+
+  return (
+    <button type="button" onClick={recording ? stop : start}
+      className="p-2 rounded-lg flex items-center gap-1.5 text-xs"
+      style={{
+        background: recording ? 'rgba(255,23,68,0.12)' : 'var(--noir-elevated)',
+        border: `1px solid ${recording ? 'rgba(255,23,68,0.35)' : 'var(--noir-border)'}`,
+        color: recording ? '#FF1744' : '#A0A0A0',
+      }}>
+      {recording ? <><Square size={13} fill="#FF1744" /> Arrêter</> : <Mic size={13} />}
+    </button>
+  )
 }
 
 export default function ForumPage() {
@@ -113,6 +182,8 @@ export default function ForumPage() {
 
   const [replies, setReplies]       = useState<ForumReply[]>([])
   const [replyText, setReplyText]   = useState('')
+  const [replyImage, setReplyImage] = useState<File | null>(null)
+  const [replyAudio, setReplyAudio] = useState<Blob | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [likingPost, setLikingPost] = useState<string | null>(null)
   const [likingReply, setLikingReply] = useState<string | null>(null)
@@ -138,15 +209,25 @@ export default function ForumPage() {
   async function submitReply() {
     if (!replyText.trim() || !selectedPost || !userId) return
     setSubmitting(true)
-    const { error } = await supabase.from('forum_replies').insert({
-      post_id:   selectedPost.id,
-      content:   replyText.trim(),
-      author_id: userId,
-    })
-    if (error) toast.error('Erreur lors de la publication')
-    else {
+    try {
+      let image_url: string | null = null
+      let audio_url: string | null = null
+      if (replyImage) image_url = await uploadForumMedia(supabase, userId, replyImage, replyImage.name.split('.').pop() || 'jpg')
+      if (replyAudio) audio_url = await uploadForumMedia(supabase, userId, replyAudio, 'webm')
+
+      const { error } = await supabase.from('forum_replies').insert({
+        post_id:   selectedPost.id,
+        content:   replyText.trim(),
+        author_id: userId,
+        image_url, audio_url,
+      })
+      if (error) throw error
       setReplyText('')
+      setReplyImage(null)
+      setReplyAudio(null)
       fetchReplies(selectedPost.id)
+    } catch {
+      toast.error('Erreur lors de la publication')
     }
     setSubmitting(false)
   }
@@ -423,6 +504,10 @@ export default function ForumPage() {
             submitting={submitting}
             isLiked={likedPosts.has(selectedPost.id)}
             likedReplies={likedReplies}
+            replyImage={replyImage}
+            replyAudio={replyAudio}
+            onReplyImageChange={setReplyImage}
+            onReplyAudioChange={setReplyAudio}
             onReplyChange={setReplyText}
             onSubmitReply={submitReply}
             onLike={() => toggleLike(selectedPost)}
@@ -448,16 +533,38 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }) {
   const [form, setForm] = useState({ title: '', content: '', category: CATEGORIES[0].key, ticker: '' })
   const [loading, setLoading] = useState(false)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
   const supabase = createClient()
+
+  function handleImagePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 8 * 1024 * 1024) { toast.error('Image trop lourde (max 8 Mo)'); return }
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    const { error } = await supabase.from('forum_posts').insert({
-      ...form, author_id: userId, ticker: form.ticker || null,
-    })
-    if (error) toast.error('Erreur lors de la publication')
-    else { toast.success('Discussion créée'); onCreated(); onClose() }
+    try {
+      let image_url: string | null = null
+      let audio_url: string | null = null
+      if (imageFile) image_url = await uploadForumMedia(supabase, userId, imageFile, imageFile.name.split('.').pop() || 'jpg')
+      if (audioBlob) audio_url = await uploadForumMedia(supabase, userId, audioBlob, 'webm')
+
+      const { error } = await supabase.from('forum_posts').insert({
+        ...form, author_id: userId, ticker: form.ticker || null, image_url, audio_url,
+      })
+      if (error) throw error
+      toast.success('Discussion créée')
+      onCreated()
+      onClose()
+    } catch {
+      toast.error('Erreur lors de la publication')
+    }
     setLoading(false)
   }
 
@@ -486,6 +593,27 @@ function NewPostModal({ userId, onClose, onCreated }: {
           </div>
           <textarea value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
             placeholder="Décrivez votre sujet..." required rows={4} className="input-premium resize-none" />
+
+          {imagePreview && (
+            <div className="relative inline-block">
+              <img src={imagePreview} alt="" className="rounded-lg" style={{ maxHeight: 140, maxWidth: '100%' }} />
+              <button type="button" onClick={() => { setImageFile(null); setImagePreview(null) }}
+                className="absolute -top-2 -right-2 rounded-full p-1"
+                style={{ background: '#1A1A1A', border: '1px solid var(--noir-border)' }}>
+                <X size={12} style={{ color: '#FF1744' }} />
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <label className="p-2 rounded-lg flex items-center gap-1.5 text-xs cursor-pointer"
+              style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)', color: '#A0A0A0' }}>
+              <ImageIcon size={13} /> Image
+              <input type="file" accept="image/*" onChange={handleImagePick} className="hidden" />
+            </label>
+            <VoiceRecorderButton value={audioBlob} onChange={setAudioBlob} />
+          </div>
+
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="btn-ghost flex-1">Annuler</button>
             <motion.button type="submit" disabled={loading} whileTap={{ scale: 0.97 }}
@@ -502,13 +630,17 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }
 
 // ── Detail Post ────────────────────────────────────────────
-function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, onReplyChange, onSubmitReply, onLike, onLikeReply, onClose, onOpenProfile }: {
+function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, replyImage, replyAudio, onReplyImageChange, onReplyAudioChange, onReplyChange, onSubmitReply, onLike, onLikeReply, onClose, onOpenProfile }: {
   post: ForumPost
   replies: ForumReply[]
   replyText: string
   submitting: boolean
   isLiked: boolean
   likedReplies: Set<string>
+  replyImage: File | null
+  replyAudio: Blob | null
+  onReplyImageChange: (f: File | null) => void
+  onReplyAudioChange: (b: Blob | null) => void
   onReplyChange: (t: string) => void
   onSubmitReply: () => void
   onLike: () => void
@@ -566,6 +698,12 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
             <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
               {post.content}
             </p>
+            {post.image_url && (
+              <img src={post.image_url} alt="" className="rounded-lg mt-3" style={{ maxWidth: '100%', maxHeight: 320 }} />
+            )}
+            {post.audio_url && (
+              <audio controls src={post.audio_url} className="mt-3" style={{ width: '100%', height: 32 }} />
+            )}
             <div className="flex items-center gap-3 mt-3 pt-3 border-t"
               style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
               <button onClick={onLike}
@@ -614,6 +752,12 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
                 {r.content}
               </p>
+              {r.image_url && (
+                <img src={r.image_url} alt="" className="rounded-lg mt-2" style={{ maxWidth: '100%', maxHeight: 220 }} />
+              )}
+              {r.audio_url && (
+                <audio controls src={r.audio_url} className="mt-2" style={{ width: '100%', height: 30 }} />
+              )}
               <button
                 onClick={() => onLikeReply(r)}
                 className="flex items-center gap-1 text-xs mt-2 px-2 py-1 rounded-lg transition-all"
@@ -632,6 +776,25 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
         {/* Zone de réponse */}
         {!post.is_locked && (
           <div className="px-5 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+            {replyImage && (
+              <div className="relative inline-block mb-2">
+                <img src={URL.createObjectURL(replyImage)} alt="" className="rounded-lg" style={{ maxHeight: 100 }} />
+                <button type="button" onClick={() => onReplyImageChange(null)}
+                  className="absolute -top-2 -right-2 rounded-full p-1"
+                  style={{ background: '#1A1A1A', border: '1px solid var(--noir-border)' }}>
+                  <X size={11} style={{ color: '#FF1744' }} />
+                </button>
+              </div>
+            )}
+            <div className="flex items-center gap-2 mb-2">
+              <label className="p-1.5 rounded-lg flex items-center cursor-pointer"
+                style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)', color: '#A0A0A0' }}>
+                <ImageIcon size={13} />
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) onReplyImageChange(f) }} />
+              </label>
+              <VoiceRecorderButton value={replyAudio} onChange={onReplyAudioChange} />
+            </div>
             <div className="flex gap-3">
               <textarea value={replyText} onChange={e => onReplyChange(e.target.value)}
                 placeholder="Votre réponse..." rows={2}
