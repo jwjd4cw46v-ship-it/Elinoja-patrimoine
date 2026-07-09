@@ -101,6 +101,8 @@ export interface ForumPost {
   views_count: number
   is_pinned: boolean
   is_locked: boolean
+  image_url: string | null
+  audio_url: string | null
   created_at: string
   updated_at: string
   replies?: ForumReply[]
@@ -115,6 +117,8 @@ export interface ForumReply {
   author?: Profile
   likes_count: number
   is_admin_reply: boolean
+  image_url: string | null
+  audio_url: string | null
   created_at: string
   updated_at: string
   user_liked?: boolean
