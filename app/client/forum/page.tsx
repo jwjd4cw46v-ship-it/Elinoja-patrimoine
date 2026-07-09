@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye, Award, Clock, Image as ImageIcon, Mic, Square, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -8,6 +8,27 @@ import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { ForumPost, ForumReply } from '@/types'
+
+// Détecte les URLs (http/https/www.) dans un texte et les rend cliquables.
+// On reste volontairement sur du texte + <a>, jamais de
+// dangerouslySetInnerHTML, pour ne pas exécuter de HTML/JS arbitraire
+// écrit par un utilisateur dans son post.
+const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<]+)/gi
+function linkify(text: string): ReactNode[] {
+  const parts = text.split(URL_REGEX)
+  return parts.map((part, i) => {
+    if (!URL_REGEX.test(part)) { URL_REGEX.lastIndex = 0; return part }
+    URL_REGEX.lastIndex = 0
+    const href = part.startsWith('www.') ? `https://${part}` : part
+    return (
+      <a key={i} href={href} target="_blank" rel="noopener noreferrer"
+        onClick={e => e.stopPropagation()}
+        style={{ color: '#D4AF37', textDecoration: 'underline', wordBreak: 'break-all' }}>
+        {part}
+      </a>
+    )
+  })
+}
 
 // ── Catégories du forum ─────────────────────────────
 const CATEGORIES: { key: string; emoji: string }[] = [
@@ -725,7 +746,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
               </span>
             </div>
             <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
-              {post.content}
+              {linkify(post.content)}
             </p>
             {post.image_url && (
               <img src={post.image_url} alt="" className="rounded-lg mt-3" style={{ maxWidth: '100%', maxHeight: 320 }} />
@@ -779,7 +800,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
                 </span>
               </div>
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
-                {r.content}
+                {linkify(r.content)}
               </p>
               {r.image_url && (
                 <img src={r.image_url} alt="" className="rounded-lg mt-2" style={{ maxWidth: '100%', maxHeight: 220 }} />
