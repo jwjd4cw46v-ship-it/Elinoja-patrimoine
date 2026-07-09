@@ -824,18 +824,18 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
               </label>
               <VoiceRecorderButton value={replyAudio} onChange={onReplyAudioChange} />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3">
               <textarea value={replyText} onChange={e => onReplyChange(e.target.value)}
                 placeholder="Votre réponse..." rows={2}
-                className="input-premium flex-1 resize-none text-sm"
+                className="input-premium w-full resize-none text-sm"
                 onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }} />
-              <motion.button whileTap={{ scale: 0.95 }} onClick={onSubmitReply}
+              <motion.button whileTap={{ scale: 0.97 }} onClick={onSubmitReply}
                 disabled={!replyText.trim() || submitting}
-                className="btn-gold px-4 self-end flex items-center gap-2"
+                className="btn-gold w-full py-2.5 flex items-center justify-center gap-2"
                 style={{ opacity: !replyText.trim() ? 0.5 : 1 }}>
                 {submitting
                   ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  : <Reply size={14} />}
+                  : <><Reply size={14} /> Publier</>}
               </motion.button>
             </div>
           </div>
