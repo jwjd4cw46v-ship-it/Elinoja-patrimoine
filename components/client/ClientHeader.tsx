@@ -24,6 +24,17 @@ interface Market {
 
 const PRIORITY = ['TUNINDEX', 'TUNINDEX20', 'AB', 'SFBT', 'BNA', 'ATB', 'BIAT', 'BT', 'PGH', 'STB']
 
+// Met à jour (ou vide) le badge sur l'icône de l'app — Badging API,
+// silencieusement ignorée si non supportée (navigateur/OS/PWA non installée).
+function syncAppBadge(unreadCount: number) {
+  if (typeof navigator === 'undefined') return
+  if (unreadCount > 0 && 'setAppBadge' in navigator) {
+    (navigator as any).setAppBadge(unreadCount).catch(() => {})
+  } else if (unreadCount === 0 && 'clearAppBadge' in navigator) {
+    (navigator as any).clearAppBadge().catch(() => {})
+  }
+}
+
 export default function ClientHeader({ profile }: { profile: Profile }) {
   const [menuOpen,   setMenuOpen]   = useState(false)
   const [notifOpen,  setNotifOpen]  = useState(false)
@@ -87,6 +98,10 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     const unread = data.filter(n => !n.is_read)
     setCountLow(unread.filter(n => n.type?.includes('LOW') || n.type === 'STOP_LOSS').length)
     setCountHigh(unread.filter(n => !(n.type?.includes('LOW') || n.type === 'STOP_LOSS')).length)
+    // Resynchronise le badge de l'icône avec l'état réel à chaque
+    // chargement — couvre le cas où le badge du dernier push reçu était
+    // désynchronisé (plusieurs pushes rapprochés, notif lue ailleurs, etc.)
+    syncAppBadge(unread.length)
   }
 
   useEffect(() => {
@@ -112,6 +127,9 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
   // Marque les notifications comme lues à l'ouverture du panneau
   async function markAllRead() {
     await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile.id).eq('is_read', false)
+    // Tout est lu → on vide le badge de l'icône immédiatement, sans
+    // attendre un éventuel prochain push pour le resynchroniser.
+    syncAppBadge(0)
   }
 
   function handleBellOpen() {
