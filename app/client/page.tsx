@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import Link from 'next/link'
-import PWARegister from '@/components/PWARegister'
+import NotificationActivateButton from '@/components/NotificationActivateButton'
 import type { TechnicalAnalysis, Announcement } from '@/types'
 
 export default function ClientDashboard() {
@@ -101,7 +101,7 @@ export default function ClientDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome banner modifiée avec le bouton PWARegister */}
+      {/* Welcome banner avec le bouton d'activation des notifications */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -123,8 +123,8 @@ export default function ClientDashboard() {
             <p className="text-sm mb-3" style={{ color: '#707070' }}>
               {format(new Date(), "EEEE d MMMM yyyy", { locale: fr })} · Données en temps réel
             </p>
-            {/* Intégration du composant d'activation des alertes */}
-            <PWARegister />
+            {/* Seul et unique bouton d'activation des notifications de l'app */}
+            <NotificationActivateButton />
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium hidden sm:flex"
             style={{ background: 'rgba(0,200,83,0.1)', color: '#00C853', border: '1px solid rgba(0,200,83,0.2)' }}>
