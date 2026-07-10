@@ -26,9 +26,13 @@ export function usePushNotifications() {
         return false
       }
 
-      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY?.trim()
       if (!vapidKey) {
         setError('Clé VAPID publique manquante (NEXT_PUBLIC_VAPID_PUBLIC_KEY).')
+        return false
+      }
+      if (!/^[A-Za-z0-9\-_]+=*$/.test(vapidKey)) {
+        setError('Clé VAPID publique mal formée (caractères invalides) — vérifiez qu\'elle a été copiée sans espace ni retour à la ligne.')
         return false
       }
 
@@ -107,8 +111,9 @@ export function usePushNotifications() {
 }
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4)
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const trimmed = base64String.trim()
+  const padding = '='.repeat((4 - trimmed.length % 4) % 4)
+  const base64 = (trimmed + padding).replace(/-/g, '+').replace(/_/g, '/')
   const rawData = atob(base64)
   const outputArray = new Uint8Array(rawData.length)
   for (let i = 0; i < rawData.length; i++) {
