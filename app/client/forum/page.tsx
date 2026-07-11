@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye, Award, Clock, Image as ImageIcon, Mic, Square, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -8,27 +8,6 @@ import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { ForumPost, ForumReply } from '@/types'
-
-// Détecte les URLs (http/https/www.) dans un texte et les rend cliquables.
-// On reste volontairement sur du texte + <a>, jamais de
-// dangerouslySetInnerHTML, pour ne pas exécuter de HTML/JS arbitraire
-// écrit par un utilisateur dans son post.
-const URL_REGEX = /((?:https?:\/\/|www\.)[^\s<]+)/gi
-function linkify(text: string): ReactNode[] {
-  const parts = text.split(URL_REGEX)
-  return parts.map((part, i) => {
-    if (!URL_REGEX.test(part)) { URL_REGEX.lastIndex = 0; return part }
-    URL_REGEX.lastIndex = 0
-    const href = part.startsWith('www.') ? `https://${part}` : part
-    return (
-      <a key={i} href={href} target="_blank" rel="noopener noreferrer"
-        onClick={e => e.stopPropagation()}
-        style={{ color: '#D4AF37', textDecoration: 'underline', wordBreak: 'break-all' }}>
-        {part}
-      </a>
-    )
-  })
-}
 
 // ── Catégories du forum ─────────────────────────────
 const CATEGORIES: { key: string; emoji: string }[] = [
@@ -85,28 +64,6 @@ async function uploadForumMedia(supabase: ReturnType<typeof createClient>, userI
   return data.publicUrl
 }
 
-// Safari (iOS/macOS) ne supporte PAS l'enregistrement en 'audio/webm' via
-// MediaRecorder — seul 'audio/mp4' fonctionne. Sans ce choix explicite,
-// le Blob était étiqueté "audio/webm" en dur alors que le contenu réel
-// pouvait être autre chose selon le navigateur, ce qui cassait la lecture
-// (locale ET après upload) avec un état "Erreur" sur iPhone.
-function pickAudioMimeType(): string {
-  const candidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
-  for (const c of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(c)) return c
-  }
-  return '' // laisser le navigateur choisir son défaut si aucun candidat n'est supporté
-}
-
-// Déduit une extension de fichier cohérente avec le mimeType réel du Blob,
-// au lieu de forcer 'webm' pour tout le monde.
-function extFromMime(mime: string): string {
-  if (mime.includes('mp4')) return 'm4a'
-  if (mime.includes('webm')) return 'webm'
-  if (mime.includes('ogg')) return 'ogg'
-  return 'webm'
-}
-
 /** Bouton d'enregistrement vocal — composant contrôlé (value/onChange). */
 function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange: (b: Blob | null) => void }) {
   const [recording, setRecording] = useState(false)
@@ -114,7 +71,6 @@ function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const streamRef = useRef<MediaStream | null>(null)
-  const mimeTypeRef = useRef<string>('')
 
   useEffect(() => {
     if (!value) { setPreviewUrl(null); return }
@@ -128,16 +84,10 @@ function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
       chunksRef.current = []
-      const mimeType = pickAudioMimeType()
-      mimeTypeRef.current = mimeType
-      const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+      const mr = new MediaRecorder(stream)
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
       mr.onstop = () => {
-        // On utilise le mimeType réellement employé par l'enregistreur
-        // (mr.mimeType), pas une valeur supposée à l'avance — c'est ce
-        // qui garantit que le Blob correspond vraiment à son contenu.
-        const actualType = mr.mimeType || mimeTypeRef.current || 'audio/webm'
-        onChange(new Blob(chunksRef.current, { type: actualType }))
+        onChange(new Blob(chunksRef.current, { type: 'audio/webm' }))
         stream.getTracks().forEach(t => t.stop())
       }
       mr.start()
@@ -234,6 +184,7 @@ export default function ForumPage() {
   const [replyText, setReplyText]   = useState('')
   const [replyImage, setReplyImage] = useState<File | null>(null)
   const [replyAudio, setReplyAudio] = useState<Blob | null>(null)
+  const [replyingTo, setReplyingTo] = useState<{ id: string; authorId: string; authorName: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [likingPost, setLikingPost] = useState<string | null>(null)
   const [likingReply, setLikingReply] = useState<string | null>(null)
@@ -263,18 +214,42 @@ export default function ForumPage() {
       let image_url: string | null = null
       let audio_url: string | null = null
       if (replyImage) image_url = await uploadForumMedia(supabase, userId, replyImage, replyImage.name.split('.').pop() || 'jpg')
-      if (replyAudio) audio_url = await uploadForumMedia(supabase, userId, replyAudio, extFromMime(replyAudio.type))
+      if (replyAudio) audio_url = await uploadForumMedia(supabase, userId, replyAudio, 'webm')
 
       const { error } = await supabase.from('forum_replies').insert({
-        post_id:   selectedPost.id,
-        content:   replyText.trim(),
-        author_id: userId,
+        post_id:     selectedPost.id,
+        content:     replyText.trim(),
+        author_id:   userId,
+        reply_to_id: replyingTo?.id ?? null,
         image_url, audio_url,
       })
       if (error) throw error
+
+      // ── Notifications : la personne taguée (si réponse ciblée) ET
+      // l'auteur du sujet (sauf si c'est la même personne, ou soi-même) ──
+      const notifyTargets = new Set<string>()
+      if (replyingTo && replyingTo.authorId !== userId) notifyTargets.add(replyingTo.authorId)
+      if (selectedPost.author_id && selectedPost.author_id !== userId) notifyTargets.add(selectedPost.author_id)
+
+      await Promise.allSettled(
+        [...notifyTargets].map(targetUserId =>
+          window.fetch('/api/forum/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              targetUserId,
+              postId: selectedPost.id,
+              postTitle: selectedPost.title,
+              mention: replyingTo?.authorId === targetUserId,
+            }),
+          })
+        )
+      )
+
       setReplyText('')
       setReplyImage(null)
       setReplyAudio(null)
+      setReplyingTo(null)
       fetchReplies(selectedPost.id)
     } catch {
       toast.error('Erreur lors de la publication')
@@ -556,13 +531,15 @@ export default function ForumPage() {
             likedReplies={likedReplies}
             replyImage={replyImage}
             replyAudio={replyAudio}
+            replyingTo={replyingTo}
             onReplyImageChange={setReplyImage}
             onReplyAudioChange={setReplyAudio}
+            onReplyingToChange={setReplyingTo}
             onReplyChange={setReplyText}
             onSubmitReply={submitReply}
             onLike={() => toggleLike(selectedPost)}
             onLikeReply={toggleReplyLike}
-            onClose={() => { setSelectedPost(null); setReplies([]) }}
+            onClose={() => { setSelectedPost(null); setReplies([]); setReplyingTo(null) }}
             onOpenProfile={setProfileUserId}
           />
         )}
@@ -603,7 +580,7 @@ function NewPostModal({ userId, onClose, onCreated }: {
       let image_url: string | null = null
       let audio_url: string | null = null
       if (imageFile) image_url = await uploadForumMedia(supabase, userId, imageFile, imageFile.name.split('.').pop() || 'jpg')
-      if (audioBlob) audio_url = await uploadForumMedia(supabase, userId, audioBlob, extFromMime(audioBlob.type))
+      if (audioBlob) audio_url = await uploadForumMedia(supabase, userId, audioBlob, 'webm')
 
       const { error } = await supabase.from('forum_posts').insert({
         ...form, author_id: userId, ticker: form.ticker || null, image_url, audio_url,
@@ -680,7 +657,7 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }
 
 // ── Detail Post ────────────────────────────────────────────
-function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, replyImage, replyAudio, onReplyImageChange, onReplyAudioChange, onReplyChange, onSubmitReply, onLike, onLikeReply, onClose, onOpenProfile }: {
+function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, replyImage, replyAudio, replyingTo, onReplyImageChange, onReplyAudioChange, onReplyingToChange, onReplyChange, onSubmitReply, onLike, onLikeReply, onClose, onOpenProfile }: {
   post: ForumPost
   replies: ForumReply[]
   replyText: string
@@ -689,8 +666,10 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
   likedReplies: Set<string>
   replyImage: File | null
   replyAudio: Blob | null
+  replyingTo: { id: string; authorId: string; authorName: string } | null
   onReplyImageChange: (f: File | null) => void
   onReplyAudioChange: (b: Blob | null) => void
+  onReplyingToChange: (v: { id: string; authorId: string; authorName: string } | null) => void
   onReplyChange: (t: string) => void
   onSubmitReply: () => void
   onLike: () => void
@@ -746,13 +725,13 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
               </span>
             </div>
             <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
-              {linkify(post.content)}
+              {post.content}
             </p>
-            {post.image_url && (
-              <img src={post.image_url} alt="" className="rounded-lg mt-3" style={{ maxWidth: '100%', maxHeight: 320 }} />
+            {(post as any).image_url && (
+              <img src={(post as any).image_url} alt="" className="rounded-lg mt-3" style={{ maxWidth: '100%', maxHeight: 320 }} />
             )}
-            {post.audio_url && (
-              <audio controls src={post.audio_url} className="mt-3" style={{ width: '100%', height: 32 }} />
+            {(post as any).audio_url && (
+              <audio controls src={(post as any).audio_url} className="mt-3" style={{ width: '100%', height: 32 }} />
             )}
             <div className="flex items-center gap-3 mt-3 pt-3 border-t"
               style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
@@ -800,25 +779,42 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
                 </span>
               </div>
               <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#C0C0C0' }}>
-                {linkify(r.content)}
+                {(() => {
+                  const parentId = (r as any).reply_to_id as string | undefined
+                  const parent = parentId ? replies.find(pr => pr.id === parentId) : null
+                  return parent ? (
+                    <span className="block text-xs mb-1" style={{ color: '#D4AF37' }}>
+                      ↳ en réponse à @{(parent.author as any)?.full_name}
+                    </span>
+                  ) : null
+                })()}
+                {r.content}
               </p>
-              {r.image_url && (
-                <img src={r.image_url} alt="" className="rounded-lg mt-2" style={{ maxWidth: '100%', maxHeight: 220 }} />
+              {(r as any).image_url && (
+                <img src={(r as any).image_url} alt="" className="rounded-lg mt-2" style={{ maxWidth: '100%', maxHeight: 220 }} />
               )}
-              {r.audio_url && (
-                <audio controls src={r.audio_url} className="mt-2" style={{ width: '100%', height: 30 }} />
+              {(r as any).audio_url && (
+                <audio controls src={(r as any).audio_url} className="mt-2" style={{ width: '100%', height: 30 }} />
               )}
-              <button
-                onClick={() => onLikeReply(r)}
-                className="flex items-center gap-1 text-xs mt-2 px-2 py-1 rounded-lg transition-all"
-                style={{
-                  color:      likedReplies.has(r.id) ? '#D4AF37' : '#5C5C5C',
-                  background: likedReplies.has(r.id) ? 'rgba(212,175,55,0.1)' : 'transparent',
-                  border:     likedReplies.has(r.id) ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
-                }}>
-                <ThumbsUp size={11} fill={likedReplies.has(r.id) ? '#D4AF37' : 'none'} />
-                <span>{(r as any).likes_count || 0}</span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onLikeReply(r)}
+                  className="flex items-center gap-1 text-xs mt-2 px-2 py-1 rounded-lg transition-all"
+                  style={{
+                    color:      likedReplies.has(r.id) ? '#D4AF37' : '#5C5C5C',
+                    background: likedReplies.has(r.id) ? 'rgba(212,175,55,0.1)' : 'transparent',
+                    border:     likedReplies.has(r.id) ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+                  }}>
+                  <ThumbsUp size={11} fill={likedReplies.has(r.id) ? '#D4AF37' : 'none'} />
+                  <span>{(r as any).likes_count || 0}</span>
+                </button>
+                <button
+                  onClick={() => onReplyingToChange({ id: r.id, authorId: r.author_id, authorName: (r.author as any)?.full_name || 'ce membre' })}
+                  className="flex items-center gap-1 text-xs mt-2 px-2 py-1 rounded-lg"
+                  style={{ color: '#5C5C5C' }}>
+                  <Reply size={11} /> Répondre
+                </button>
+              </div>
             </motion.div>
           ))}
         </div>
@@ -826,6 +822,17 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
         {/* Zone de réponse */}
         {!post.is_locked && (
           <div className="px-5 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+            {replyingTo && (
+              <div className="flex items-center justify-between mb-2 px-2 py-1 rounded-lg"
+                style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)' }}>
+                <span className="text-xs" style={{ color: '#D4AF37' }}>
+                  Réponse à @{replyingTo.authorName}
+                </span>
+                <button onClick={() => onReplyingToChange(null)}>
+                  <X size={12} style={{ color: '#5C5C5C' }} />
+                </button>
+              </div>
+            )}
             {replyImage && (
               <div className="relative inline-block mb-2">
                 <img src={URL.createObjectURL(replyImage)} alt="" className="rounded-lg" style={{ maxHeight: 100 }} />
@@ -845,18 +852,18 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
               </label>
               <VoiceRecorderButton value={replyAudio} onChange={onReplyAudioChange} />
             </div>
-            <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
               <textarea value={replyText} onChange={e => onReplyChange(e.target.value)}
-                placeholder="Votre réponse..." rows={2}
-                className="input-premium w-full resize-none text-sm"
+                placeholder={replyingTo ? `Répondre à @${replyingTo.authorName}...` : 'Votre réponse...'} rows={2}
+                className="input-premium flex-1 resize-none text-sm"
                 onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) onSubmitReply() }} />
-              <motion.button whileTap={{ scale: 0.97 }} onClick={onSubmitReply}
+              <motion.button whileTap={{ scale: 0.95 }} onClick={onSubmitReply}
                 disabled={!replyText.trim() || submitting}
-                className="btn-gold w-full py-2.5 flex items-center justify-center gap-2"
+                className="btn-gold px-4 self-end flex items-center gap-2"
                 style={{ opacity: !replyText.trim() ? 0.5 : 1 }}>
                 {submitting
                   ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  : <><Reply size={14} /> Publier</>}
+                  : <Reply size={14} />}
               </motion.button>
             </div>
           </div>
