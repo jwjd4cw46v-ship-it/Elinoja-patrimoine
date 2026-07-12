@@ -214,6 +214,7 @@ export default function ForumPage() {
   // propre publication/réponse — sinon cliquer sur son propre like le
   // likerait soi-même, ce qui n'a pas de sens) ─────────────────────────
   const [likersModal, setLikersModal] = useState<{ names: string[]; loading: boolean } | null>(null)
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   async function showLikers(target: { postId?: string; replyId?: string }) {
     setLikersModal({ names: [], loading: true })
@@ -583,6 +584,7 @@ export default function ForumPage() {
             onLike={() => toggleLike(selectedPost)}
             onLikeReply={toggleReplyLike}
             onShowLikers={showLikers}
+            onImageClick={setLightboxSrc}
             onClose={() => { setSelectedPost(null); setReplies([]) }}
             onOpenProfile={setProfileUserId}
           />
@@ -598,6 +600,12 @@ export default function ForumPage() {
       <AnimatePresence>
         {likersModal && (
           <LikersModal names={likersModal.names} loading={likersModal.loading} onClose={() => setLikersModal(null)} />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {lightboxSrc && (
+          <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
         )}
       </AnimatePresence>
     </div>
@@ -724,6 +732,7 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
   onLike: () => void
   onLikeReply: (reply: ForumReply) => void
   onShowLikers: (target: { postId?: string; replyId?: string }) => void
+  onImageClick: (src: string) => void
   onClose: () => void
   onOpenProfile: (userId: string) => void
 }) {
@@ -778,7 +787,8 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
               {linkify(post.content)}
             </p>
             {post.image_url && (
-              <img src={post.image_url} alt="" className="rounded-lg mt-3" style={{ maxWidth: '100%', maxHeight: 320 }} />
+              <img src={post.image_url} alt="" onClick={() => onImageClick(post.image_url!)}
+                className="rounded-lg mt-3 cursor-zoom-in" style={{ maxWidth: '100%', maxHeight: 320 }} />
             )}
             {post.audio_url && (
               <audio controls src={post.audio_url} className="mt-3" style={{ width: '100%', height: 32 }} />
@@ -832,7 +842,8 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
                 {linkify(r.content)}
               </p>
               {r.image_url && (
-                <img src={r.image_url} alt="" className="rounded-lg mt-2" style={{ maxWidth: '100%', maxHeight: 220 }} />
+                <img src={r.image_url} alt="" onClick={() => onImageClick(r.image_url!)}
+                  className="rounded-lg mt-2 cursor-zoom-in" style={{ maxWidth: '100%', maxHeight: 220 }} />
               )}
               {r.audio_url && (
                 <audio controls src={r.audio_url} className="mt-2" style={{ width: '100%', height: 30 }} />
@@ -896,6 +907,25 @@ function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedR
 }
 
 // ── Fiche profil membre (avatar, badge, ancienneté, publications, réputation, dernière connexion) ──
+// ── Image plein écran (zoom) ──────────────────────────────────
+function ImageLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2"
+      style={{ background: 'rgba(0,0,0,0.95)', overflow: 'auto', touchAction: 'pinch-zoom' }}>
+      <button onClick={onClose}
+        className="fixed top-4 right-4 p-2 rounded-full z-10"
+        style={{ background: 'rgba(255,255,255,0.1)' }}>
+        <X size={20} style={{ color: '#fff' }} />
+      </button>
+      <img src={src} alt=""
+        className="cursor-zoom-out"
+        style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', touchAction: 'pinch-zoom' }} />
+    </motion.div>
+  )
+}
+
 // ── Qui a aimé ? ─────────────────────────────────────────────
 function LikersModal({ names, loading, onClose }: { names: string[]; loading: boolean; onClose: () => void }) {
   return (
