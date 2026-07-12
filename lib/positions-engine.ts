@@ -138,6 +138,18 @@ export function calculerPnlVente(
  * Détection des alertes à partir du prix courant (t-15min)
  * Retourne la liste des alertes à déclencher (idempotent)
  * Alertes : STOP_LOSS, TAKE_PROFIT_R1/R2/R3, RUNNER_STOP uniquement
+ *
+ * IMPORTANT : `deja()` ne doit PAS filtrer sur `is_acted`. Une alerte
+ * "conservée"/traitée par l'utilisateur (is_acted=true) compte quand même
+ * comme "déjà existante" pour ce (position, type) — sinon, tant que le
+ * prix reste dans la zone de déclenchement, cette fonction continue de
+ * proposer une NOUVELLE alerte à insérer à chaque appel, ce qui entre en
+ * collision avec la contrainte unique en base (unique_alerte) puisque
+ * l'ancienne ligne n'est plus supprimée quand l'utilisateur clique sur
+ * "Conserver ma position" (elle est désormais marquée is_acted=true, pas
+ * supprimée). Le nettoyage (fait par l'appelant, page.tsx / check-alerts)
+ * continue de supprimer la ligne dès que le prix repasse hors zone, ce qui
+ * réarme naturellement la détection pour un futur franchissement.
  */
 export function detecterAlertes(
   position: Position,
@@ -146,7 +158,7 @@ export function detecterAlertes(
 ): { type: AlertType; prix_trigger: number }[] {
   const alertes: { type: AlertType; prix_trigger: number }[] = []
   const deja = (type: AlertType) =>
-    alertesExistantes.some(a => a.type === type && !a.is_acted)
+    alertesExistantes.some(a => a.type === type)
 
   // Stop loss — prix <= stop actuel
   if (prixCourant <= position.stop_actuel && !deja('STOP_LOSS')) {
