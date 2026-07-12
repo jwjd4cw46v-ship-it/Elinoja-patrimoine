@@ -230,7 +230,7 @@ export default function ForumPage() {
       .from('forum_replies')
       .select('*, author:profiles(full_name, role, badge)')
       .eq('post_id', postId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
     if (data) setReplies(data as any)
   }
 
