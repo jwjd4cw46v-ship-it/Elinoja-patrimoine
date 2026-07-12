@@ -24,8 +24,8 @@ self.addEventListener('push', e => {
 
   const { title, body, ticker, type, notifId, badgeCount } = payload
 
-  const icon  = '/icons/icon-192.png'
-  const badge = '/icons/badge-72.png'
+  const icon  = '/icon-192.png'
+  const badge = '/badge-72.png'
   const tag   = `elinoja-${ticker || type}-${notifId}`
 
   // Badge sur l'icône de l'app (Badging API — iOS 16.4+, Chrome/Edge
