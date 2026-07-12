@@ -11,7 +11,23 @@ export function usePushNotifications() {
   useEffect(() => {
     const ok = 'serviceWorker' in navigator && 'PushManager' in window
     setSupported(ok)
-    if (ok) setPermission(Notification.permission)
+    if (!ok) return
+    setPermission(Notification.permission)
+
+    // Sans ce check, `subscribed` repartait à `false` à chaque montage du
+    // composant (reconnexion, rechargement de page), même si l'abonnement
+    // était toujours actif côté navigateur ET en base — le bouton
+    // réapparaissait alors qu'il n'y avait rien à refaire.
+    ;(async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration()
+        if (!reg) return
+        const sub = await reg.pushManager.getSubscription()
+        if (sub) setSubscribed(true)
+      } catch {
+        // silencieux — au pire l'utilisateur reverra le bouton et pourra recliquer
+      }
+    })()
   }, [])
 
   async function subscribe() {
