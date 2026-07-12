@@ -818,7 +818,7 @@ function VenteModal({
   async function handleConserverPosition() {
     if (!alerte) return
     setLoading(true)
-    await supabase.from('position_alertes').delete().eq('id', alerte.id)
+    await supabase.from('position_alertes').update({ is_acted: true, is_read: true }).eq('id', alerte.id)
     toast.success('Position conservée')
     onSaved()
     setLoading(false)
@@ -1280,8 +1280,15 @@ function PositionsDashboardContent() {
     try {
       const { data: pos } = await supabase
         .from('positions').select('*').neq('state', 'CLOSED')
+      // IMPORTANT : on ne filtre plus sur is_acted=false ici. Une alerte
+      // "conservée" (is_acted=true) doit rester visible à cette détection
+      // tant que le prix reste dans la zone de déclenchement, sinon elle
+      // est recréée à chaque rafraîchissement des cotations — c'était le
+      // bug ("l'alerte réapparaît"). Le nettoyage juste en dessous continue
+      // de supprimer ces alertes (traitées ou non) dès que le prix repasse
+      // hors zone, ce qui réarme normalement la détection pour la suite.
       const { data: alertesExist } = await supabase
-        .from('position_alertes').select('*').eq('is_acted', false)
+        .from('position_alertes').select('*')
       if (!pos) return
 
       for (const p of pos as Position[]) {
