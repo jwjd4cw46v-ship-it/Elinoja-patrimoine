@@ -715,7 +715,7 @@ function NewPostModal({ userId, onClose, onCreated }: {
 }
 
 // ── Detail Post ────────────────────────────────────────────
-function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, replyImage, replyAudio, userId, onReplyImageChange, onReplyAudioChange, onReplyChange, onSubmitReply, onLike, onLikeReply, onShowLikers, onClose, onOpenProfile }: {
+function PostDetailModal({ post, replies, replyText, submitting, isLiked, likedReplies, replyImage, replyAudio, userId, onReplyImageChange, onReplyAudioChange, onReplyChange, onSubmitReply, onLike, onLikeReply, onShowLikers, onImageClick, onClose, onOpenProfile }: {
   post: ForumPost
   replies: ForumReply[]
   replyText: string
