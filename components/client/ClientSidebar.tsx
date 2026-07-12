@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, BarChart2,
   FileText, MessageSquare, Bell, Star, ChevronRight,
   Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
-  Menu, X, Globe, Target, BookOpen, Users,
+  Menu, X, Globe, Target, BookOpen, Users, HelpCircle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -71,6 +71,12 @@ const navSections = [
       { href: '/client/forum',   icon: MessageSquare, label: 'Communauté Elinoja' },
     ],
   },
+  {
+    label: 'SUPPORT',
+    items: [
+      { href: '/client/aide', icon: HelpCircle, label: 'Aide & Installation' },
+    ],
+  },
 ]
 
 const PAGE_LABELS: Record<string, string> = {
@@ -88,6 +94,7 @@ const PAGE_LABELS: Record<string, string> = {
   '/client/figures-chartistes': 'Figures Chartistes',
   '/client/positions':     'Elinoja Stratégie',
   '/client/avis-experts':  "Avis d'Experts",
+  '/client/aide':          'Aide & Installation',
 }
 
 function getLabel(pathname: string) {
