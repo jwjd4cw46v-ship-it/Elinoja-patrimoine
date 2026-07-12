@@ -105,8 +105,16 @@ export async function GET(req: NextRequest) {
   // ═══════════════════════ PART B — POSITIONS ═══════════════════════════
   const { data: positions, error: posErr } = await db
     .from('positions').select('*').neq('state', 'CLOSED')
+  // IMPORTANT : on ne filtre plus sur is_acted=false ici. Une alerte
+  // "conservée" par l'utilisateur (is_acted=true, cf. handleConserverPosition
+  // côté client) doit rester visible à cette détection tant que le prix
+  // reste dans la zone de déclenchement — sinon ce cron la recréait (et
+  // renvoyait un NOUVEAU push) alors même que l'utilisateur venait de la
+  // traiter côté app. Le nettoyage juste en dessous continue de supprimer
+  // ces alertes (traitées ou non) dès que le prix repasse hors zone, ce qui
+  // réarme normalement la détection pour un futur franchissement.
   const { data: alertesExist, error: alErr } = await db
-    .from('position_alertes').select('*').eq('is_acted', false)
+    .from('position_alertes').select('*')
 
   if (posErr) console.error('positions fetch error:', posErr.message)
   if (alErr)  console.error('position_alertes fetch error:', alErr.message)
