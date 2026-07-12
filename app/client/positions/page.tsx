@@ -818,19 +818,30 @@ function VenteModal({
   async function handleConserverPosition() {
     if (!alerte) return
     setLoading(true)
-    await supabase.from('position_alertes').update({ is_acted: true, is_read: true }).eq('id', alerte.id)
+    const { error } = await supabase
+      .from('position_alertes')
+      .update({ is_acted: true, is_read: true })
+      .eq('id', alerte.id)
+    setLoading(false)
+    if (error) {
+      toast.error(`Échec : ${error.message}`)
+      return
+    }
     toast.success('Position conservée')
     onSaved()
-    setLoading(false)
     onClose()
   }
 
   async function handleSupprimerAlerte() {
     if (!alerte) return
     setLoading(true)
-    await supabase.from('position_alertes').delete().eq('id', alerte.id)
-    onSaved()
+    const { error } = await supabase.from('position_alertes').delete().eq('id', alerte.id)
     setLoading(false)
+    if (error) {
+      toast.error(`Échec : ${error.message}`)
+      return
+    }
+    onSaved()
     onClose()
   }
 
