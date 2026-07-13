@@ -291,6 +291,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
           return (
             <div key={section.label} style={{ marginBottom: '2px' }}>
               <button
+                type="button"
                 onClick={() => toggleSection(section.label)}
                 style={{
                   all: 'unset', boxSizing: 'border-box', cursor: 'pointer',
@@ -382,7 +383,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
               {activeAlerts} alerte{activeAlerts > 1 ? 's' : ''}
             </span>
           )}
-          <button onClick={e => { e.stopPropagation(); handleRefresh() }}
+          <button type="button" onClick={e => { e.stopPropagation(); handleRefresh() }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: C.label, display: 'flex' }}>
             <RefreshCw size={11} style={{ transition: 'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
           </button>
@@ -440,6 +441,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         <>
           {/* Bouton hamburger — flush left, classe définie dans globals.css */}
           <button
+            type="button"
             onClick={() => setMenuOpen(v => !v)}
             className={`hamburger-btn${menuOpen ? ' open' : ''}`}>
             {menuOpen ? <X size={18} /> : <Menu size={18} />}
