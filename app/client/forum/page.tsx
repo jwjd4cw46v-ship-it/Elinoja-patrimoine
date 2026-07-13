@@ -282,6 +282,19 @@ export default function ForumPage() {
         )
       )
 
+      // Diffusion à tous si la réponse commence par "@tous"
+      if (replyText.trim().toLowerCase().startsWith('@tous')) {
+        window.fetch('/api/forum/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type:      'FORUM_BROADCAST',
+            postTitle: selectedPost.title,
+            excerpt:   replyText.trim().slice(0, 140),
+          }),
+        }).catch(() => {})
+      }
+
       setReplyText('')
       setReplyImage(null)
       setReplyAudio(null)
@@ -641,6 +654,21 @@ function NewPostModal({ userId, onClose, onCreated }: {
         ...form, author_id: userId, ticker: form.ticker || null, image_url, audio_url,
       })
       if (error) throw error
+
+      // Diffusion à tous les utilisateurs : soit "nouveau sujet" (toujours),
+      // soit "@tous" si le contenu commence explicitement par ce mot-clé
+      // (dans ce cas, un seul message plus marquant, pas les deux).
+      const startsWithTous = form.content.trim().toLowerCase().startsWith('@tous')
+      window.fetch('/api/forum/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type:      startsWithTous ? 'FORUM_BROADCAST' : 'FORUM_NEW_POST',
+          postTitle: form.title,
+          excerpt:   startsWithTous ? form.content.trim().slice(0, 140) : undefined,
+        }),
+      }).catch(() => {})
+
       toast.success('Discussion créée')
       onCreated()
       onClose()
