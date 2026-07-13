@@ -17,7 +17,7 @@ import type { Profile } from '@/types'
 
 const C = {
   bg: '#0A0A0A', surface: '#0F0F0F', border: '#1C1C1C', gold: '#D4AF37',
-  goldLight: '#F0D060', text: '#FFFFFF', muted: '#555555', red: '#FF3B3B',
+  text: '#FFFFFF', muted: '#555555',
 }
 
 const navSections = [
@@ -51,17 +51,12 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [userId, setUserId] = useState<string>(profile.id || '')
   const pathname = usePathname()
-  
-  // Le hook attend un userId. S'il n'est pas défini, il attendra le chargement.
   const { items } = useWatchlist(userId)
   const [openSection, setOpenSection] = useState<string | null>('MARCHÉS')
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => { 
-      if (data.user) setUserId(data.user.id) 
-    })
-    
+    supabase.auth.getUser().then(({ data }) => { if (data.user) setUserId(data.user.id) })
     const mq = window.matchMedia('(max-width: 767px)')
     setIsMobile(mq.matches)
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
@@ -72,10 +67,10 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full overflow-y-auto" style={{ background: C.surface }}>
+    <div className="flex flex-col h-full overflow-y-auto pb-10" style={{ background: C.surface }}>
       <div className="p-5 border-b border-[#1C1C1C] text-center"><Image src="/logo.jpeg" alt="Logo" width={130} height={56} /></div>
       
-      <nav className="flex-1 py-4">
+      <nav className="flex-grow py-4">
         {navSections.map((section) => (
           <div key={section.label} className="mb-1">
             {section.items.length === 1 ? (
@@ -103,18 +98,18 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-[#1C1C1C]">
-        <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider font-bold">Watchlist</div>
+      <div className="p-4 mt-auto border-t border-[#1C1C1C]">
+        <div className="text-[10px] text-gray-500 mb-3 uppercase tracking-wider font-bold">Watchlist</div>
         <div className="flex flex-col gap-2">
-          {items && items.length > 0 ? (
+          {items.length > 0 ? (
             items.map((item: any) => (
-              <div key={item.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 10px' }} className="flex justify-between items-center">
-                <span className="text-[11px] text-white font-medium">{item.ticker}</span>
-                <span className="text-[11px] text-white font-bold">{item.current?.toLocaleString('fr-TN', { minimumFractionDigits: 3 })}</span>
+              <div key={item.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '10px 12px' }} className="flex justify-between items-center">
+                <span className="text-[12px] text-white font-medium">{item.ticker}</span>
+                <span className="text-[12px] text-white font-bold">{item.current?.toLocaleString('fr-TN', { minimumFractionDigits: 3 })}</span>
               </div>
             ))
           ) : (
-            <div className="text-[11px] text-muted italic">Aucun titre suivi</div>
+            <div className="text-[11px] text-muted italic p-2">Aucun titre suivi</div>
           )}
         </div>
       </div>
