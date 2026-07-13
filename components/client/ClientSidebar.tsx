@@ -17,17 +17,9 @@ import type { Profile } from '@/types'
 
 // ── Palette ────────────────────────────────────────────────────────────────
 const C = {
-  bg:          '#0A0A0A',
-  surface:     '#0F0F0F',
-  border:      '#1C1C1C',
-  gold:        '#D4AF37',
-  goldLight:   '#F0D060',
-  goldDim:     'rgba(212,175,55,0.12)',
-  goldBorder:  'rgba(212,175,55,0.22)',
-  text:        '#FFFFFF',
-  muted:       '#555555',
-  label:       '#3A3A3A',
-  red:         '#FF3B3B',
+  bg: '#0A0A0A', surface: '#0F0F0F', border: '#1C1C1C', gold: '#D4AF37',
+  goldLight: '#F0D060', goldDim: 'rgba(212,175,55,0.12)', goldBorder: 'rgba(212,175,55,0.22)',
+  text: '#FFFFFF', muted: '#555555', label: '#3A3A3A', red: '#FF3B3B',
 }
 
 const navSections = [
@@ -57,55 +49,45 @@ const navSections = [
 ]
 
 function WatchMiniCard({ item }: { item: any }) {
-  const isBelowLow = item.low > 0 && item.current > 0 && item.current < item.low
-  const isAboveHigh = item.high > 0 && item.current > 0 && item.current > item.high
-  const pct = item.high > item.low ? ((item.current - item.low) / (item.high - item.low)) * 100 : 50
-  const pctClamped = Math.max(0, Math.min(100, pct))
-  const fmt = (v: number) => v.toLocaleString('fr-TN', { minimumFractionDigits: v > 100 ? 2 : 3, maximumFractionDigits: v > 100 ? 2 : 3 })
-
+  const isBelowLow = item.low > 0 && item.current < item.low;
   return (
-    <div style={{ background: C.bg, border: `1px solid ${isBelowLow ? 'rgba(255,59,59,0.3)' : isAboveHigh ? 'rgba(0,200,83,0.25)' : C.border}`, borderRadius: '8px', padding: '10px 12px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFFFFF' }}>{item.ticker}</div>
-        <div style={{ fontSize: '13px', fontWeight: 700, color: isBelowLow ? C.red : isAboveHigh ? '#00C853' : '#FFFFFF' }}>{fmt(item.current)}</div>
-      </div>
+    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '10px' }}>
+      <div className="flex justify-between text-[11px] text-white"><span>{item.ticker}</span><span>{item.current.toFixed(3)}</span></div>
     </div>
   )
 }
 
-// ── COMPOSANT CONTENU (Structure aplatie) ──
 function SidebarContent({ profile, userId, onClose }: { profile: Profile; userId: string; onClose?: () => void }) {
-  const pathname = usePathname()
-  const [openSection, setOpenSection] = useState<string | null>(null)
-  const [watchOpen, setWatchOpen] = useState(true)
-  const [spinning, setSpinning] = useState(false)
-  const { items, loading: watchLoading, refresh } = useWatchlist(userId || profile.id || '')
-  
-  const isActive = (href: string) => href === '/client' ? pathname === href : pathname === href || pathname.startsWith(href + '/')
-  const activeAlerts = items.filter(i => i.current > 0 && ((i.low > 0 && i.current < i.low) || (i.high > 0 && i.current > i.high))).length
+  const pathname = usePathname();
+  const { items, loading, refresh } = useWatchlist(userId || profile.id || '');
+  const [openSection, setOpenSection] = useState<string | null>('MARCHÉS');
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   return (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: C.surface }}>
-      <div style={{ padding: '20px 16px', borderBottom: `1px solid ${C.border}`, textAlign: 'center', background: C.bg }}>
-        <Image src="/logo.jpeg" alt="Elinoja" width={130} height={56} />
+      <div className="p-5 border-b border-[#1C1C1C] text-center">
+        <Image src="/logo.jpeg" alt="Logo" width={130} height={56} />
       </div>
 
-      <nav style={{ padding: '8px 0', flex: 1 }}>
-        {navSections.map(section => (
-          <div key={section.label} style={{ marginBottom: '2px' }}>
+      <nav className="flex-1 py-4">
+        {navSections.map((section) => (
+          <div key={section.label} className="mb-1">
             {section.items.length === 1 ? (
-              <Link href={section.items[0].href} onClick={onClose} className="flex items-center gap-3 p-3 mx-2 rounded-lg text-[13px]" style={{ color: isActive(section.items[0].href) ? C.gold : '#FFFFFF' }}>
-                <section.icon size={15} /> {section.items[0].label}
+              <Link href={section.items[0].href} onClick={onClose} className="flex items-center gap-3 p-3 px-6 text-[13px]" style={{ color: isActive(section.items[0].href) ? C.gold : '#FFF' }}>
+                <section.icon size={16} /> {section.items[0].label}
               </Link>
             ) : (
               <div>
-                <button onClick={() => setOpenSection(openSection === section.label ? null : section.label)} className="flex items-center justify-between w-full p-3 px-4 text-[13px]" style={{ color: '#FFFFFF' }}>
-                  {section.label} <ChevronDown size={12} style={{ transform: openSection === section.label ? 'rotate(180deg)' : 'none' }} />
+                <button onClick={() => setOpenSection(openSection === section.label ? null : section.label)} className="flex items-center justify-between w-full p-3 px-6 text-[13px] text-white">
+                  {section.label} <ChevronDown size={14} />
                 </button>
-                <div style={{ display: 'grid', gridTemplateRows: openSection === section.label ? '1fr' : '0fr', transition: 'grid-template-rows 0.2s' }}>
-                  <div style={{ overflow: 'hidden' }}>
+                <div style={{ display: 'grid', gridTemplateRows: openSection === section.label ? '1fr' : '0fr', transition: '0.2s' }}>
+                  <div className="overflow-hidden">
                     {section.items.map(item => (
-                      <Link key={item.href} href={item.href} onClick={onClose} className="block p-2 pl-10 text-[12px]" style={{ color: isActive(item.href) ? C.gold : '#B8B8B8' }}>{item.label}</Link>
+                      <Link key={item.href} href={item.href} onClick={onClose} className="flex items-center justify-between py-2 pl-10 pr-6 text-[12px]" style={{ color: isActive(item.href) ? C.gold : '#B8B8B8' }}>
+                        {item.label}
+                        {(item as any).premium && <span className="text-[7px] font-bold bg-[#D4AF37] text-black px-1 rounded">PREMIUM</span>}
+                      </Link>
                     ))}
                   </div>
                 </div>
@@ -114,44 +96,44 @@ function SidebarContent({ profile, userId, onClose }: { profile: Profile; userId
           </div>
         ))}
       </nav>
+
+      <div className="p-4 border-t border-[#1C1C1C]">
+        <div className="text-xs text-gray-500 mb-2 uppercase">Watchlist</div>
+        <div className="flex flex-col gap-2">
+          {items.map(item => <WatchMiniCard key={item.id} item={item} />)}
+        </div>
+      </div>
     </div>
-  )
+  );
 }
 
 export default function ClientSidebar({ profile }: { profile: Profile }) {
-  const [isMobile, setIsMobile] = useState<boolean | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [userId, setUserId] = useState('')
-  const supabase = createClient()
-
+  const [isMobile, setIsMobile] = useState<boolean | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => { if (data.user) setUserId(data.user.id) })
-    const mq = window.matchMedia('(max-width: 767px)')
-    setIsMobile(mq.matches)
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
+    const mq = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   return (
     <>
-      {(isMobile === false || isMobile === null) && (
-        <aside className="w-64 h-full border-r border-[#1C1C1C]"><SidebarContent profile={profile} userId={userId} /></aside>
-      )}
+      {(isMobile === false || isMobile === null) && <aside className="w-64 h-full border-r border-[#1C1C1C]"><SidebarContent profile={profile} userId="" /></aside>}
       {isMobile && (
         <>
-          <button type="button" onClick={() => setMenuOpen(!menuOpen)} className={`hamburger-btn${menuOpen ? ' open' : ''}`}>
-            {menuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+          <button onClick={() => setMenuOpen(!menuOpen)} className="fixed top-4 left-4 z-[300]"><Menu color="#FFF" /></button>
           <AnimatePresence>
             {menuOpen && (
               <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} className="fixed inset-0 z-[201] w-[85vw] max-w-[320px]">
-                <SidebarContent profile={profile} userId={userId} onClose={() => setMenuOpen(false)} />
+                <SidebarContent profile={profile} userId="" onClose={() => setMenuOpen(false)} />
               </motion.div>
             )}
           </AnimatePresence>
         </>
       )}
     </>
-  )
+  );
 }
