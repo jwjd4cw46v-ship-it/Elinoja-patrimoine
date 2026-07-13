@@ -46,6 +46,7 @@ export type NotifType =
   | 'BREAK_EVEN' | 'RUNNER_STOP' | 'EXPOSURE' | 'SYSTEM'
   | 'WATCHLIST_LOW' | 'WATCHLIST_HIGH'
   | 'FORUM_LIKE' | 'FORUM_REPLY' | 'FORUM_MENTION'
+  | 'FORUM_NEW_POST' | 'FORUM_BROADCAST'
 
 export interface NotifPayload {
   userId:  string
@@ -171,5 +172,13 @@ export const NOTIF_TEMPLATES: Record<NotifType, (ticker?: string) => { title: st
   FORUM_MENTION:  _ => ({
     title: '💬 Vous avez été mentionné',
     body:  'Quelqu\'un vous a répondu directement sur le forum.',
+  }),
+  FORUM_NEW_POST: _ => ({
+    title: `🆕 Nouveau sujet sur le forum`,
+    body:  `Une nouvelle discussion vient d'être publiée sur le forum.`,
+  }),
+  FORUM_BROADCAST: _ => ({
+    title: `📢 Message à tous`,
+    body:  `Quelqu'un a publié un message pour tout le monde sur le forum.`,
   }),
 }
