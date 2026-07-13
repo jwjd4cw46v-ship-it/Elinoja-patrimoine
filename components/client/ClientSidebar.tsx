@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, TrendingUp, BarChart2,
-  FileText, MessageSquare, Bell, Star, ChevronRight,
-  Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
+  FileText, MessageSquare, Bell, Star,
+  Newspaper, Calendar, LineChart, ChevronDown,
   Menu, X, Globe, BookOpen, Users, HelpCircle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -15,11 +15,9 @@ import { createClient } from '@/lib/supabase/client'
 import { useWatchlist } from '@/hooks/useWatchlist'
 import type { Profile } from '@/types'
 
-// ── Palette ────────────────────────────────────────────────────────────────
 const C = {
   bg: '#0A0A0A', surface: '#0F0F0F', border: '#1C1C1C', gold: '#D4AF37',
-  goldLight: '#F0D060', goldDim: 'rgba(212,175,55,0.12)', goldBorder: 'rgba(212,175,55,0.22)',
-  text: '#FFFFFF', muted: '#555555', label: '#3A3A3A', red: '#FF3B3B',
+  goldLight: '#F0D060', text: '#FFFFFF', muted: '#555555', red: '#FF3B3B',
 }
 
 const navSections = [
@@ -48,32 +46,35 @@ const navSections = [
   { label: 'SUPPORT', icon: HelpCircle, items: [{ href: '/client/aide', icon: HelpCircle, label: 'Aide & Installation' }] },
 ]
 
-function WatchMiniCard({ item }: { item: any }) {
-  const isBelowLow = item.low > 0 && item.current < item.low;
-  return (
-    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '10px' }}>
-      <div className="flex justify-between text-[11px] text-white"><span>{item.ticker}</span><span>{item.current.toFixed(3)}</span></div>
-    </div>
-  )
-}
+export default function ClientSidebar({ profile }: { profile: Profile }) {
+  const [isMobile, setIsMobile] = useState<boolean>(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [userId, setUserId] = useState<string>('')
+  const pathname = usePathname()
+  const { items } = useWatchlist(userId || profile.id || '')
+  const [openSection, setOpenSection] = useState<string | null>('MARCHÉS')
 
-function SidebarContent({ profile, userId, onClose }: { profile: Profile; userId: string; onClose?: () => void }) {
-  const pathname = usePathname();
-  const { items, loading, refresh } = useWatchlist(userId || profile.id || '');
-  const [openSection, setOpenSection] = useState<string | null>('MARCHÉS');
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => { if (data.user) setUserId(data.user.id) })
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
-  return (
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
+
+  const SidebarContent = () => (
     <div className="flex flex-col h-full overflow-y-auto" style={{ background: C.surface }}>
-      <div className="p-5 border-b border-[#1C1C1C] text-center">
-        <Image src="/logo.jpeg" alt="Logo" width={130} height={56} />
-      </div>
-
+      <div className="p-5 border-b border-[#1C1C1C] text-center"><Image src="/logo.jpeg" alt="Logo" width={130} height={56} /></div>
+      
       <nav className="flex-1 py-4">
         {navSections.map((section) => (
           <div key={section.label} className="mb-1">
             {section.items.length === 1 ? (
-              <Link href={section.items[0].href} onClick={onClose} className="flex items-center gap-3 p-3 px-6 text-[13px]" style={{ color: isActive(section.items[0].href) ? C.gold : '#FFF' }}>
+              <Link href={section.items[0].href} onClick={() => setMenuOpen(false)} className="flex items-center gap-3 p-3 px-6 text-[13px]" style={{ color: isActive(section.items[0].href) ? C.gold : '#FFF' }}>
                 <section.icon size={16} /> {section.items[0].label}
               </Link>
             ) : (
@@ -84,7 +85,7 @@ function SidebarContent({ profile, userId, onClose }: { profile: Profile; userId
                 <div style={{ display: 'grid', gridTemplateRows: openSection === section.label ? '1fr' : '0fr', transition: '0.2s' }}>
                   <div className="overflow-hidden">
                     {section.items.map(item => (
-                      <Link key={item.href} href={item.href} onClick={onClose} className="flex items-center justify-between py-2 pl-10 pr-6 text-[12px]" style={{ color: isActive(item.href) ? C.gold : '#B8B8B8' }}>
+                      <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} className="flex items-center justify-between py-2 pl-10 pr-6 text-[12px]" style={{ color: isActive(item.href) ? C.gold : '#B8B8B8' }}>
                         {item.label}
                         {(item as any).premium && <span className="text-[7px] font-bold bg-[#D4AF37] text-black px-1 rounded">PREMIUM</span>}
                       </Link>
@@ -98,42 +99,36 @@ function SidebarContent({ profile, userId, onClose }: { profile: Profile; userId
       </nav>
 
       <div className="p-4 border-t border-[#1C1C1C]">
-        <div className="text-xs text-gray-500 mb-2 uppercase">Watchlist</div>
+        <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider font-bold">Watchlist</div>
         <div className="flex flex-col gap-2">
-          {items.map(item => <WatchMiniCard key={item.id} item={item} />)}
+          {items.map((item: any) => (
+            <div key={item.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 10px' }} className="flex justify-between items-center">
+              <span className="text-[11px] text-white font-medium">{item.ticker}</span>
+              <span className="text-[11px] text-white font-bold">{item.current?.toLocaleString('fr-TN', { minimumFractionDigits: 3 })}</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
-  );
-}
-
-export default function ClientSidebar({ profile }: { profile: Profile }) {
-  const [isMobile, setIsMobile] = useState<boolean | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  )
 
   return (
     <>
-      {(isMobile === false || isMobile === null) && <aside className="w-64 h-full border-r border-[#1C1C1C]"><SidebarContent profile={profile} userId="" /></aside>}
+      {!isMobile && <aside className="w-64 h-full border-r border-[#1C1C1C]"><SidebarContent /></aside>}
       {isMobile && (
         <>
-          <button onClick={() => setMenuOpen(!menuOpen)} className="fixed top-4 left-4 z-[300]"><Menu color="#FFF" /></button>
+          <button onClick={() => setMenuOpen(!menuOpen)} className="fixed top-4 left-4 z-[300] p-2 bg-[#0F0F0F] rounded-lg border border-[#1C1C1C]">
+            {menuOpen ? <X size={18} color="#FFF" /> : <Menu size={18} color="#FFF" />}
+          </button>
           <AnimatePresence>
             {menuOpen && (
               <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} className="fixed inset-0 z-[201] w-[85vw] max-w-[320px]">
-                <SidebarContent profile={profile} userId="" onClose={() => setMenuOpen(false)} />
+                <SidebarContent />
               </motion.div>
             )}
           </AnimatePresence>
         </>
       )}
     </>
-  );
+  )
 }
