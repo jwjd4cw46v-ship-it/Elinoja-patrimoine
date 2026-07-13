@@ -251,11 +251,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </div>
       </div>
 
-      {/* ── DEBUG TEMPORAIRE — à retirer après diagnostic ── */}
-      <div style={{ background: 'red', color: 'white', padding: '6px', fontSize: '11px', textAlign: 'center' }}>
-        openSection = {String(openSection)}
-      </div>
-
       {/* ── Navigation par sections ── */}
       <nav style={{ padding: '8px 0', flex: 1 }}>
         {navSections.map((section) => {
@@ -322,12 +317,13 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                   }} />
               </button>
 
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    style={{ overflow: 'hidden' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateRows: isOpen ? '1fr' : '0fr',
+                  transition: 'grid-template-rows 0.2s ease-in-out',
+                }}>
+                <div style={{ overflow: 'hidden', minHeight: 0 }}>
                     {section.items.map((item) => {
                       const active = isActive(item.href)
                       const isWatch = item.href === '/client/watchlist'
@@ -366,9 +362,8 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                         </Link>
                       )
                     })}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                </div>
+              </div>
             </div>
           )
         })}
@@ -394,23 +389,23 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
           </button>
           <ChevronDown size={12} style={{ color: C.label, transition: 'transform 0.2s', transform: watchOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
         </div>
-        <AnimatePresence initial={false}>
-          {watchOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: 'easeInOut' }}
-              style={{ overflow: 'hidden' }}>
-              <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                {watchLoading
-                  ? [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: '80px', borderRadius: '8px' }} />)
-                  : items.length === 0
-                  ? <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '11px', color: C.label }}>Aucun titre en watchlist</div>
-                  : items.map(item => <WatchMiniCard key={item.id} item={item} />)
-                }
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateRows: watchOpen ? '1fr' : '0fr',
+            transition: 'grid-template-rows 0.22s ease-in-out',
+          }}>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              {watchLoading
+                ? [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: '80px', borderRadius: '8px' }} />)
+                : items.length === 0
+                ? <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '11px', color: C.label }}>Aucun titre en watchlist</div>
+                : items.map(item => <WatchMiniCard key={item.id} item={item} />)
+              }
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Footer profil ── */}
