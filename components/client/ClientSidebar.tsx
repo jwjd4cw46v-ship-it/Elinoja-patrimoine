@@ -15,10 +15,10 @@ import { createClient } from '@/lib/supabase/client'
 import { useWatchlist } from '@/hooks/useWatchlist'
 import type { Profile } from '@/types'
 
-// ── VOS CONSTANTES ORIGINALES ────────────────────────────────────────────────
+// ── CONSTANTES ──────────────────────────────────────────────────────────────
 const C = {
   bg: '#0A0A0A', surface: '#0F0F0F', border: '#1C1C1C', gold: '#D4AF37',
-  goldLight: '#F0D060', goldDim: 'rgba(212,175,55,0.12)', text: '#FFFFFF', red: '#FF3B3B',
+  text: '#FFFFFF', muted: '#555555', red: '#FF3B3B',
 }
 
 const navSections = [
@@ -47,7 +47,7 @@ const navSections = [
   { label: 'SUPPORT', icon: HelpCircle, items: [{ href: '/client/aide', icon: HelpCircle, label: 'Aide & Installation' }] },
 ]
 
-// ── COMPOSANT WATCHLIST EXACTEMENT COMME AVANT ──────────────────────────────
+// ── COMPOSANT WATCHLIST ORIGINAL ────────────────────────────────────────────
 function WatchMiniCard({ item }: { item: any }) {
   const isBelowLow = item.low > 0 && item.current < item.low
   const isAboveHigh = item.high > 0 && item.current > item.high
@@ -63,7 +63,7 @@ function WatchMiniCard({ item }: { item: any }) {
   )
 }
 
-// ── COMPOSANT SIDEBAR REUNIFIÉ ───────────────────────────────────────────────
+// ── COMPOSANT SIDEBAR ───────────────────────────────────────────────────────
 export default function ClientSidebar({ profile }: { profile: Profile }) {
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -85,8 +85,10 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full overflow-y-auto pb-8" style={{ background: C.surface }}>
-      <div className="p-5 border-b border-[#1C1C1C] text-center"><Image src="/logo.jpeg" alt="Logo" width={130} height={56} /></div>
+    <div className="flex flex-col h-screen overflow-y-auto pb-20" style={{ background: C.surface }}>
+      <div className="p-5 border-b border-[#1C1C1C] text-center">
+        <Image src="/logo.jpeg" alt="Logo" width={130} height={56} />
+      </div>
       
       <nav className="flex-grow py-4">
         {navSections.map((section) => (
@@ -116,7 +118,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         ))}
       </nav>
 
-      <div className="p-4 mt-auto border-t border-[#1C1C1C]">
+      <div className="p-4 border-t border-[#1C1C1C] mt-auto">
         <div className="text-[10px] text-gray-500 mb-3 uppercase tracking-wider font-bold">Watchlist</div>
         <div className="flex flex-col gap-2">
           {items.map((item: any) => <WatchMiniCard key={item.id} item={item} />)}
