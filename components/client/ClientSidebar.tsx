@@ -49,14 +49,19 @@ const navSections = [
 export default function ClientSidebar({ profile }: { profile: Profile }) {
   const [isMobile, setIsMobile] = useState<boolean>(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [userId, setUserId] = useState<string>('')
+  const [userId, setUserId] = useState<string>(profile.id || '')
   const pathname = usePathname()
-  const { items } = useWatchlist(userId || profile.id || '')
+  
+  // Le hook attend un userId. S'il n'est pas défini, il attendra le chargement.
+  const { items } = useWatchlist(userId)
   const [openSection, setOpenSection] = useState<string | null>('MARCHÉS')
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => { if (data.user) setUserId(data.user.id) })
+    supabase.auth.getUser().then(({ data }) => { 
+      if (data.user) setUserId(data.user.id) 
+    })
+    
     const mq = window.matchMedia('(max-width: 767px)')
     setIsMobile(mq.matches)
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
@@ -101,12 +106,16 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
       <div className="p-4 border-t border-[#1C1C1C]">
         <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider font-bold">Watchlist</div>
         <div className="flex flex-col gap-2">
-          {items.map((item: any) => (
-            <div key={item.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 10px' }} className="flex justify-between items-center">
-              <span className="text-[11px] text-white font-medium">{item.ticker}</span>
-              <span className="text-[11px] text-white font-bold">{item.current?.toLocaleString('fr-TN', { minimumFractionDigits: 3 })}</span>
-            </div>
-          ))}
+          {items && items.length > 0 ? (
+            items.map((item: any) => (
+              <div key={item.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: '8px', padding: '8px 10px' }} className="flex justify-between items-center">
+                <span className="text-[11px] text-white font-medium">{item.ticker}</span>
+                <span className="text-[11px] text-white font-bold">{item.current?.toLocaleString('fr-TN', { minimumFractionDigits: 3 })}</span>
+              </div>
+            ))
+          ) : (
+            <div className="text-[11px] text-muted italic">Aucun titre suivi</div>
+          )}
         </div>
       </div>
     </div>
