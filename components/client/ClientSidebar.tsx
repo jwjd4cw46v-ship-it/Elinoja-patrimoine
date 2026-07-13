@@ -8,7 +8,7 @@ import {
   LayoutDashboard, TrendingUp, BarChart2,
   FileText, MessageSquare, Bell, Star, ChevronRight,
   Newspaper, Calendar, LineChart, RefreshCw, ChevronDown,
-  Menu, X, Globe, Target, BookOpen, Users, HelpCircle,
+  Menu, X, Globe, BookOpen, Users, HelpCircle,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -33,21 +33,23 @@ const C = {
 const navSections = [
   {
     label: 'TABLEAU DE BORD',
+    icon:  LayoutDashboard,
     items: [
       { href: '/client', icon: LayoutDashboard, label: 'Tableau de bord' },
     ],
   },
   {
     label: 'MARCHÉS',
+    icon:  LineChart,
     items: [
-      { href: '/client/cotations',    icon: LineChart,  label: 'Cotations BVMT' },
+      { href: '/client/cotations',  icon: LineChart,  label: 'Cotations BVMT' },
       { href: '/client/watchlist',  icon: Star,       label: 'Mes Opportunités' },
-      { href: '/client/positions',   icon: Target,     label: 'Mes Positions' },
-      { href: '/client/positions',   icon: TrendingUp, label: 'Opportunités Elinoja', premium: true },
+      { href: '/client/positions',  icon: TrendingUp, label: 'Opportunités Elinoja', premium: true },
     ],
   },
   {
     label: 'ANALYSES',
+    icon:  BarChart2,
     items: [
       { href: '/client/analyses',           icon: TrendingUp, label: 'Analyses Techniques' },
       { href: '/client/fondamentales',      icon: BarChart2,  label: 'Analyses Fondamentales' },
@@ -57,6 +59,7 @@ const navSections = [
   },
   {
     label: 'INFORMATIONS',
+    icon:  Newspaper,
     items: [
       { href: '/client/news',       icon: Newspaper,     label: 'Actualités' },
       { href: '/client/cmf',        icon: FileText,      label: 'Publications CMF' },
@@ -66,6 +69,7 @@ const navSections = [
   },
   {
     label: 'OUTILS',
+    icon:  Globe,
     items: [
       { href: '/client/marches', icon: Globe,         label: 'Devises & Matières' },
       { href: '/client/forum',   icon: MessageSquare, label: 'Communauté Elinoja' },
@@ -73,6 +77,7 @@ const navSections = [
   },
   {
     label: 'SUPPORT',
+    icon:  HelpCircle,
     items: [
       { href: '/client/aide', icon: HelpCircle, label: 'Aide & Installation' },
     ],
@@ -162,6 +167,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const [spinning,  setSpinning]  = useState(false)
   const [isMobile,  setIsMobile]  = useState<boolean | null>(null)
   const [menuOpen,  setMenuOpen]  = useState(false)
+  const [openSection, setOpenSection] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -192,6 +198,17 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
 
   const isActive = (href: string) =>
     href === '/client' ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+
+  // Ouvre automatiquement la section contenant la page active (ex: on
+  // arrive sur /client/fondamentales → "ANALYSES" se déplie tout seul).
+  useEffect(() => {
+    const active = navSections.find(s => s.items.length > 1 && s.items.some(it => isActive(it.href)))
+    if (active) setOpenSection(active.label)
+  }, [pathname])
+
+  function toggleSection(label: string) {
+    setOpenSection(prev => prev === label ? null : label)
+  }
 
   const sidebar = (
     <aside
@@ -236,63 +253,119 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
 
       {/* ── Navigation par sections ── */}
       <nav style={{ padding: '8px 0', flex: 1 }}>
-        {navSections.map((section) => (
-          <div key={section.label} style={{ marginBottom: '4px' }}>
-            {/* Section label */}
-            <div style={{
-              padding: '10px 16px 4px',
-              fontSize: '9px', fontWeight: 700,
-              color: C.label,
-              letterSpacing: '0.12em',
-            }}>
-              {section.label}
-            </div>
+        {navSections.map((section) => {
+          // Sections à un seul item (Tableau de bord, Support) restent des
+          // liens directs — pas d'accordéon pour une seule destination.
+          if (section.items.length === 1) {
+            const item = section.items[0]
+            const active = isActive(item.href)
+            return (
+              <Link key={section.label} href={item.href}>
+                <motion.div
+                  whileHover={{ x: 3 }}
+                  transition={{ duration: 0.12 }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '8px 16px',
+                    margin: '2px 8px',
+                    borderRadius: '7px',
+                    fontSize: '13px',
+                    fontWeight: active ? 600 : 400,
+                    color: active ? C.gold : '#FFFFFF',
+                    background: active ? C.goldDim : 'transparent',
+                    borderLeft: active ? `2px solid ${C.gold}` : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}>
+                  <item.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: active ? 1 : 0.75 }} />
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {active && <ChevronRight size={11} style={{ color: C.gold, opacity: 0.7 }} />}
+                </motion.div>
+              </Link>
+            )
+          }
 
-            {/* Items */}
-            {section.items.map((item) => {
-              const active = isActive(item.href)
-              const isWatch = item.href === '/client/watchlist'
-              return (
-                <Link key={item.href} href={item.href}>
+          // Sections à plusieurs items : accordéon dépliable au clic.
+          const isOpen = openSection === section.label
+          const hasActiveChild = section.items.some(it => isActive(it.href))
+          return (
+            <div key={section.label} style={{ marginBottom: '2px' }}>
+              <button
+                onClick={() => toggleSection(section.label)}
+                style={{
+                  all: 'unset', boxSizing: 'border-box', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '8px 16px',
+                  margin: '2px 8px',
+                  width: 'calc(100% - 16px)',
+                  borderRadius: '7px',
+                  fontSize: '13px',
+                  fontWeight: hasActiveChild ? 600 : 400,
+                  color: hasActiveChild ? C.gold : '#FFFFFF',
+                  transition: 'all 0.15s',
+                }}>
+                <section.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: hasActiveChild ? 1 : 0.75 }} />
+                <span style={{ flex: 1, textAlign: 'left' }}>
+                  {section.label.charAt(0) + section.label.slice(1).toLowerCase()}
+                </span>
+                <ChevronDown size={13}
+                  style={{
+                    color: C.label, flexShrink: 0,
+                    transition: 'transform 0.18s',
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }} />
+              </button>
+
+              <AnimatePresence initial={false}>
+                {isOpen && (
                   <motion.div
-                    whileHover={{ x: 3 }}
-                    transition={{ duration: 0.12 }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 16px',
-                      margin: '1px 8px',
-                      borderRadius: '7px',
-                      fontSize: '13px',
-                      fontWeight: active ? 600 : 400,
-                      color: active ? C.gold : '#FFFFFF',
-                      background: active ? C.goldDim : 'transparent',
-                      borderLeft: active ? `2px solid ${C.gold}` : '2px solid transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}>
-                    <item.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: active ? 1 : 0.75 }} />
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {(item as any).premium && (
-                      <span style={{
-                        fontSize: '8px', fontWeight: 700, color: C.bg,
-                        background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
-                        padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',
-                      }}>PREMIUM</span>
-                    )}
-                    {isWatch && activeAlerts > 0 && (
-                      <span style={{ background: C.red, color: '#fff', fontSize: '8px', fontWeight: 700, minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', boxShadow: `0 0 6px rgba(255,59,59,0.6)` }}>
-                        {activeAlerts}
-                      </span>
-                    )}
-                    {active && !(isWatch && activeAlerts > 0) && !(item as any).premium && (
-                      <ChevronRight size={11} style={{ color: C.gold, opacity: 0.7 }} />
-                    )}
+                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    style={{ overflow: 'hidden' }}>
+                    {section.items.map((item) => {
+                      const active = isActive(item.href)
+                      const isWatch = item.href === '/client/watchlist'
+                      return (
+                        <Link key={item.href} href={item.href}>
+                          <motion.div
+                            whileHover={{ x: 3 }}
+                            transition={{ duration: 0.12 }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '9px',
+                              padding: '7px 16px 7px 34px',
+                              margin: '1px 8px',
+                              borderRadius: '7px',
+                              fontSize: '12.5px',
+                              fontWeight: active ? 600 : 400,
+                              color: active ? C.gold : '#B8B8B8',
+                              background: active ? C.goldDim : 'transparent',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s',
+                            }}>
+                            <item.icon size={13} style={{ flexShrink: 0, color: active ? C.gold : C.muted }} />
+                            <span style={{ flex: 1 }}>{item.label}</span>
+                            {(item as any).premium && (
+                              <span style={{
+                                fontSize: '8px', fontWeight: 700, color: C.bg,
+                                background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
+                                padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',
+                              }}>PREMIUM</span>
+                            )}
+                            {isWatch && activeAlerts > 0 && (
+                              <span style={{ background: C.red, color: '#fff', fontSize: '8px', fontWeight: 700, minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', boxShadow: `0 0 6px rgba(255,59,59,0.6)` }}>
+                                {activeAlerts}
+                              </span>
+                            )}
+                          </motion.div>
+                        </Link>
+                      )
+                    })}
                   </motion.div>
-                </Link>
-              )
-            })}
-          </div>
-        ))}
+                )}
+              </AnimatePresence>
+            </div>
+          )
+        })}
       </nav>
 
       {/* ── Séparateur ── */}
