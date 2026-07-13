@@ -199,6 +199,8 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const isActive = (href: string) =>
     href === '/client' ? pathname === href : pathname === href || pathname.startsWith(href + '/')
 
+  // Ouvre automatiquement la section contenant la page active (ex: on
+  // arrive sur /client/fondamentales → "ANALYSES" se déplie tout seul).
   useEffect(() => {
     const active = navSections.find(s => s.items.length > 1 && s.items.some(it => isActive(it.href)))
     if (active) setOpenSection(active.label)
@@ -214,10 +216,12 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
       style={{
         background: C.surface,
         borderRight: `1px solid ${C.border}`,
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
       } as React.CSSProperties}>
 
-      {/* ── Logo & Header (FIXE) ── */}
-      <div className="flex-shrink-0" style={{
+      {/* ── Logo ── */}
+      <div style={{
         padding: '20px 16px 16px',
         borderBottom: `1px solid ${C.border}`,
         display: 'flex',
@@ -232,6 +236,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
           L'expertise au service de votre patrimoine
         </p>
 
+        {/* Badge abonnement */}
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: '6px',
           padding: '5px 12px', borderRadius: '20px',
@@ -246,160 +251,160 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </div>
       </div>
 
-      {/* ── Navigation & Watchlist (DÉFILANT) ── */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: '8px 0' }}>
-        <nav>
-          {navSections.map((section) => {
-            if (section.items.length === 1) {
-              const item = section.items[0]
-              const active = isActive(item.href)
-              return (
-                <Link key={section.label} href={item.href}>
-                  <motion.div
-                    whileHover={{ x: 3 }}
-                    transition={{ duration: 0.12 }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 16px',
-                      margin: '2px 8px',
-                      borderRadius: '7px',
-                      fontSize: '13px',
-                      fontWeight: active ? 600 : 400,
-                      color: active ? C.gold : '#FFFFFF',
-                      background: active ? C.goldDim : 'transparent',
-                      borderLeft: active ? `2px solid ${C.gold}` : '2px solid transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s',
-                    }}>
-                    <item.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: active ? 1 : 0.75 }} />
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {active && <ChevronRight size={11} style={{ color: C.gold, opacity: 0.7 }} />}
-                  </motion.div>
-                </Link>
-              )
-            }
-
-            const isOpen = openSection === section.label
-            const hasActiveChild = section.items.some(it => isActive(it.href))
+      {/* ── Navigation par sections ── */}
+      <nav style={{ padding: '8px 0', flex: 1 }}>
+        {navSections.map((section) => {
+          // Sections à un seul item (Tableau de bord, Support) restent des
+          // liens directs — pas d'accordéon pour une seule destination.
+          if (section.items.length === 1) {
+            const item = section.items[0]
+            const active = isActive(item.href)
             return (
-              <div key={section.label} style={{ marginBottom: '2px' }}>
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.label)}
+              <Link key={section.label} href={item.href}>
+                <motion.div
+                  whileHover={{ x: 3 }}
+                  transition={{ duration: 0.12 }}
                   style={{
-                    all: 'unset', boxSizing: 'border-box', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '8px 16px',
                     margin: '2px 8px',
-                    width: 'calc(100% - 16px)',
                     borderRadius: '7px',
                     fontSize: '13px',
-                    fontWeight: hasActiveChild ? 600 : 400,
-                    color: hasActiveChild ? C.gold : '#FFFFFF',
+                    fontWeight: active ? 600 : 400,
+                    color: active ? C.gold : '#FFFFFF',
+                    background: active ? C.goldDim : 'transparent',
+                    borderLeft: active ? `2px solid ${C.gold}` : '2px solid transparent',
+                    cursor: 'pointer',
                     transition: 'all 0.15s',
                   }}>
-                  <section.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: hasActiveChild ? 1 : 0.75 }} />
-                  <span style={{ flex: 1, textAlign: 'left' }}>
-                    {section.label.charAt(0) + section.label.slice(1).toLowerCase()}
-                  </span>
-                  <ChevronDown size={13}
-                    style={{
-                      color: C.label, flexShrink: 0,
-                      transition: 'transform 0.18s',
-                      transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                    }} />
-                </button>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateRows: isOpen ? '1fr' : '0fr',
-                    transition: 'grid-template-rows 0.2s ease-in-out',
-                  }}>
-                  <div style={{ overflow: 'hidden', minHeight: 0 }}>
-                      {section.items.map((item) => {
-                        const active = isActive(item.href)
-                        const isWatch = item.href === '/client/watchlist'
-                        return (
-                          <Link key={item.href} href={item.href}>
-                            <motion.div
-                              whileHover={{ x: 3 }}
-                              transition={{ duration: 0.12 }}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: '9px',
-                                padding: '7px 16px 7px 34px',
-                                margin: '1px 8px',
-                                borderRadius: '7px',
-                                fontSize: '12.5px',
-                                fontWeight: active ? 600 : 400,
-                                color: active ? C.gold : '#B8B8B8',
-                                background: active ? C.goldDim : 'transparent',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s',
-                              }}>
-                              <item.icon size={13} style={{ flexShrink: 0, color: active ? C.gold : C.muted }} />
-                              <span style={{ flex: 1 }}>{item.label}</span>
-                              {(item as any).premium && (
-                                <span style={{
-                                  fontSize: '8px', fontWeight: 700, color: C.bg,
-                                  background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
-                                  padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',
-                                }}>PREMIUM</span>
-                              )}
-                              {isWatch && activeAlerts > 0 && (
-                                <span style={{ background: C.red, color: '#fff', fontSize: '8px', fontWeight: 700, minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', boxShadow: `0 0 6px rgba(255,59,59,0.6)` }}>
-                                  {activeAlerts}
-                                </span>
-                              )}
-                            </motion.div>
-                          </Link>
-                        )
-                      })}
-                  </div>
-                </div>
-              </div>
+                  <item.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: active ? 1 : 0.75 }} />
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {active && <ChevronRight size={11} style={{ color: C.gold, opacity: 0.7 }} />}
+                </motion.div>
+              </Link>
             )
-          })}
-        </nav>
+          }
 
-        <div style={{ flexShrink: 0, marginTop: '10px' }}>
-          <div onClick={() => setWatchOpen(o => !o)}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', cursor: 'pointer', userSelect: 'none' }}>
-            <Star size={12} style={{ color: C.gold, flexShrink: 0 }} />
-            <span style={{ fontSize: '9px', fontWeight: 700, color: C.label, letterSpacing: '0.12em', textTransform: 'uppercase', flex: 1 }}>Watchlist</span>
-            {activeAlerts > 0 && (
-              <span style={{ fontSize: '8px', fontWeight: 700, color: C.red, background: 'rgba(255,59,59,0.1)', padding: '1px 5px', borderRadius: '4px', border: `1px solid rgba(255,59,59,0.2)` }}>
-                {activeAlerts} alerte{activeAlerts > 1 ? 's' : ''}
-              </span>
-            )}
-            <button type="button" onClick={e => { e.stopPropagation(); handleRefresh() }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: C.label, display: 'flex' }}>
-              <RefreshCw size={11} style={{ transition: 'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
-            </button>
-            <ChevronDown size={12} style={{ color: C.label, transition: 'transform 0.2s', transform: watchOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateRows: watchOpen ? '1fr' : '0fr',
-              transition: 'grid-template-rows 0.22s ease-in-out',
-            }}>
-            <div style={{ overflow: 'hidden', minHeight: 0 }}>
-              <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                {watchLoading
-                  ? [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: '80px', borderRadius: '8px' }} />)
-                  : items.length === 0
-                  ? <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '11px', color: C.label }}>Aucun titre en watchlist</div>
-                  : items.map(item => <WatchMiniCard key={item.id} item={item} />)
-                }
-              </div>
+          // Sections à plusieurs items : accordéon dépliable au clic.
+          const isOpen = openSection === section.label
+          const hasActiveChild = section.items.some(it => isActive(it.href))
+          return (
+            <div key={section.label} style={{ marginBottom: '2px' }}>
+              <button
+                type="button"
+                onClick={() => toggleSection(section.label)}
+                style={{
+                  all: 'unset', boxSizing: 'border-box', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '8px 16px',
+                  margin: '2px 8px',
+                  width: 'calc(100% - 16px)',
+                  borderRadius: '7px',
+                  fontSize: '13px',
+                  fontWeight: hasActiveChild ? 600 : 400,
+                  color: hasActiveChild ? C.gold : '#FFFFFF',
+                  transition: 'all 0.15s',
+                }}>
+                <section.icon size={15} style={{ flexShrink: 0, color: C.gold, opacity: hasActiveChild ? 1 : 0.75 }} />
+                <span style={{ flex: 1, textAlign: 'left' }}>
+                  {section.label.charAt(0) + section.label.slice(1).toLowerCase()}
+                </span>
+                <ChevronDown size={13}
+                  style={{
+                    color: C.label, flexShrink: 0,
+                    transition: 'transform 0.18s',
+                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }} />
+              </button>
+
+              {isOpen && (
+                <div>
+                  {section.items.map((item) => {
+                    const active = isActive(item.href)
+                    const isWatch = item.href === '/client/watchlist'
+                    return (
+                      <Link key={item.href} href={item.href}>
+                        <motion.div
+                          whileHover={{ x: 3 }}
+                          transition={{ duration: 0.12 }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '9px',
+                            padding: '7px 16px 7px 34px',
+                            margin: '1px 8px',
+                            borderRadius: '7px',
+                            fontSize: '12.5px',
+                            fontWeight: active ? 600 : 400,
+                            color: active ? C.gold : '#B8B8B8',
+                            background: active ? C.goldDim : 'transparent',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                          }}>
+                          <item.icon size={13} style={{ flexShrink: 0, color: active ? C.gold : C.muted }} />
+                          <span style={{ flex: 1 }}>{item.label}</span>
+                          {(item as any).premium && (
+                            <span style={{
+                              fontSize: '8px', fontWeight: 700, color: C.bg,
+                              background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`,
+                              padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',
+                            }}>PREMIUM</span>
+                          )}
+                          {isWatch && activeAlerts > 0 && (
+                            <span style={{ background: C.red, color: '#fff', fontSize: '8px', fontWeight: 700, minWidth: '16px', height: '16px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', boxShadow: `0 0 6px rgba(255,59,59,0.6)` }}>
+                              {activeAlerts}
+                            </span>
+                          )}
+                        </motion.div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </nav>
+
+      {/* ── Séparateur ── */}
+      <div style={{ height: '1px', background: C.border, margin: '0 16px' }} />
+
+      {/* ── Watchlist ── */}
+      <div style={{ flexShrink: 0 }}>
+        <div onClick={() => setWatchOpen(o => !o)}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', cursor: 'pointer', userSelect: 'none' }}>
+          <Star size={12} style={{ color: C.gold, flexShrink: 0 }} />
+          <span style={{ fontSize: '9px', fontWeight: 700, color: C.label, letterSpacing: '0.12em', textTransform: 'uppercase', flex: 1 }}>Watchlist</span>
+          {activeAlerts > 0 && (
+            <span style={{ fontSize: '8px', fontWeight: 700, color: C.red, background: 'rgba(255,59,59,0.1)', padding: '1px 5px', borderRadius: '4px', border: `1px solid rgba(255,59,59,0.2)` }}>
+              {activeAlerts} alerte{activeAlerts > 1 ? 's' : ''}
+            </span>
+          )}
+          <button type="button" onClick={e => { e.stopPropagation(); handleRefresh() }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', color: C.label, display: 'flex' }}>
+            <RefreshCw size={11} style={{ transition: 'transform 0.6s', transform: spinning ? 'rotate(360deg)' : 'none' }} />
+          </button>
+          <ChevronDown size={12} style={{ color: C.label, transition: 'transform 0.2s', transform: watchOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }} />
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateRows: watchOpen ? '1fr' : '0fr',
+            transition: 'grid-template-rows 0.22s ease-in-out',
+          }}>
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              {watchLoading
+                ? [1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: '80px', borderRadius: '8px' }} />)
+                : items.length === 0
+                ? <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '11px', color: C.label }}>Aucun titre en watchlist</div>
+                : items.map(item => <WatchMiniCard key={item.id} item={item} />)
+              }
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Footer profil (FIXE) ── */}
-      <div className="flex-shrink-0" style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.bg }}>
+      {/* ── Footer profil ── */}
+      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
             width: 34, height: 34, borderRadius: '50%',
@@ -429,6 +434,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
       {/* ── MOBILE ── */}
       {isMobile && (
         <>
+          {/* Bouton hamburger — flush left, classe définie dans globals.css */}
           <button
             type="button"
             onClick={() => setMenuOpen(v => !v)}
@@ -455,7 +461,7 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
                     width: '85vw', maxWidth: 320,
                     background: C.surface,
                     boxShadow: '4px 0 32px rgba(0,0,0,0.8)',
-                    overflow: 'hidden',
+                    overflowY: 'auto', WebkitOverflowScrolling: 'touch',
                   } as React.CSSProperties}>
                   {sidebar}
                 </motion.div>
