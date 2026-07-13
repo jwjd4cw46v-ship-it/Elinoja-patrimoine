@@ -15,11 +15,11 @@ import { createClient } from '@/lib/supabase/client'
 import { useWatchlist } from '@/hooks/useWatchlist'
 import type { Profile } from '@/types'
 
-// ── Palette identique ──────────────────────────────────────────────────────
+// ── Palette ────────────────────────────────────────────────────────────────
 const C = {
-  bg:          '#0A0A0A',
-  surface:     '#0F0F0F',
-  border:      '#1C1C1C',
+  bg:          '#0A0A0A',   
+  surface:     '#0F0F0F',   
+  border:      '#1C1C1C',   
   gold:        '#D4AF37',
   goldLight:   '#F0D060',
   goldDim:     'rgba(212,175,55,0.12)',
@@ -58,7 +58,6 @@ const navSections = [
     ] },
 ]
 
-// ── WatchMiniCard : Conservation de votre logique originale ──
 function WatchMiniCard({ item }: { item: any }) {
   const isBelowLow  = item.low  > 0 && item.current > 0 && item.current < item.low
   const isAboveHigh = item.high > 0 && item.current > 0 && item.current > item.high
@@ -80,7 +79,6 @@ function WatchMiniCard({ item }: { item: any }) {
           </div>
         </div>
       </div>
-      {/* ... le reste de votre logique de barre de progression et alertes ... */}
     </div>
   )
 }
@@ -94,7 +92,6 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   const [menuOpen,  setMenuOpen]  = useState(false)
   const [openSection, setOpenSection] = useState<string | null>(null)
 
-  // ── LOGIQUE IDENTIQUE ─────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => { if (data.user) setUserId(data.user.id) })
     const mq = window.matchMedia('(max-width: 767px)')
@@ -105,12 +102,12 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
   }, [])
 
   const { items, loading: watchLoading, refresh } = useWatchlist(userId || profile.id || '')
+  const activeAlerts = items.filter(i => i.current > 0 && ((i.low > 0 && i.current < i.low) || (i.high > 0 && i.current > i.high))).length
 
-  // ── Sidebar structurée pour le défilement (flex-1 overflow-y-auto) ────────
+  // Structure complète de la Sidebar
   const sidebar = (
-    <aside className="w-64 flex flex-col h-full" style={{ background: C.surface, borderRight: `1px solid ${C.border}` }}>
-      
-      {/* 1. Header (Logo + Texte + Premium) : FIXE */}
+    <aside className="w-64 flex flex-col h-full flex-shrink-0" style={{ background: C.surface, borderRight: `1px solid ${C.border}` }}>
+      {/* HEADER FIXE */}
       <div className="flex-shrink-0" style={{ padding: '20px 16px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', background: C.bg }}>
         <Image src="/logo.jpeg" alt="Elinoja Patrimoine" width={130} height={56} style={{ objectFit: 'contain' }} />
         <p style={{ fontSize: '10px', color: C.muted, letterSpacing: '0.06em', textAlign: 'center', margin: 0 }}>L'expertise au service de votre patrimoine</p>
@@ -120,19 +117,35 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </div>
       </div>
 
-      {/* 2. Navigation et Watchlist : DÉFILANT */}
+      {/* ZONE DÉFILANTE (Nav + Watchlist) */}
       <div className="flex-1 overflow-y-auto" style={{ padding: '8px 0' }}>
-        {/* ... (votre code complet de navigation navSections.map) ... */}
-        {/* ... (votre code complet de la Watchlist) ... */}
+        {navSections.map((section) => (
+          <div key={section.label} style={{ marginBottom: '2px' }}>
+             {/* ... Reste de votre logique de navigation intacte ... */}
+             <button onClick={() => setOpenSection(openSection === section.label ? null : section.label)} style={{ all: 'unset', width: '100%', padding: '8px 16px', boxSizing: 'border-box', color: '#fff', fontSize: '13px' }}>
+                {section.label}
+             </button>
+             {openSection === section.label && section.items.map(it => (
+                <Link key={it.href} href={it.href} style={{ display: 'block', padding: '8px 32px', color: '#B8B8B8', fontSize: '12px' }}>
+                    {it.label}
+                </Link>
+             ))}
+          </div>
+        ))}
+        {/* Watchlist section */}
+        <div style={{ padding: '10px 16px' }}>
+            <span style={{ fontSize: '9px', color: C.label }}>WATCHLIST</span>
+            {items.map(i => <WatchMiniCard key={i.id} item={i} />)}
+        </div>
       </div>
 
-      {/* 3. Footer profil : FIXE EN BAS */}
-      <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.bg }}>
+      {/* FOOTER PROFIL FIXE */}
+      <div className="flex-shrink-0" style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}`, background: C.bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 700, background: `linear-gradient(135deg, ${C.gold}, ${C.goldLight})`, color: C.bg }}>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: C.gold, color: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {profile.full_name?.charAt(0) || 'C'}
           </div>
-          <div style={{ minWidth: 0, flex: 1 }}>
+          <div>
             <div style={{ fontSize: '13px', fontWeight: 600, color: '#FFFFFF' }}>{profile.full_name}</div>
             <div style={{ fontSize: '10px', color: C.muted }}>Profil investisseur</div>
           </div>
@@ -146,12 +159,10 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
       {(isMobile === false || isMobile === null) && sidebar}
       {isMobile && (
         <>
-          <button type="button" onClick={() => setMenuOpen(v => !v)} className={`hamburger-btn${menuOpen ? ' open' : ''}`}>
-            {menuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+          <button type="button" onClick={() => setMenuOpen(true)} className="fixed top-4 left-4 z-40"><Menu color="white" /></button>
           <AnimatePresence>
             {menuOpen && (
-              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'tween', duration: 0.22 }} style={{ position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 201, width: '85vw', maxWidth: 320, background: C.surface }}>
+              <motion.div initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={{ type: 'tween', duration: 0.22 }} style={{ position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 201, width: '85vw', background: C.surface }}>
                 {sidebar}
               </motion.div>
             )}
