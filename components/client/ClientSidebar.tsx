@@ -251,6 +251,11 @@ export default function ClientSidebar({ profile }: { profile: Profile }) {
         </div>
       </div>
 
+      {/* ── DEBUG TEMPORAIRE — à retirer après diagnostic ── */}
+      <div style={{ background: 'red', color: 'white', padding: '6px', fontSize: '11px', textAlign: 'center' }}>
+        openSection = {String(openSection)}
+      </div>
+
       {/* ── Navigation par sections ── */}
       <nav style={{ padding: '8px 0', flex: 1 }}>
         {navSections.map((section) => {
