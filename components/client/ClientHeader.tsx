@@ -73,7 +73,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     if (!user) return
     const { data } = await supabase
       .from('notifications')
-      .select('id, type, ticker, title, body, is_read, created_at')
+      .select('id, type, ticker, title, body, is_read, created_at, link')
       .eq('user_id', profile.id)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -81,7 +81,11 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
     setLogs(
       data.map(n => ({
         id:      n.id,
-        type:    n.type?.includes('LOW') || n.type === 'STOP_LOSS' ? 'low' : 'high',
+        // IMPORTANT : on garde le vrai type (STOP_LOSS, FORUM_REPLY, ...),
+        // pas un simple 'low'/'high' — NotifPanel en a besoin pour la
+        // couleur du badge ET pour déduire le lien de destination quand
+        // aucun `link` explicite n'est enregistré (anciennes notifs).
+        type:    n.type,
         current: 0,
         low:     0,
         high:    0,
@@ -93,6 +97,7 @@ export default function ClientHeader({ profile }: { profile: Profile }) {
         body:    n.body,
         ticker:  n.ticker,
         isRead:  n.is_read,
+        link:    n.link,
       })) as any
     )
     const unread = data.filter(n => !n.is_read)
