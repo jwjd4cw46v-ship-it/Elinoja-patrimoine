@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 
 /**
  * Format consommé depuis la table `notifications` (source de vérité côté
@@ -15,6 +16,7 @@ export interface NotifItem {
   body:    string
   time:    string
   isRead?: boolean
+  link?:   string | null
 }
 
 interface Props {
@@ -32,7 +34,26 @@ function badgeFor(type: string) {
   return { label: 'INFO', color: '#D4AF37', bg: 'rgba(212,175,55,0.12)' }
 }
 
+// Destination par défaut si la notification n'a pas de `link` enregistré
+// (anciennes notifications créées avant l'ajout de cette colonne).
+function fallbackLink(type: string): string {
+  if (type.startsWith('FORUM_')) return '/client/forum'
+  if (type === 'WATCHLIST_LOW' || type === 'WATCHLIST_HIGH') return '/client/watchlist'
+  if (
+    type === 'STOP_LOSS' || type === 'RUNNER_STOP' || type === 'BREAK_EVEN' ||
+    type === 'EXPOSURE' || type === 'TAKE_PROFIT_R1' || type === 'TAKE_PROFIT_R2' || type === 'TAKE_PROFIT_R3'
+  ) return '/client/positions'
+  return '/client'
+}
+
 export function NotifPanel({ logs, onClose }: Props) {
+  const router = useRouter()
+
+  function handleClick(log: NotifItem) {
+    router.push(log.link || fallbackLink(log.type))
+    onClose()
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -8, scale: 0.97 }}
@@ -82,6 +103,10 @@ export function NotifPanel({ logs, onClose }: Props) {
           return (
             <div
               key={log.id}
+              onClick={() => handleClick(log)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') handleClick(log) }}
               style={{
                 padding:      '10px 14px',
                 borderBottom: '1px solid var(--noir-border)',
@@ -89,6 +114,7 @@ export function NotifPanel({ logs, onClose }: Props) {
                 alignItems:   'flex-start',
                 gap:          '10px',
                 background:   log.isRead === false ? 'rgba(212,175,55,0.04)' : 'transparent',
+                cursor:       'pointer',
               }}>
               {/* Badge type */}
               <span style={{
