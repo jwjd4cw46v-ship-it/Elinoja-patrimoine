@@ -1,5 +1,5 @@
-// Elinoja Patrimoine — Service Worker v2
-const CACHE_NAME = 'elinoja-v1'
+// Elinoja Patrimoine — Service Worker v3
+const CACHE_NAME = 'elinoja-v2'
 const STATIC = ['/client', '/manifest.json']
 
 self.addEventListener('install', e => {
@@ -16,14 +16,39 @@ self.addEventListener('activate', e => {
   )
 })
 
+// ── Fetch handler ────────────────────────────────────────────────────────
+// IMPORTANT : sans ce handler, Chrome peut ne pas considérer le site comme
+// une vraie PWA installable (critère historique, encore pris en compte par
+// l'algorithme d'invite d'installation automatique même si le menu manuel
+// "Ajouter à l'écran d'accueil" a été assoupli depuis Chrome 108). Sans
+// installation "propre", Android peut créer un simple raccourci-favori au
+// lieu d'un WebAPK — et un raccourci-favori peut afficher une icône
+// générique plutôt que les icônes définies dans le manifest.
+// Stratégie network-first avec repli sur le cache : simple et sûre, ne
+// risque pas de servir du contenu périmé indéfiniment.
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return
+  e.respondWith(
+    fetch(e.request)
+      .then(res => {
+        const resClone = res.clone()
+        caches.open(CACHE_NAME).then(c => c.put(e.request, resClone)).catch(() => {})
+        return res
+      })
+      .catch(() => caches.match(e.request).then(cached => cached || caches.match('/client')))
+  )
+})
+
 // ── Push notification handler ──────────────────────────────────────────────
 self.addEventListener('push', e => {
   if (!e.data) return
   let payload
   try { payload = e.data.json() } catch { return }
 
-  const { title, body, ticker, type, notifId, badgeCount } = payload
+  const { title, body, ticker, type, notifId, badgeCount, link } = payload
 
+  // Chemins corrigés : ces fichiers sont à la racine de /public, pas dans
+  // un sous-dossier /icons/ (qui n'existe pas — vérifié dans le repo).
   const icon  = '/icon-192.png'
   const badge = '/badge-72.png'
   const tag   = `elinoja-${ticker || type}-${notifId}`
@@ -46,7 +71,7 @@ self.addEventListener('push', e => {
         icon,
         badge,
         tag,
-        data: { url: '/client/positions', notifId },
+        data: { url: link || '/client', notifId },
         requireInteraction: false,
         silent: false,
       }),
