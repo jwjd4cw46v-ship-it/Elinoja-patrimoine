@@ -54,11 +54,26 @@ export interface NotifPayload {
   ticker?: string
   title:   string
   body:    string
+  link?:   string   // destination précise (ex: /client/forum?post=<id>) — sinon déduite du type
+}
+
+// Destination par défaut selon le type, utilisée quand aucun `link` précis
+// n'est fourni par l'appelant (typiquement les alertes watchlist/positions,
+// qui n'ont pas de "sujet" spécifique à cibler).
+function defaultLinkForType(type: NotifType): string {
+  if (type.startsWith('FORUM_')) return '/client/forum'
+  if (type === 'WATCHLIST_LOW' || type === 'WATCHLIST_HIGH') return '/client/watchlist'
+  if (
+    type === 'STOP_LOSS' || type === 'RUNNER_STOP' || type === 'BREAK_EVEN' ||
+    type === 'EXPOSURE' || type === 'TAKE_PROFIT_R1' || type === 'TAKE_PROFIT_R2' || type === 'TAKE_PROFIT_R3'
+  ) return '/client/positions'
+  return '/client'
 }
 
 /** Crée une notification en base + envoie le push à tous les appareils */
 export async function sendNotification(p: NotifPayload): Promise<void> {
   const db = service()
+  const link = p.link ?? defaultLinkForType(p.type)
 
   // 1. Insérer en base
   const { data: notif } = await db.from('notifications').insert({
@@ -67,6 +82,7 @@ export async function sendNotification(p: NotifPayload): Promise<void> {
     ticker:  p.ticker ?? null,
     title:   p.title,
     body:    p.body,
+    link,
   }).select('id').single()
 
   if (!notif) return
@@ -100,6 +116,7 @@ export async function sendNotification(p: NotifPayload): Promise<void> {
     type:       p.type,
     notifId:    notif.id,
     badgeCount: unreadCount ?? 1,
+    link,
   })
 
   // 3. Envoyer à chaque appareil
