@@ -6,6 +6,11 @@ import { sendNotification } from '@/lib/notifications'
 // appel serveur-à-serveur), cette route est appelée directement par le
 // client juste après la création d'une réponse au forum. Elle est donc
 // sécurisée par la session utilisateur classique, pas par un secret partagé.
+//
+// C'est désormais la SEULE source de notification pour les réponses
+// (le trigger SQL équivalent sur forum_replies a été retiré — voir
+// 015_remove_reply_webhook_trigger.sql — car les deux ensemble créaient
+// une notification en double pour chaque réponse).
 export async function POST(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -33,7 +38,9 @@ export async function POST(req: NextRequest) {
     .from('profiles').select('full_name').eq('id', user.id).single()
   const fromName = authorProfile?.full_name || 'Un membre'
 
-  const title = mention ? '💬 Vous avez été mentionné' : '💬 Nouvelle réponse'
+  const title = mention
+    ? '💬 Vous avez été mentionné'
+    : `💬 Nouvelle réponse — ${postTitle}`
   const body  = mention
     ? `${fromName} vous a répondu directement dans « ${postTitle} ».`
     : `${fromName} a répondu à votre discussion « ${postTitle} ».`
@@ -43,6 +50,7 @@ export async function POST(req: NextRequest) {
     type:   mention ? 'FORUM_MENTION' : 'FORUM_REPLY',
     title,
     body,
+    link:   `/client/forum?post=${postId}`,
   })
 
   return NextResponse.json({ ok: true })
