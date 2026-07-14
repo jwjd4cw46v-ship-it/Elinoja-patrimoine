@@ -49,15 +49,17 @@ export async function POST(req: NextRequest) {
     const isReply = record.reply_id != null
     let ownerId: string | null = null
     let title: string | null = null
+    let postId: string | null = record.post_id ?? null
 
     if (isReply) {
       const { data } = await db
         .from('forum_replies')
-        .select('author_id, forum_posts(title)')
+        .select('author_id, post_id, forum_posts(title)')
         .eq('id', record.reply_id)
         .single()
       ownerId = data?.author_id ?? null
       title   = (data as any)?.forum_posts?.title ?? null
+      postId  = data?.post_id ?? null
     } else {
       const { data } = await db
         .from('forum_posts')
@@ -82,33 +84,19 @@ export async function POST(req: NextRequest) {
       body: isReply
         ? `Quelqu'un a aimé votre réponse dans la discussion "${title ?? ''}".`
         : `Quelqu'un a aimé votre discussion "${title ?? ''}".`,
+      link: postId ? `/client/forum?post=${postId}` : undefined,
     })
 
     return NextResponse.json({ ok: true })
   }
 
   // ── Réponse sur un post ──────────────────────────────────────────────
-  if (table === 'forum_replies') {
-    const { data } = await db
-      .from('forum_posts')
-      .select('author_id, title')
-      .eq('id', record.post_id)
-      .single()
-
-    const ownerId = data?.author_id ?? null
-    if (!ownerId || ownerId === record.author_id) {
-      return NextResponse.json({ ok: true, skipped: true })
-    }
-
-    await sendNotification({
-      userId: ownerId,
-      type:   'FORUM_REPLY',
-      title:  `💬 Nouvelle réponse — ${data?.title ?? 'votre discussion'}`,
-      body:   `Quelqu'un a répondu à votre discussion "${data?.title ?? ''}".`,
-    })
-
-    return NextResponse.json({ ok: true })
-  }
+  // NOTE : retiré volontairement — /api/forum/notify (appelé côté client
+  // juste après la création de la réponse) couvre déjà ce cas, avec en
+  // plus la distinction mention/réponse simple. Garder les deux causait
+  // une notification en double pour chaque réponse. Le trigger SQL
+  // correspondant (trg_forum_reply_webhook) a été supprimé — voir
+  // 015_remove_reply_webhook_trigger.sql.
 
   return NextResponse.json({ ok: true, skipped: true, reason: 'unhandled table' })
 }
