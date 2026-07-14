@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { sendNotification } from '@/lib/notifications'
+
 /**
  * POST /api/forum/broadcast
  * ─────────────────────────────────────────────────────────────────────────
@@ -29,8 +30,9 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { type, postTitle, excerpt } = await req.json() as {
+  const { type, postId, postTitle, excerpt } = await req.json() as {
     type:      'FORUM_NEW_POST' | 'FORUM_BROADCAST'
+    postId:    string
     postTitle: string
     excerpt?:  string
   }
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
   const body = type === 'FORUM_NEW_POST'
     ? `${fromName} a publié une nouvelle discussion : « ${postTitle} ».`
     : `${fromName} a un message pour tout le monde${excerpt ? ` : « ${excerpt} »` : ''}.`
+  const link = postId ? `/client/forum?post=${postId}` : '/client/forum'
 
   const db = service()
   const { data: profiles, error } = await db.from('profiles').select('id').neq('id', user.id)
@@ -58,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   const results = await Promise.allSettled(
     (profiles ?? []).map(p =>
-      sendNotification({ userId: p.id, type, title, body })
+      sendNotification({ userId: p.id, type, title, body, link })
     )
   )
   const notified = results.filter(r => r.status === 'fulfilled').length
