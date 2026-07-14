@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, useRef, Suspense, type ReactNode } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { MessageSquare, ThumbsUp, Reply, Plus, Pin, Lock, Search, X, Eye, Award, Clock, Image as ImageIcon, Mic, Square, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import toast from 'react-hot-toast'
 import { formatDistanceToNow } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { useSearchParams, useRouter } from 'next/navigation'
 import type { ForumPost, ForumReply } from '@/types'
 
 // Détecte les URLs (http/https/www.) dans un texte et les rend cliquables.
@@ -145,7 +146,7 @@ function VoiceRecorderButton({ value, onChange }: { value: Blob | null; onChange
   )
 }
 
-export default function ForumPage() {
+function ForumPageContent() {
   const [posts, setPosts]           = useState<ForumPost[]>([])
   const [loading, setLoading]       = useState(true)
   const [search, setSearch]         = useState('')
@@ -159,6 +160,8 @@ export default function ForumPage() {
   const [likersModal, setLikersModal] = useState<{ names: string[]; loading: boolean } | null>(null)
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
 
   // ── Charger les posts ──────────────────────────────
   const fetchPosts = useCallback(async () => {
@@ -216,6 +219,18 @@ export default function ForumPage() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
+  // Arrivée depuis une notification : /client/forum?post=<id> → on ouvre
+  // directement le sujet concerné, puis on nettoie l'URL pour ne pas le
+  // rouvrir à chaque refresh.
+  useEffect(() => {
+    const postId = searchParams.get('post')
+    if (postId) {
+      openPostById(postId)
+      router.replace('/client/forum', { scroll: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
   const [replies, setReplies]       = useState<ForumReply[]>([])
   const [replyText, setReplyText]   = useState('')
   const [replyImage, setReplyImage] = useState<File | null>(null)
@@ -241,6 +256,18 @@ export default function ForumPage() {
       .from('forum_posts')
       .update({ views_count: (post.views_count || 0) + 1 })
       .eq('id', post.id)
+  }
+
+  // Ouvre un sujet directement à partir de son id (utilisé quand on arrive
+  // via le lien d'une notification : /client/forum?post=<id>) — on n'a que
+  // l'id à ce stade, pas l'objet post complet, donc on va le chercher.
+  async function openPostById(postId: string) {
+    const { data } = await supabase
+      .from('forum_posts')
+      .select('*, author:profiles(full_name, role, badge)')
+      .eq('id', postId)
+      .single()
+    if (data) await openPost(data as any)
   }
 
   async function submitReply() {
@@ -289,6 +316,7 @@ export default function ForumPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             type:      'FORUM_BROADCAST',
+            postId:    selectedPost.id,
             postTitle: selectedPost.title,
             excerpt:   replyText.trim().slice(0, 140),
           }),
@@ -622,6 +650,16 @@ export default function ForumPage() {
   )
 }
 
+// Next.js exige que tout composant utilisant useSearchParams() soit
+// entouré d'un <Suspense>, sans quoi le build échoue.
+export default function ForumPage() {
+  return (
+    <Suspense fallback={null}>
+      <ForumPageContent />
+    </Suspense>
+  )
+}
+
 // ── Nouveau Post ───────────────────────────────────────────
 function NewPostModal({ userId, onClose, onCreated }: {
   userId: string; onClose: () => void; onCreated: () => void
@@ -650,9 +688,9 @@ function NewPostModal({ userId, onClose, onCreated }: {
       if (imageFile) image_url = await uploadForumMedia(supabase, userId, imageFile, imageFile.name.split('.').pop() || 'jpg')
       if (audioBlob) audio_url = await uploadForumMedia(supabase, userId, audioBlob, 'webm')
 
-      const { error } = await supabase.from('forum_posts').insert({
+      const { data: created, error } = await supabase.from('forum_posts').insert({
         ...form, author_id: userId, ticker: form.ticker || null, image_url, audio_url,
-      })
+      }).select('id').single()
       if (error) throw error
 
       // Diffusion à tous les utilisateurs : soit "nouveau sujet" (toujours),
@@ -664,6 +702,7 @@ function NewPostModal({ userId, onClose, onCreated }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type:      startsWithTous ? 'FORUM_BROADCAST' : 'FORUM_NEW_POST',
+          postId:    created?.id,
           postTitle: form.title,
           excerpt:   startsWithTous ? form.content.trim().slice(0, 140) : undefined,
         }),
