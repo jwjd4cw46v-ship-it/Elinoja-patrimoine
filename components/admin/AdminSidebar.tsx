@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Users, TrendingUp, BarChart2,
-  FileText, MessageSquare, Bell, Settings, ChevronRight, Newspaper, Calendar
+  FileText, MessageSquare, Bell, Settings, ChevronRight, Newspaper, Calendar,
+  Briefcase
 } from 'lucide-react'
 import type { Profile } from '@/types'
 
@@ -15,6 +16,7 @@ const navItems = [
   { href: '/admin/clients',                icon: Users,           label: 'Clients' },
   { href: '/admin/analyses-techniques',    icon: TrendingUp,      label: 'Analyses Techniques' },
   { href: '/admin/analyses-fondamentales', icon: BarChart2,       label: 'Analyses Fondamentales' },
+  { href: '/admin/intermediaires',         icon: Briefcase,       label: 'Intermédiaires' },
   { href: '/admin/cmf',                    icon: FileText,        label: 'Communiqués CMF' },
   { href: '/admin/news',                   icon: Newspaper,       label: 'News' },
   { href: '/admin/forum',                  icon: MessageSquare,   label: 'Forum' },
