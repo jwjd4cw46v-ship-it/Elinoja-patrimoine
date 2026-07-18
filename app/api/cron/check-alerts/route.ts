@@ -28,6 +28,14 @@ interface Market {
   referentiel: { ticker: string; stockName: string }
 }
 
+// Hystérésis anti-flapping : marge (en % du seuil) que le cours doit
+// franchir dans l'autre sens avant qu'une alerte watchlist ne soit
+// réarmée. Sans cette marge, un cours qui oscille d'un tick autour du
+// seuil (ex: 99,000 / 98,990 / 99,000 sur des cotations successives)
+// fait basculer triggered → false → true à chaque cycle de cron, et
+// donc renvoie une notification push pour le MÊME franchissement.
+const REARM_BUFFER_PCT = 0.005 // 0.5%
+
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('Authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -73,7 +81,9 @@ export async function GET(req: NextRequest) {
     const high = w.alert_price_high ?? 0
     const patch: Record<string, boolean> = {}
 
-    // Seuil bas — franchissement <=, comme dans WatchCard/ClientHeader
+    // Seuil bas — franchissement <=
+    // Réarmement seulement si le cours remonte AU-DESSUS de low + marge
+    // (et non plus au premier tick au-dessus de low pile).
     if (low > 0 && current <= low) {
       if (!w.low_triggered) {
         const { title, body } = NOTIF_TEMPLATES.WATCHLIST_LOW(ticker)
@@ -81,11 +91,12 @@ export async function GET(req: NextRequest) {
         result.watchlist.notified++
       }
       patch.low_triggered = true
-    } else if (low > 0 && current > low && w.low_triggered) {
-      patch.low_triggered = false // repasse au-dessus → réarme l'alerte
+    } else if (low > 0 && w.low_triggered && current > low * (1 + REARM_BUFFER_PCT)) {
+      patch.low_triggered = false // s'éloigne franchement du seuil → réarme l'alerte
     }
 
     // Seuil haut — franchissement >=
+    // Réarmement seulement si le cours redescend EN-DESSOUS de high - marge.
     if (high > 0 && current >= high) {
       if (!w.high_triggered) {
         const { title, body } = NOTIF_TEMPLATES.WATCHLIST_HIGH(ticker)
@@ -93,8 +104,8 @@ export async function GET(req: NextRequest) {
         result.watchlist.notified++
       }
       patch.high_triggered = true
-    } else if (high > 0 && current < high && w.high_triggered) {
-      patch.high_triggered = false // redescend en dessous → réarme l'alerte
+    } else if (high > 0 && w.high_triggered && current < high * (1 - REARM_BUFFER_PCT)) {
+      patch.high_triggered = false // s'éloigne franchement du seuil → réarme l'alerte
     }
 
     if (Object.keys(patch).length > 0) {
