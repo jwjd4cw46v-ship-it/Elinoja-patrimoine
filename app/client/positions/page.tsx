@@ -862,7 +862,7 @@ function VenteModal({
             style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--noir-border)' }}>
             <div>
               <div className="text-sm" style={{ color: '#F5F5F5' }}>
-                Le seuil de stop enregistré a été atteint.
+                {alerteCfg.emoji} {alerteCfg.titre}.
               </div>
               <div className="text-xs mt-1" style={{ color: '#707070' }}>
                 Que souhaitez-vous faire ?
@@ -873,7 +873,7 @@ function VenteModal({
                 onClick={() => setQuantite(String(qSuggestion))}
                 className="flex-1 py-2 rounded-lg text-xs font-bold"
                 style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: '#D4AF37' }}>
-                Appliquer le stop
+                {alerte?.type === 'STOP_LOSS' || alerte?.type === 'RUNNER_STOP' ? 'Appliquer le stop' : 'Prendre les profits'}
               </button>
               <button type="button" disabled={loading}
                 onClick={handleConserverPosition}
