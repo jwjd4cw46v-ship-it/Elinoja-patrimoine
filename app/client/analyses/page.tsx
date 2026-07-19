@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, TrendingUp, X, Target } from 'lucide-react'
+import { Search, TrendingUp, X, Target, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -22,6 +22,31 @@ const riskConfig = {
   high:   { label: 'Élevé',  color: '#FF1744' },
 }
 
+/**
+ * Statut d'une analyse par rapport au cours actuel.
+ * 'objectif' → le cours a atteint/dépassé le niveau objectif (dans le sens de l'analyse)
+ * 'stop'     → le cours a atteint/dépassé le niveau stop (dans le sens opposé)
+ * null       → aucun niveau atteint, ou données insuffisantes
+ *
+ * On déduit le sens de l'analyse (haussière/baissière) à partir de la
+ * position de l'objectif par rapport à l'entrée plutôt que du seul champ
+ * `signal`, car 'watch'/'hold' peuvent aussi porter des niveaux valides.
+ */
+function getStatutNiveau(
+  entry?: number | null, target?: number | null, stop?: number | null, current?: number
+): 'objectif' | 'stop' | null {
+  if (entry == null || target == null || stop == null || current == null) return null
+  const haussier = target > entry
+  if (haussier) {
+    if (current >= target) return 'objectif'
+    if (current <= stop) return 'stop'
+  } else {
+    if (current <= target) return 'objectif'
+    if (current >= stop) return 'stop'
+  }
+  return null
+}
+
 export default function ClientAnalysesPage() {
   const [analyses, setAnalyses] = useState<TechnicalAnalysis[]>([])
   const [loading, setLoading]   = useState(true)
@@ -30,18 +55,46 @@ export default function ClientAnalysesPage() {
   const [market, setMarket]     = useState('all')
   const [selected, setSelected] = useState<TechnicalAnalysis | null>(null)
   const [newIds, setNewIds]     = useState<Set<string>>(new Set())
+  const [prixMap, setPrixMap]   = useState<Record<string, number>>({})
   const supabase = createClient()
 
   async function fetchAnalyses() {
+    // Seuls les trades encore ouverts apparaissent ici. Dès que le cron
+    // (check-alerts) constate que l'objectif ou le stop a été atteint, il
+    // renseigne closed_at et le trade bascule automatiquement sur la page
+    // "Trades clôturés" (il disparaît d'ici au prochain fetch/realtime).
     const { data } = await supabase
       .from('technical_analyses').select('*').eq('status', 'published')
+      .is('closed_at', null)
       .order('published_at', { ascending: false })
     if (data) setAnalyses(data as any)
     setLoading(false)
   }
 
+  async function fetchCotations() {
+    try {
+      const res = await fetch('/api/cotations', { cache: 'no-store' })
+      if (!res.ok) return
+      const json = await res.json()
+      const markets: { last: number; referentiel: { ticker: string } }[] = json.markets ?? []
+      const map: Record<string, number> = {}
+      markets.forEach(m => {
+        const t = m.referentiel?.ticker?.toUpperCase()
+        if (t && m.last != null) map[t] = m.last
+      })
+      setPrixMap(map)
+    } catch {
+      // cotations indisponibles → on affiche simplement les cartes sans statut objectif/stop
+    }
+  }
+
   useEffect(() => {
     fetchAnalyses()
+    fetchCotations()
+    // Rafraîchit les cotations régulièrement pour que le statut objectif/stop
+    // reste à jour sans que l'utilisateur ait à recharger la page.
+    const cotInterval = setInterval(fetchCotations, 60_000)
+
     const channel = supabase.channel('client-analyses')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'technical_analyses', filter: 'status=eq.published' },
         (payload) => {
@@ -53,7 +106,7 @@ export default function ClientAnalysesPage() {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'technical_analyses' },
         (payload) => setAnalyses(prev => prev.filter(a => a.id !== payload.old.id)))
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => { supabase.removeChannel(channel); clearInterval(cotInterval) }
   }, [])
 
   const markets  = ['all', ...Array.from(new Set(analyses.map(a => a.market)))]
@@ -73,9 +126,16 @@ export default function ClientAnalysesPage() {
             {filtered.length} analyse{filtered.length !== 1 ? 's' : ''} disponible{filtered.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
-          style={{ background: 'rgba(0,200,83,0.1)', color: '#00C853', border: '1px solid rgba(0,200,83,0.2)' }}>
-          <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" /> Temps réel
+        <div className="flex items-center gap-2">
+          <a href="/client/analyses/cloturees"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            style={{ background: 'var(--noir-elevated)', color: '#A0A0A0', border: '1px solid var(--noir-border)' }}>
+            Trades clôturés
+          </a>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
+            style={{ background: 'rgba(0,200,83,0.1)', color: '#00C853', border: '1px solid rgba(0,200,83,0.2)' }}>
+            <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" /> Temps réel
+          </div>
         </div>
       </div>
 
@@ -127,14 +187,16 @@ export default function ClientAnalysesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((a, i) => {
-            const sig   = signalConfig[a.signal as keyof typeof signalConfig]
-            const risk  = riskConfig[a.risk_level as keyof typeof riskConfig]
-            const isNew = newIds.has(a.id)
-            const gain  = a.target_price && a.entry_price ? (((a.target_price - a.entry_price) / a.entry_price) * 100).toFixed(1) : null
-            const loss  = a.entry_price && a.stop_loss ? (((a.entry_price - a.stop_loss) / a.entry_price) * 100).toFixed(1) : null
-            const rr    = (a.target_price && a.entry_price && a.stop_loss && a.stop_loss < a.entry_price)
+            const sig     = signalConfig[a.signal as keyof typeof signalConfig]
+            const risk    = riskConfig[a.risk_level as keyof typeof riskConfig]
+            const isNew   = newIds.has(a.id)
+            const gain    = a.target_price && a.entry_price ? (((a.target_price - a.entry_price) / a.entry_price) * 100).toFixed(1) : null
+            const loss    = a.entry_price && a.stop_loss ? (((a.entry_price - a.stop_loss) / a.entry_price) * 100).toFixed(1) : null
+            const rr      = (a.target_price && a.entry_price && a.stop_loss && a.stop_loss < a.entry_price)
               ? ((a.target_price - a.entry_price) / (a.entry_price - a.stop_loss)).toFixed(2) : null
             const hasNiveaux = (a as any).support || (a as any).r1
+            const current  = prixMap[a.ticker?.toUpperCase()]
+            const statut   = getStatutNiveau(a.entry_price, a.target_price, a.stop_loss, current)
 
             return (
               <motion.div key={a.id}
@@ -175,20 +237,35 @@ export default function ClientAnalysesPage() {
                   <h3 className="text-sm font-medium mb-4 line-clamp-2 leading-snug"
                     style={{ color: '#C0C0C0', minHeight: '2.5em' }}>{a.title}</h3>
 
-                  <div className="grid grid-cols-3 gap-2 mb-3">
-                    {[
-                      { l: 'Entrée',   v: a.entry_price?.toLocaleString(),  c: '#A0A0A0', sub: null },
-                      { l: 'Objectif', v: a.target_price?.toLocaleString(), c: '#00C853', sub: gain ? `+${gain}%` : null },
-                      { l: 'Stop',     v: a.stop_loss?.toLocaleString(),    c: '#FF1744', sub: loss ? `-${loss}%` : null },
-                    ].map(p => (
-                      <div key={p.l} className="text-center p-2 rounded-lg"
-                        style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
-                        <div className="text-xs font-bold font-mono" style={{ color: p.c }}>{p.v}</div>
-                        {p.sub && <div className="text-[10px] font-medium" style={{ color: p.c }}>{p.sub}</div>}
-                        <div className="text-[10px] mt-0.5" style={{ color: '#4A4A4A' }}>{p.l}</div>
-                      </div>
-                    ))}
-                  </div>
+                  {statut ? (
+                    <div className="mb-3 rounded-lg flex items-center justify-center gap-2 py-3"
+                      style={{
+                        background: statut === 'objectif' ? 'rgba(0,200,83,0.1)' : 'rgba(255,23,68,0.1)',
+                        border: `1px solid ${statut === 'objectif' ? 'rgba(0,200,83,0.4)' : 'rgba(255,23,68,0.4)'}`,
+                      }}>
+                      {statut === 'objectif'
+                        ? <CheckCircle2 size={16} style={{ color: '#00C853' }} />
+                        : <AlertTriangle size={16} style={{ color: '#FF1744' }} />}
+                      <span className="text-sm font-bold" style={{ color: statut === 'objectif' ? '#00C853' : '#FF1744' }}>
+                        {statut === 'objectif' ? `Objectif atteint · +${gain}%` : `Stop atteint · ${loss ? '-' + loss : ''}%`}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      {[
+                        { l: 'Entrée',   v: a.entry_price?.toLocaleString(),  c: '#A0A0A0', sub: null },
+                        { l: 'Objectif', v: a.target_price?.toLocaleString(), c: '#00C853', sub: gain ? `+${gain}%` : null },
+                        { l: 'Stop',     v: a.stop_loss?.toLocaleString(),    c: '#FF1744', sub: loss ? `-${loss}%` : null },
+                      ].map(p => (
+                        <div key={p.l} className="text-center p-2 rounded-lg"
+                          style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
+                          <div className="text-xs font-bold font-mono" style={{ color: p.c }}>{p.v}</div>
+                          {p.sub && <div className="text-[10px] font-medium" style={{ color: p.c }}>{p.sub}</div>}
+                          <div className="text-[10px] mt-0.5" style={{ color: '#4A4A4A' }}>{p.l}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between pt-3 border-t"
                     style={{ borderColor: 'rgba(42,42,42,0.5)' }}>
@@ -208,13 +285,13 @@ export default function ClientAnalysesPage() {
       )}
 
       <AnimatePresence>
-        {selected && <AnalysisDetailModal analysis={selected} onClose={() => setSelected(null)} />}
+        {selected && <AnalysisDetailModal analysis={selected} current={prixMap[selected.ticker?.toUpperCase()]} onClose={() => setSelected(null)} />}
       </AnimatePresence>
     </div>
   )
 }
 
-function AnalysisDetailModal({ analysis: a, onClose }: { analysis: TechnicalAnalysis; onClose: () => void }) {
+function AnalysisDetailModal({ analysis: a, current, onClose }: { analysis: TechnicalAnalysis; current?: number; onClose: () => void }) {
   const router = useRouter()
   const sig  = signalConfig[a.signal as keyof typeof signalConfig]
   const risk = riskConfig[a.risk_level as keyof typeof riskConfig]
@@ -222,6 +299,7 @@ function AnalysisDetailModal({ analysis: a, onClose }: { analysis: TechnicalAnal
   const loss = a.entry_price && a.stop_loss ? (((a.entry_price - a.stop_loss) / a.entry_price) * 100).toFixed(2) : null
   const rr   = (a.target_price && a.entry_price && a.stop_loss && a.stop_loss < a.entry_price)
     ? ((a.target_price - a.entry_price) / (a.entry_price - a.stop_loss)).toFixed(2) : null
+  const statut = getStatutNiveau(a.entry_price, a.target_price, a.stop_loss, current)
 
   const an = a as any
   const hasNiveaux = an.support || an.r1
@@ -273,20 +351,35 @@ function AnalysisDetailModal({ analysis: a, onClose }: { analysis: TechnicalAnal
           <h2 className="text-lg font-semibold" style={{ color: '#F5F5F5' }}>{a.title}</h2>
 
           {/* Prix */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { l: "Prix d'entrée", v: a.entry_price?.toLocaleString(),  c: '#A0A0A0', sub: null },
-              { l: 'Objectif',      v: a.target_price?.toLocaleString(), c: '#00C853', sub: gain ? `+${gain}%` : null },
-              { l: 'Stop Loss',     v: a.stop_loss?.toLocaleString(),    c: '#FF1744', sub: loss ? `-${loss}%` : null },
-            ].map(p => (
-              <div key={p.l} className="p-3 rounded-xl text-center"
-                style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
-                <div className="text-lg font-bold font-mono" style={{ color: p.c }}>{p.v}</div>
-                {p.sub && <div className="text-xs font-semibold" style={{ color: p.c }}>{p.sub}</div>}
-                <div className="text-[11px] mt-1" style={{ color: '#5C5C5C' }}>{p.l}</div>
-              </div>
-            ))}
-          </div>
+          {statut ? (
+            <div className="rounded-xl flex items-center justify-center gap-2 py-5"
+              style={{
+                background: statut === 'objectif' ? 'rgba(0,200,83,0.1)' : 'rgba(255,23,68,0.1)',
+                border: `1px solid ${statut === 'objectif' ? 'rgba(0,200,83,0.4)' : 'rgba(255,23,68,0.4)'}`,
+              }}>
+              {statut === 'objectif'
+                ? <CheckCircle2 size={20} style={{ color: '#00C853' }} />
+                : <AlertTriangle size={20} style={{ color: '#FF1744' }} />}
+              <span className="text-base font-bold" style={{ color: statut === 'objectif' ? '#00C853' : '#FF1744' }}>
+                {statut === 'objectif' ? `Objectif atteint · +${gain}%` : `Stop atteint · ${loss ? '-' + loss : ''}%`}
+              </span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { l: "Prix d'entrée", v: a.entry_price?.toLocaleString(),  c: '#A0A0A0', sub: null },
+                { l: 'Objectif',      v: a.target_price?.toLocaleString(), c: '#00C853', sub: gain ? `+${gain}%` : null },
+                { l: 'Stop Loss',     v: a.stop_loss?.toLocaleString(),    c: '#FF1744', sub: loss ? `-${loss}%` : null },
+              ].map(p => (
+                <div key={p.l} className="p-3 rounded-xl text-center"
+                  style={{ background: 'var(--noir-elevated)', border: '1px solid var(--noir-border)' }}>
+                  <div className="text-lg font-bold font-mono" style={{ color: p.c }}>{p.v}</div>
+                  {p.sub && <div className="text-xs font-semibold" style={{ color: p.c }}>{p.sub}</div>}
+                  <div className="text-[11px] mt-1" style={{ color: '#5C5C5C' }}>{p.l}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Niveaux techniques */}
           {hasNiveaux && (
