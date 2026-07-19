@@ -83,6 +83,38 @@ export const AI_TOOLS = [
   {
     type: 'function' as const,
     function: {
+      name: 'getIntermediairePfType',
+      description: 'Récupère le portefeuille type (liste de sociétés, ticker et poids en %) publié par un intermédiaire en bourse tunisien (ex: Amen Invest, Tunisie Valeurs, MAC SA, Maxula Bourse...). Utilise ce tool quand l\'utilisateur demande le portefeuille type, la composition ou l\'allocation d\'un intermédiaire.',
+      parameters: {
+        type: 'object',
+        properties: { intermediaire: { type: 'string', description: 'Nom de l\'intermédiaire en bourse (ex: AMEN INVEST, TUNISIE VALEURS)' } },
+        required: ['intermediaire'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'getIntermediaireRecommandations',
+      description: 'Récupère les recommandations (société, ticker, cours cible) publiées par un intermédiaire en bourse tunisien. Utilise ce tool quand l\'utilisateur demande les recommandations, cours cibles ou conseils publiés par un intermédiaire donné.',
+      parameters: {
+        type: 'object',
+        properties: { intermediaire: { type: 'string', description: 'Nom de l\'intermédiaire en bourse (ex: AMEN INVEST, TUNISIE VALEURS)' } },
+        required: ['intermediaire'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'listIntermediaires',
+      description: 'Liste les intermédiaires en bourse tunisiens pour lesquels un portefeuille type et/ou des recommandations sont disponibles sur la plateforme. Utilise ce tool si l\'utilisateur demande quels intermédiaires sont couverts, ou si le nom qu\'il donne ne correspond à aucun résultat.',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
       name: 'getWatchlistAlerts',
       description: 'Récupère les alertes de franchissement de seuil actives pour l\'utilisateur connecté.',
       parameters: {
@@ -219,4 +251,10 @@ Portefeuille :
 Avis d'experts :
 - Pour toute question sur les recommandations, le consensus ou l'avis des experts sur un titre, appelle IMMÉDIATEMENT getExpertOpinions
 - Présente le consensus en premier, puis les avis individuels avec le nom de l'expert
-- Mentionne toujours que ces avis sont valables 6 mois et ne constituent pas un conseil d'investissement`
+- Mentionne toujours que ces avis sont valables 6 mois et ne constituent pas un conseil d'investissement
+
+Intermédiaires en bourse (portefeuilles types & recommandations) :
+- Pour toute question sur le portefeuille type ou l'allocation d'un intermédiaire (ex: Amen Invest, Tunisie Valeurs), appelle getIntermediairePfType
+- Pour toute question sur les recommandations ou cours cibles publiés par un intermédiaire, appelle getIntermediaireRecommandations
+- Si le nom de l'intermédiaire donné par l'utilisateur ne renvoie aucun résultat, appelle listIntermediaires pour proposer les noms disponibles plutôt que de dire simplement "aucun résultat"
+- Précise toujours qu'il s'agit de données publiées par l'intermédiaire lui-même, pas d'une analyse Elinoja`
