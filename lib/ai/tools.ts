@@ -89,6 +89,73 @@ export async function executeTool(name: string, args: Record<string, any>): Prom
       }
     }
 
+    // ── Portefeuille type d'un intermédiaire ────────────────────────────────
+    case 'getIntermediairePfType': {
+      const { intermediaire } = args
+      // Essai d'abord en correspondance exacte (insensible à la casse), puis
+      // en partiel si rien trouvé — tolère les variations de saisie du user
+      // ou du modèle (ex: "Amen Invest" vs "AMEN INVEST").
+      let { data } = await supabase
+        .from('intermediaire_pf_type')
+        .select('societe, ticker, poids')
+        .ilike('intermediaire', intermediaire)
+        .order('poids', { ascending: false })
+      if (!data?.length) {
+        const fallback = await supabase
+          .from('intermediaire_pf_type')
+          .select('societe, ticker, poids')
+          .ilike('intermediaire', `%${intermediaire}%`)
+          .order('poids', { ascending: false })
+        data = fallback.data ?? []
+      }
+      if (!data.length) return { message: `Aucun portefeuille type trouvé pour "${intermediaire}". Utilise listIntermediaires pour voir les intermédiaires disponibles.`, portefeuille: [] }
+      return {
+        intermediaire: intermediaire.toUpperCase(),
+        nombre_lignes: data.length,
+        portefeuille: data.map(r => ({ société: r.societe, ticker: r.ticker, poids: r.poids + '%' })),
+        source: 'Elinoja Patrimoine — Portefeuilles Types des Intermédiaires',
+      }
+    }
+
+    // ── Recommandations d'un intermédiaire ──────────────────────────────────
+    case 'getIntermediaireRecommandations': {
+      const { intermediaire } = args
+      let { data } = await supabase
+        .from('intermediaire_recommandations')
+        .select('societe, ticker, cours_cible')
+        .ilike('intermediaire', intermediaire)
+        .order('societe', { ascending: true })
+      if (!data?.length) {
+        const fallback = await supabase
+          .from('intermediaire_recommandations')
+          .select('societe, ticker, cours_cible')
+          .ilike('intermediaire', `%${intermediaire}%`)
+          .order('societe', { ascending: true })
+        data = fallback.data ?? []
+      }
+      if (!data.length) return { message: `Aucune recommandation trouvée pour "${intermediaire}". Utilise listIntermediaires pour voir les intermédiaires disponibles.`, recommandations: [] }
+      return {
+        intermediaire: intermediaire.toUpperCase(),
+        nombre_lignes: data.length,
+        recommandations: data.map(r => ({ société: r.societe, ticker: r.ticker, cours_cible: r.cours_cible })),
+        source: 'Elinoja Patrimoine — Recommandations des Intermédiaires',
+      }
+    }
+
+    // ── Liste des intermédiaires disponibles ────────────────────────────────
+    case 'listIntermediaires': {
+      const [pf, reco] = await Promise.all([
+        supabase.from('intermediaire_pf_type').select('intermediaire'),
+        supabase.from('intermediaire_recommandations').select('intermediaire'),
+      ])
+      const set = new Set<string>()
+      ;(pf.data ?? []).forEach((r: any) => set.add(r.intermediaire))
+      ;(reco.data ?? []).forEach((r: any) => set.add(r.intermediaire))
+      const intermediaires = Array.from(set).sort()
+      if (!intermediaires.length) return { message: 'Aucun intermédiaire n\'a encore de données publiées.', intermediaires: [] }
+      return { total: intermediaires.length, intermediaires, source: 'Elinoja Patrimoine — Intermédiaires en Bourse' }
+    }
+
     // ── Alertes watchlist ───────────────────────────────────────────────────
     case 'getWatchlistAlerts': {
       const { userId } = args
