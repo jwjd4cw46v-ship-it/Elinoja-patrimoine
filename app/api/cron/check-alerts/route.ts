@@ -31,10 +31,31 @@ interface Market {
 // Hystérésis anti-flapping : marge (en % du seuil) que le cours doit
 // franchir dans l'autre sens avant qu'une alerte watchlist ne soit
 // réarmée. Sans cette marge, un cours qui oscille d'un tick autour du
-// seuil (ex: 99,000 / 98,990 / 99,000 sur des cotations successives)
-// fait basculer triggered → false → true à chaque cycle de cron, et
-// donc renvoie une notification push pour le MÊME franchissement.
+// seuil fait basculer triggered → false → true à chaque cycle de cron,
+// et donc renvoie une notification push pour le MÊME franchissement.
 const REARM_BUFFER_PCT = 0.005 // 0.5%
+
+/**
+ * Statut d'un trade (analyse technique) par rapport au cours actuel.
+ * Même logique que côté front (ClientAnalysesPage/getStatutNiveau) —
+ * dupliquée ici volontairement car le cron n'importe pas de code React.
+ * Le sens (haussier/baissier) est déduit de la position de l'objectif
+ * par rapport à l'entrée plutôt que du seul champ `signal`.
+ */
+function getStatutNiveau(
+  entry?: number | null, target?: number | null, stop?: number | null, current?: number
+): 'objectif' | 'stop' | null {
+  if (entry == null || target == null || stop == null || current == null) return null
+  const haussier = target > entry
+  if (haussier) {
+    if (current >= target) return 'objectif'
+    if (current <= stop) return 'stop'
+  } else {
+    if (current <= target) return 'objectif'
+    if (current >= stop) return 'stop'
+  }
+  return null
+}
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -62,6 +83,7 @@ export async function GET(req: NextRequest) {
   const result = {
     watchlist: { checked: 0, notified: 0 },
     positions: { checked: 0, notified: 0 },
+    trades:    { checked: 0, closed: 0 },
   }
 
   // ═══════════════════════ PART A — WATCHLIST ═══════════════════════════
@@ -81,9 +103,6 @@ export async function GET(req: NextRequest) {
     const high = w.alert_price_high ?? 0
     const patch: Record<string, boolean> = {}
 
-    // Seuil bas — franchissement <=
-    // Réarmement seulement si le cours remonte AU-DESSUS de low + marge
-    // (et non plus au premier tick au-dessus de low pile).
     if (low > 0 && current <= low) {
       if (!w.low_triggered) {
         const { title, body } = NOTIF_TEMPLATES.WATCHLIST_LOW(ticker)
@@ -92,11 +111,9 @@ export async function GET(req: NextRequest) {
       }
       patch.low_triggered = true
     } else if (low > 0 && w.low_triggered && current > low * (1 + REARM_BUFFER_PCT)) {
-      patch.low_triggered = false // s'éloigne franchement du seuil → réarme l'alerte
+      patch.low_triggered = false
     }
 
-    // Seuil haut — franchissement >=
-    // Réarmement seulement si le cours redescend EN-DESSOUS de high - marge.
     if (high > 0 && current >= high) {
       if (!w.high_triggered) {
         const { title, body } = NOTIF_TEMPLATES.WATCHLIST_HIGH(ticker)
@@ -105,7 +122,7 @@ export async function GET(req: NextRequest) {
       }
       patch.high_triggered = true
     } else if (high > 0 && w.high_triggered && current < high * (1 - REARM_BUFFER_PCT)) {
-      patch.high_triggered = false // s'éloigne franchement du seuil → réarme l'alerte
+      patch.high_triggered = false
     }
 
     if (Object.keys(patch).length > 0) {
@@ -116,14 +133,6 @@ export async function GET(req: NextRequest) {
   // ═══════════════════════ PART B — POSITIONS ═══════════════════════════
   const { data: positions, error: posErr } = await db
     .from('positions').select('*').neq('state', 'CLOSED')
-  // IMPORTANT : on ne filtre plus sur is_acted=false ici. Une alerte
-  // "conservée" par l'utilisateur (is_acted=true, cf. handleConserverPosition
-  // côté client) doit rester visible à cette détection tant que le prix
-  // reste dans la zone de déclenchement — sinon ce cron la recréait (et
-  // renvoyait un NOUVEAU push) alors même que l'utilisateur venait de la
-  // traiter côté app. Le nettoyage juste en dessous continue de supprimer
-  // ces alertes (traitées ou non) dès que le prix repasse hors zone, ce qui
-  // réarme normalement la détection pour un futur franchissement.
   const { data: alertesExist, error: alErr } = await db
     .from('position_alertes').select('*')
 
@@ -138,7 +147,6 @@ export async function GET(req: NextRequest) {
     const alertesDeja = (alertesExist ?? []).filter(a => a.position_id === p.id) as AlertePosition[]
     const nouvelles   = detecterAlertes(p, prix, alertesDeja)
 
-    // Nettoyage : alertes qui ne sont plus valides (cours revenu dans la zone)
     for (const alerteDeja of alertesDeja) {
       const encoreValide =
         (alerteDeja.type === 'STOP_LOSS'      && prix <= alerteDeja.prix_trigger) ||
@@ -152,7 +160,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Nouvelles alertes → insertion + push
     for (const a of nouvelles) {
       const { data: inserted, error: insErr } = await db
         .from('position_alertes')
@@ -180,6 +187,45 @@ export async function GET(req: NextRequest) {
       await sendNotification({ userId: p.user_id, type: a.type, ticker: p.ticker, title, body })
       result.positions.notified++
     }
+  }
+
+  // ═══════════════════════ PART C — TRADES (ANALYSES) ════════════════════
+  // Un trade publié se clôture automatiquement dès que le cours atteint
+  // l'objectif ou le stop. La clôture est définitive (closed_at figé) :
+  // même si le cours revient ensuite dans la zone, le trade reste clôturé
+  // avec le résultat constaté au moment du franchissement — contrairement
+  // aux alertes watchlist/positions plus haut, qui elles se réarment.
+  const { data: trades, error: trErr } = await db
+    .from('technical_analyses')
+    .select('id, ticker, entry_price, target_price, stop_loss, user_id')
+    .eq('status', 'published')
+    .is('closed_at', null)
+
+  if (trErr) console.error('technical_analyses fetch error:', trErr.message)
+
+  for (const t of trades ?? []) {
+    const current = t.ticker ? prixMap[t.ticker.toUpperCase()] : undefined
+    if (current == null) continue
+    result.trades.checked++
+
+    const statut = getStatutNiveau(t.entry_price, t.target_price, t.stop_loss, current)
+    if (!statut) continue
+
+    const { error: closeErr } = await db
+      .from('technical_analyses')
+      .update({
+        closed_at:    new Date().toISOString(),
+        close_reason: statut,
+        close_price:  current,
+      })
+      .eq('id', t.id)
+      .is('closed_at', null) // garde-fou anti double-clôture si deux cycles se chevauchent
+
+    if (closeErr) {
+      console.error('close technical_analysis error:', closeErr.message)
+      continue
+    }
+    result.trades.closed++
   }
 
   return NextResponse.json({ ok: true, result })
