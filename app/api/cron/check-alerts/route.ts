@@ -197,7 +197,7 @@ export async function GET(req: NextRequest) {
   // aux alertes watchlist/positions plus haut, qui elles se réarment.
   const { data: trades, error: trErr } = await db
     .from('technical_analyses')
-    .select('id, ticker, entry_price, target_price, stop_loss, user_id')
+    .select('id, ticker, entry_price, target_price, stop_loss')
     .eq('status', 'published')
     .is('closed_at', null)
 
