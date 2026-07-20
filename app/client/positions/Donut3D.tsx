@@ -23,20 +23,39 @@
     cercle complet ça faisait dépasser l'arc au-delà de 2π (angle de fin
     < angle de départ visuellement), ce qui produisait une ellipse
     dégénérée géante flottant au-dessus du donut au lieu d'un anneau plein.
+  - Couleurs générées dynamiquement via l'angle doré (137.508°) au lieu
+    d'une palette fixe de 8 couleurs : garantit des teintes distinctes
+    quel que soit le nombre de positions (fonctionne bien au-delà de 20),
+    sans jamais faire boucler/répéter deux couleurs proches côte à côte.
 */
 
 import { useId, useState } from 'react'
 
-const TICKER_COLORS: Record<string, string> = {
-  TINV: '#22C55E',
-  SFBT: '#FACC15',
-  TGH:  '#3B82F6',
-}
-const FALLBACK_COLORS = ['#22C55E','#EAB308','#3B82F6','#A855F7','#EF4444','#06B6D4','#F97316','#EC4899']
+// Angle doré : répartit les teintes de façon maximalement distincte
+// pour n'importe quel nombre de positions (fonctionne même > 20).
+const GOLDEN_ANGLE = 137.508
+const HUE_OFFSET = 200 // point de départ (évite de commencer sur un rouge criard)
 
-function colorFor(ticker: string, i: number): string {
-  return TICKER_COLORS[ticker] ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]
+function hslToHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360
+  s /= 100; l /= 100
+  const k = (n: number) => (n + h / 30) % 12
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))
+  const toHex = (x: number) => Math.round(x * 255).toString(16).padStart(2, '0')
+  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`
 }
+
+function colorFor(_ticker: string, i: number): string {
+  const hue = HUE_OFFSET + i * GOLDEN_ANGLE
+  // Légère variation de saturation/luminosité toutes les 3 tranches pour
+  // renforcer encore le contraste entre teintes voisines quand il y a
+  // beaucoup de positions.
+  const sat = 62 + (i % 3) * 10        // 62 / 72 / 82
+  const light = 54 + ((i + 1) % 2) * 6  // 54 / 60
+  return hslToHex(hue, sat, light)
+}
+
 function darken(hex: string, f = 0.72): string {
   const n = parseInt(hex.slice(1), 16)
   return `rgb(${Math.round(((n>>16)&0xff)*f)},${Math.round(((n>>8)&0xff)*f)},${Math.round((n&0xff)*f)})`
