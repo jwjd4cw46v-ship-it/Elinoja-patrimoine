@@ -41,11 +41,21 @@ const REARM_BUFFER_PCT = 0.005 // 0.5%
  * dupliquée ici volontairement car le cron n'importe pas de code React.
  * Le sens (haussier/baissier) est déduit de la position de l'objectif
  * par rapport à l'entrée plutôt que du seul champ `signal`.
+ *
+ * IMPORTANT : on utilise `!entry`/`!target`/`!stop` (et pas `== null`) pour
+ * exclure aussi bien `null`/`undefined` que `0`. Beaucoup d'analyses créées
+ * via le système support/r1/r2/r3 n'ont jamais entry_price/target_price/
+ * stop_loss renseignés et ces colonnes valent alors 0 (NOT NULL DEFAULT 0)
+ * plutôt que null. Avec `== null`, `entry=0, target=0, stop=0` passait le
+ * garde-fou, `haussier = target > entry` valait `false` (0 > 0), et la
+ * branche baissière déclenchait `current >= stop` → `current >= 0` → vrai
+ * pour n'importe quel cours positif : TOUTES ces analyses étaient donc
+ * clôturées à tort en "stop atteint" dès le premier passage du cron.
  */
 function getStatutNiveau(
   entry?: number | null, target?: number | null, stop?: number | null, current?: number
 ): 'objectif' | 'stop' | null {
-  if (entry == null || target == null || stop == null || current == null) return null
+  if (!entry || !target || !stop || current == null) return null
   const haussier = target > entry
   if (haussier) {
     if (current >= target) return 'objectif'
