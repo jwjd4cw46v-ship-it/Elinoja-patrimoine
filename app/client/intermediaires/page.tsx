@@ -130,13 +130,19 @@ export default function IntermediairesPage() {
               Aucun portefeuille type publié pour {selected}.
             </p>
           ) : (
-            <table className="table-premium w-full">
-              <thead><tr><th>Ticker</th><th>Société</th><th style={{ textAlign: 'right' }}>Poids</th></tr></thead>
+            <table className="table-premium w-full" style={{ tableLayout: 'fixed' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '18%' }}>Ticker</th>
+                  <th style={{ width: '57%' }}>Société</th>
+                  <th style={{ width: '25%', textAlign: 'right' }}>Poids</th>
+                </tr>
+              </thead>
               <tbody>
                 {pfRows.map(r => (
                   <tr key={r.id}>
                     <td style={{ color: '#D4AF37', fontWeight: 600, fontFamily: 'monospace' }}>{r.ticker || '—'}</td>
-                    <td style={{ color: '#F5F5F5' }}>{r.societe}</td>
+                    <td style={{ color: '#F5F5F5', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.societe}</td>
                     <td style={{ textAlign: 'right', color: '#D4AF37', fontWeight: 600 }}>{r.poids.toFixed(1)}%</td>
                   </tr>
                 ))}
@@ -149,13 +155,19 @@ export default function IntermediairesPage() {
               Aucune recommandation publiée pour {selected}.
             </p>
           ) : (
-            <table className="table-premium w-full">
-              <thead><tr><th>Ticker</th><th>Société</th><th style={{ textAlign: 'right' }}>Cours cible</th></tr></thead>
+            <table className="table-premium w-full" style={{ tableLayout: 'fixed' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '18%' }}>Ticker</th>
+                  <th style={{ width: '47%' }}>Société</th>
+                  <th style={{ width: '35%', textAlign: 'right' }}>Cours cible</th>
+                </tr>
+              </thead>
               <tbody>
                 {recoRows.map(r => (
                   <tr key={r.id}>
                     <td style={{ color: '#D4AF37', fontWeight: 600, fontFamily: 'monospace' }}>{r.ticker || '—'}</td>
-                    <td style={{ color: '#F5F5F5' }}>{r.societe}</td>
+                    <td style={{ color: '#F5F5F5', whiteSpace: 'normal', wordBreak: 'break-word' }}>{r.societe}</td>
                     <td style={{ textAlign: 'right', color: '#00C853', fontWeight: 600, fontFamily: 'monospace' }}>
                       {r.cours_cible.toLocaleString('fr-TN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                     </td>
