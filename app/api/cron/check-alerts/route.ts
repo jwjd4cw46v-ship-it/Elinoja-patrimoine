@@ -42,20 +42,19 @@ const REARM_BUFFER_PCT = 0.005 // 0.5%
  * Le sens (haussier/baissier) est déduit de la position de l'objectif
  * par rapport à l'entrée plutôt que du seul champ `signal`.
  *
- * IMPORTANT : on utilise `!entry`/`!target`/`!stop` (et pas `== null`) pour
- * exclure aussi bien `null`/`undefined` que `0`. Beaucoup d'analyses créées
- * via le système support/r1/r2/r3 n'ont jamais entry_price/target_price/
- * stop_loss renseignés et ces colonnes valent alors 0 (NOT NULL DEFAULT 0)
- * plutôt que null. Avec `== null`, `entry=0, target=0, stop=0` passait le
- * garde-fou, `haussier = target > entry` valait `false` (0 > 0), et la
- * branche baissière déclenchait `current >= stop` → `current >= 0` → vrai
- * pour n'importe quel cours positif : TOUTES ces analyses étaient donc
- * clôturées à tort en "stop atteint" dès le premier passage du cron.
+ * NOTE : cette fonction suppose que `current` est déjà un prix valide et
+ * non nul — c'est à l'appelant de le garantir (voir `if (!current) continue`
+ * dans la boucle PART C plus bas). Si un `current = 0` lui était transmis,
+ * `current <= stop` serait toujours vrai côté baissier et déclencherait un
+ * faux "stop" pour n'importe quel trade : c'est exactement le bug corrigé
+ * ici (l'ancien garde-fou testait `current == null`, ce qui laissait passer
+ * les cotations à 0 renvoyées par /api/cotations pour un ticker fermé ou
+ * en glitch).
  */
 function getStatutNiveau(
   entry?: number | null, target?: number | null, stop?: number | null, current?: number
 ): 'objectif' | 'stop' | null {
-  if (!entry || !target || !stop || current == null) return null
+  if (!entry || !target || !stop || !current) return null
   const haussier = target > entry
   if (haussier) {
     if (current >= target) return 'objectif'
@@ -106,7 +105,7 @@ export async function GET(req: NextRequest) {
   for (const w of watchlists ?? []) {
     const ticker  = w.ticker?.toUpperCase()
     const current = ticker ? prixMap[ticker] : undefined
-    if (!ticker || current == null) continue
+    if (!ticker || !current) continue
     result.watchlist.checked++
 
     const low  = w.alert_price_low  ?? 0
@@ -215,7 +214,12 @@ export async function GET(req: NextRequest) {
 
   for (const t of trades ?? []) {
     const current = t.ticker ? prixMap[t.ticker.toUpperCase()] : undefined
-    if (current == null) continue
+    // IMPORTANT : `!current` exclut à la fois `undefined` (ticker absent des
+    // cotations) ET `0` (cotation invalide/marché fermé/glitch de l'API).
+    // C'était `current == null` avant : un `current = 0` passait ce garde-fou
+    // et déclenchait un faux "stop" pour tout trade avec un stop_loss > 0,
+    // ce qui a provoqué la clôture en masse observée en base (close_price: 0).
+    if (!current) continue
     result.trades.checked++
 
     const statut = getStatutNiveau(t.entry_price, t.target_price, t.stop_loss, current)
