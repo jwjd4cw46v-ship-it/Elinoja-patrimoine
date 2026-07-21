@@ -361,19 +361,30 @@ function PositionCard({
   const stopActuel = prochainStop(pos)
   const alerteActive = alertes.find(a => a.position_id === pos.id && !a.is_acted)
 
+  // Affichage seulement : "franchi" = vendu (source de vérité DB) OU le prix
+  // courant a dépassé le niveau. pos.r1_atteint / r2_atteint / r3_atteint ne
+  // sont JAMAIS modifiés ici — ils restent la seule source de vérité pour le
+  // calcul du stop dynamique (prochainStop) et pour la détection R2/R3
+  // (detecterAlertes), qui doivent continuer à dépendre uniquement de la
+  // vente réellement exécutée.
+  const r1Franchi = pos.r1_atteint || (prix != null && pos.r1 != null && prix >= pos.r1)
+  const r2Franchi = pos.r2_atteint || (prix != null && pos.r2 != null && prix >= pos.r2)
+  const r3Franchi = pos.r3_atteint || (prix != null && pos.r3 != null && prix >= pos.r3)
+
   // Progression S → R1 → R2 → R3 → Runner
   const niveaux = [
     { label: 'S',      value: pos.support, atteint: true,           color: '#5C5C5C' },
-    { label: 'R1',     value: pos.r1,      atteint: pos.r1_atteint, color: '#D4AF37' },
-    { label: 'R2',     value: pos.r2,      atteint: pos.r2_atteint, color: '#D4AF37' },
-    { label: 'R3',     value: pos.r3,      atteint: pos.r3_atteint, color: '#D4AF37' },
+    { label: 'R1',     value: pos.r1,      atteint: r1Franchi,      color: '#D4AF37' },
+    { label: 'R2',     value: pos.r2,      atteint: r2Franchi,      color: '#D4AF37' },
+    { label: 'R3',     value: pos.r3,      atteint: r3Franchi,      color: '#D4AF37' },
     { label: 'Runner', value: null,         atteint: pos.state === 'RUNNING', color: '#00C853' },
   ].filter(n => n.label === 'S' || n.label === 'R1' || n.label === 'Runner' || n.value != null)
 
-  // Largeur de la barre de progression
-  const progressPct = pos.r3_atteint ? 90
-    : pos.r2_atteint ? 70
-    : pos.r1_atteint ? 45
+  // Largeur de la barre de progression (basée sur le franchissement affiché,
+  // pas uniquement sur la vente réelle)
+  const progressPct = r3Franchi ? 90
+    : r2Franchi ? 70
+    : r1Franchi ? 45
     : prix && pos.support
     ? Math.min(40, Math.max(0, ((prix - pos.support) / (pos.r1 - pos.support)) * 40))
     : 5
@@ -534,10 +545,19 @@ function PositionDetailModal({
   const stops   = calculerStops(pos.support, pos.r1, pos.r2 ?? undefined, pos.r3 ?? undefined)
   const stopAct = prochainStop(pos)
 
-  // Prochain objectif
-  const prochainObj = !pos.r1_atteint ? { label: 'R1', value: pos.r1, qte: pos.q1_cible }
-    : !pos.r2_atteint && pos.r2 ? { label: 'R2', value: pos.r2, qte: pos.q2_cible }
-    : !pos.r3_atteint && pos.r3 ? { label: 'R3', value: pos.r3, qte: pos.q3_cible }
+  // Affichage seulement : mêmes règles que PositionCard. pos.r1_atteint /
+  // r2_atteint / r3_atteint restent la seule source de vérité pour le stop
+  // et la détection R2/R3 — on ne les modifie jamais ici, on ne fait que
+  // les compléter pour l'affichage avec le franchissement de prix en direct.
+  const r1Franchi = pos.r1_atteint || (prix != null && pos.r1 != null && prix >= pos.r1)
+  const r2Franchi = pos.r2_atteint || (prix != null && pos.r2 != null && prix >= pos.r2)
+  const r3Franchi = pos.r3_atteint || (prix != null && pos.r3 != null && prix >= pos.r3)
+
+  // Prochain objectif — basé sur le franchissement affiché, pour rester
+  // cohérent avec la barre de progression ci-dessous.
+  const prochainObj = !r1Franchi ? { label: 'R1', value: pos.r1, qte: pos.q1_cible }
+    : !r2Franchi && pos.r2 ? { label: 'R2', value: pos.r2, qte: pos.q2_cible }
+    : !r3Franchi && pos.r3 ? { label: 'R3', value: pos.r3, qte: pos.q3_cible }
     : pos.runner_cible ? { label: 'Runner', value: null, qte: pos.runner_cible }
     : null
 
@@ -631,9 +651,9 @@ function PositionDetailModal({
               </span>
             </div>
             {[
-              pos.r3 && { label: 'R3', value: pos.r3, atteint: pos.r3_atteint, stop: stops.stop3 },
-              pos.r2 && { label: 'R2', value: pos.r2, atteint: pos.r2_atteint, stop: stops.stop2 },
-              { label: 'R1', value: pos.r1, atteint: pos.r1_atteint, stop: stops.stop1 },
+              pos.r3 && { label: 'R3', value: pos.r3, atteint: r3Franchi, stop: stops.stop3 },
+              pos.r2 && { label: 'R2', value: pos.r2, atteint: r2Franchi, stop: stops.stop2 },
+              { label: 'R1', value: pos.r1, atteint: r1Franchi, stop: stops.stop1 },
               { label: 'Entrée', value: pos.prix_moyen, atteint: true, stop: null },
               { label: 'Support (S)', value: pos.support, atteint: false, stop: stops.stop0 },
             ].filter(Boolean).map((n: any) => (
@@ -664,7 +684,7 @@ function PositionDetailModal({
             </div>
             <div className="flex items-center justify-between mb-2">
               {['Entrée', 'R1', 'R2', 'R3', 'Runner'].map((step, i) => {
-                const atteint = i === 0 || (i === 1 && pos.r1_atteint) || (i === 2 && pos.r2_atteint) || (i === 3 && pos.r3_atteint) || (i === 4 && pos.state === 'RUNNING')
+                const atteint = i === 0 || (i === 1 && r1Franchi) || (i === 2 && r2Franchi) || (i === 3 && r3Franchi) || (i === 4 && pos.state === 'RUNNING')
                 const existe  = i === 0 || i === 1 || (i === 2 && pos.r2) || (i === 3 && pos.r3) || i === 4
                 return (
                   <div key={step} className="flex flex-col items-center gap-1.5" style={{ flex: 1 }}>
