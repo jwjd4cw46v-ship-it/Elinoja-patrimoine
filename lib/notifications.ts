@@ -47,6 +47,9 @@ export type NotifType =
   | 'WATCHLIST_LOW' | 'WATCHLIST_HIGH'
   | 'FORUM_LIKE' | 'FORUM_REPLY' | 'FORUM_MENTION'
   | 'FORUM_NEW_POST' | 'FORUM_BROADCAST'
+  // Événements calendrier (AG / détachement de dividendes) sur les tickers en position
+  | 'CALENDAR_AG_J7' | 'CALENDAR_AG_J1'
+  | 'CALENDAR_DIV_J7' | 'CALENDAR_DIV_J1'
 
 export interface NotifPayload {
   userId:  string
@@ -67,6 +70,8 @@ function defaultLinkForType(type: NotifType): string {
     type === 'STOP_LOSS' || type === 'RUNNER_STOP' || type === 'BREAK_EVEN' ||
     type === 'EXPOSURE' || type === 'TAKE_PROFIT_R1' || type === 'TAKE_PROFIT_R2' || type === 'TAKE_PROFIT_R3'
   ) return '/client/positions'
+  // ADAPTER cette route si la page calendrier a un autre chemin dans l'app.
+  if (type.startsWith('CALENDAR_')) return '/client/calendrier'
   return '/client'
 }
 
@@ -197,5 +202,24 @@ export const NOTIF_TEMPLATES: Record<NotifType, (ticker?: string) => { title: st
   FORUM_BROADCAST: _ => ({
     title: `📢 Message à tous`,
     body:  `Quelqu'un a publié un message pour tout le monde sur le forum.`,
+  }),
+  // Templates génériques (le cron check-calendar-events construit en général
+  // un message plus précis incluant la date exacte, donc ceux-ci servent
+  // surtout de filet de sécurité / cas d'usage futur ailleurs dans l'app).
+  CALENDAR_AG_J7:  t => ({
+    title: `📅 Assemblée générale dans 7 jours — ${t}`,
+    body:  `Une assemblée générale de ${t} est prévue dans une semaine. Consultez le calendrier pour les détails.`,
+  }),
+  CALENDAR_AG_J1:  t => ({
+    title: `📅 Assemblée générale demain — ${t}`,
+    body:  `Une assemblée générale de ${t} aura lieu demain. Consultez le calendrier pour les détails.`,
+  }),
+  CALENDAR_DIV_J7: t => ({
+    title: `💰 Détachement de dividende dans 7 jours — ${t}`,
+    body:  `Le détachement de dividende de ${t} est prévu dans une semaine.`,
+  }),
+  CALENDAR_DIV_J1: t => ({
+    title: `💰 Détachement de dividende demain — ${t}`,
+    body:  `Le détachement de dividende de ${t} aura lieu demain.`,
   }),
 }
