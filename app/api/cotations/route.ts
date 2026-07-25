@@ -111,7 +111,7 @@ async function upsertMarkets(markets: any[], today: string) {
     .select('nom, plus_haut, plus_bas')
     .eq('date', today)
 
-  const map = {}
+  const map: Record<string, any> = {}
   for (const r of existing || []) map[r.nom] = r
 
   const rows = markets.map((m) => {
