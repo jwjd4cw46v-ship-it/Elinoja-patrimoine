@@ -156,7 +156,7 @@ export default function ClientDashboard() {
         </div>
       </motion.div>
 
-      {/* Quick stats */}
+      {/* Quick stats - Images réduites de 5% (85%) et titres en blanc éclatant (#FFFFFF) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           {
@@ -198,12 +198,12 @@ export default function ClientDashboard() {
             transition={{ delay: i * 0.06 }}
             className="card-premium p-4 relative overflow-hidden">
 
-            {/* Image de fond représentative du contenu, taille native, centrée */}
+            {/* Image de fond représentative du contenu, réduite de 5% (90% -> 85%), centrée */}
             <div
               className="absolute inset-0"
               style={{
                 backgroundImage: `url('${s.image}')`,
-                backgroundSize: '90%',
+                backgroundSize: '85%',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 filter: 'brightness(1.25) saturate(1.4)',
@@ -215,7 +215,7 @@ export default function ClientDashboard() {
                 <s.icon size={14} style={{ color: s.color }} />
               </div>
               <div className="text-2xl font-bold" style={{ color: '#F5F5F5' }}>{s.value}</div>
-              <div className="text-xs mt-0.5" style={{ color: '#5C5C5C' }}>{s.label}</div>
+              <div className="text-xs mt-0.5" style={{ color: '#FFFFFF' }}>{s.label}</div>
             </div>
           </motion.div>
         ))}
