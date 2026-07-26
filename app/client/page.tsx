@@ -203,18 +203,19 @@ export default function ClientDashboard() {
               className="absolute inset-0"
               style={{
                 backgroundImage: `url('${s.image}')`,
-                backgroundSize: '75%',
+                backgroundSize: '80%',
                 backgroundPosition: 'bottom right',
                 backgroundRepeat: 'no-repeat',
-                opacity: 0.85,
+                opacity: 1,
+                filter: 'brightness(1.25) saturate(1.4)',
               }}
             />
 
-            {/* Fondu uniquement à gauche pour garder le texte lisible */}
+            {/* Fondu réduit, juste assez pour lire le chiffre en haut à gauche */}
             <div
               className="absolute inset-0"
               style={{
-                background: 'linear-gradient(90deg, #121212 0%, #121212 40%, rgba(18,18,18,0.55) 65%, rgba(18,18,18,0.1) 100%)',
+                background: 'linear-gradient(90deg, #121212 0%, #121212 22%, rgba(18,18,18,0.35) 42%, transparent 65%)',
               }}
             />
 
