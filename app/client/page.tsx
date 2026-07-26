@@ -198,23 +198,15 @@ export default function ClientDashboard() {
             transition={{ delay: i * 0.06 }}
             className="card-premium p-4 relative overflow-hidden">
 
-            {/* Image de fond représentative du contenu, ajustée plein cadre */}
+            {/* Image de fond représentative du contenu, taille native, centrée */}
             <div
               className="absolute inset-0"
               style={{
                 backgroundImage: `url('${s.image}')`,
-                backgroundSize: 'cover',
+                backgroundSize: 'contain',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 filter: 'brightness(1.25) saturate(1.4)',
-              }}
-            />
-
-            {/* Fondu à gauche pour garder chiffre et label lisibles */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background: 'linear-gradient(90deg, #121212 0%, #121212 30%, rgba(18,18,18,0.5) 55%, transparent 80%)',
               }}
             />
 
