@@ -107,14 +107,36 @@ export default function ClientDashboard() {
         animate={{ opacity: 1, y: 0 }}
         className="p-5 rounded-xl border relative overflow-hidden"
         style={{
-          background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(212,175,55,0.02) 100%)',
+          background: '#0A0A0A',
           borderColor: 'rgba(212,175,55,0.2)',
         }}>
+
+        {/* Image du graphique doré, alignée à droite */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "url('/images/hero-chart.png')",
+            backgroundSize: 'contain',
+            backgroundPosition: 'right center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+
+        {/* Fondu noir progressif pour garder le texte lisible à gauche */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: 'linear-gradient(90deg, #0A0A0A 0%, #0A0A0A 30%, rgba(10,10,10,0.4) 60%, transparent 85%)',
+          }}
+        />
+
+        {/* Grille décorative subtile */}
         <div className="absolute inset-0 opacity-[0.015]"
           style={{
             backgroundImage: 'linear-gradient(#D4AF37 1px, transparent 1px), linear-gradient(90deg, #D4AF37 1px, transparent 1px)',
             backgroundSize: '40px 40px',
           }} />
+
         <div className="relative z-10 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold mb-1" style={{ color: '#F5F5F5' }}>
