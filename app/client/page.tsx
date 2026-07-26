@@ -203,7 +203,7 @@ export default function ClientDashboard() {
               className="absolute inset-0"
               style={{
                 backgroundImage: `url('${s.image}')`,
-                backgroundSize: '75%',
+                backgroundSize: '65%',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',
                 filter: 'brightness(1.25) saturate(1.4)',
