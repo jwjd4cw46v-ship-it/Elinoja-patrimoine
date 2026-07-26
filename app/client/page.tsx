@@ -164,7 +164,7 @@ export default function ClientDashboard() {
             value: analyses.length,
             icon: TrendingUp,
             color: '#D4AF37',
-            image: '/images/analyse-dispo.png',
+            image: '/images/Analyse-dispo.png',
           },
           {
             label: 'Publiées ce mois',
@@ -175,21 +175,21 @@ export default function ClientDashboard() {
             }).length,
             icon: BarChart2,
             color: '#00C853',
-            image: '/images/publication.png',
+            image: '/images/Publication.png',
           },
           {
             label: 'Signaux achat',
             value: analyses.filter(a => a.signal === 'buy').length,
             icon: TrendingUp,
             color: '#2196F3',
-            image: '/images/signal.png',
+            image: '/images/Signal.png',
           },
           {
             label: 'Annonces actives',
             value: announcements.length,
             icon: Bell,
             color: '#FF9800',
-            image: '/images/alertes.png',
+            image: '/images/Alertes.png',
           },
         ].map((s, i) => (
           <motion.div key={s.label}
