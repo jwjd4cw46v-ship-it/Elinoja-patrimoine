@@ -202,7 +202,7 @@ export default function ClientDashboard() {
             <div
               className="absolute"
               style={{
-                bottom: '-10%',
+                bottom: '-18%',
                 right: '-6%',
                 width: '68%',
                 height: '68%',
