@@ -159,25 +159,72 @@ export default function ClientDashboard() {
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Analyses dispo.', value: analyses.length, icon: TrendingUp, color: '#D4AF37' },
-          { label: 'Publiées ce mois', value: analyses.filter(a => {
-            const d = new Date(a.created_at)
-            const now = new Date()
-            return d.getMonth() === now.getMonth()
-          }).length, icon: BarChart2, color: '#00C853' },
-          { label: 'Signaux achat', value: analyses.filter(a => a.signal === 'buy').length, icon: TrendingUp, color: '#2196F3' },
-          { label: 'Annonces actives', value: announcements.length, icon: Bell, color: '#FF9800' },
+          {
+            label: 'Analyses dispo.',
+            value: analyses.length,
+            icon: TrendingUp,
+            color: '#D4AF37',
+            image: '/images/analyse-dispo.png',
+          },
+          {
+            label: 'Publiées ce mois',
+            value: analyses.filter(a => {
+              const d = new Date(a.created_at)
+              const now = new Date()
+              return d.getMonth() === now.getMonth()
+            }).length,
+            icon: BarChart2,
+            color: '#00C853',
+            image: '/images/publication.png',
+          },
+          {
+            label: 'Signaux achat',
+            value: analyses.filter(a => a.signal === 'buy').length,
+            icon: TrendingUp,
+            color: '#2196F3',
+            image: '/images/signal.png',
+          },
+          {
+            label: 'Annonces actives',
+            value: announcements.length,
+            icon: Bell,
+            color: '#FF9800',
+            image: '/images/alertes.png',
+          },
         ].map((s, i) => (
           <motion.div key={s.label}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06 }}
-            className="card-premium p-4">
-            <div className="flex items-center justify-between mb-2">
-              <s.icon size={14} style={{ color: s.color }} />
+            className="card-premium p-4 relative overflow-hidden">
+
+            {/* Image de fond représentative du contenu */}
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `url('${s.image}')`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+                opacity: 0.35,
+              }}
+            />
+
+            {/* Fondu pour garder le texte lisible */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'linear-gradient(135deg, rgba(18,18,18,0.95) 0%, rgba(18,18,18,0.75) 45%, rgba(18,18,18,0.35) 100%)',
+              }}
+            />
+
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <s.icon size={14} style={{ color: s.color }} />
+              </div>
+              <div className="text-2xl font-bold" style={{ color: '#F5F5F5' }}>{s.value}</div>
+              <div className="text-xs mt-0.5" style={{ color: '#5C5C5C' }}>{s.label}</div>
             </div>
-            <div className="text-2xl font-bold" style={{ color: '#F5F5F5' }}>{s.value}</div>
-            <div className="text-xs mt-0.5" style={{ color: '#5C5C5C' }}>{s.label}</div>
           </motion.div>
         ))}
       </div>
