@@ -198,12 +198,16 @@ export default function ClientDashboard() {
             transition={{ delay: i * 0.06 }}
             className="card-premium p-4 relative overflow-hidden">
 
-            {/* Image de fond représentative du contenu */}
+            {/* Image de fond représentative du contenu, décalée plus bas dans le coin */}
             <div
-              className="absolute inset-0"
+              className="absolute"
               style={{
+                bottom: '-10%',
+                right: '-6%',
+                width: '68%',
+                height: '68%',
                 backgroundImage: `url('${s.image}')`,
-                backgroundSize: '70%',
+                backgroundSize: 'contain',
                 backgroundPosition: 'bottom right',
                 backgroundRepeat: 'no-repeat',
                 filter: 'brightness(1.25) saturate(1.4)',
