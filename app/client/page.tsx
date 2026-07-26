@@ -111,7 +111,7 @@ export default function ClientDashboard() {
           borderColor: 'rgba(212,175,55,0.2)',
         }}>
 
-        {/* Image du graphique doré, alignée à droite */}
+        {/* Image du graphique doré, alignée à droite, opacité réduite */}
         <div
           className="absolute inset-0"
           style={{
@@ -119,14 +119,15 @@ export default function ClientDashboard() {
             backgroundSize: 'contain',
             backgroundPosition: 'right center',
             backgroundRepeat: 'no-repeat',
+            opacity: 0.45,
           }}
         />
 
-        {/* Fondu noir progressif pour garder le texte lisible à gauche */}
+        {/* Fondu noir renforcé pour garder le texte lisible et calmer la dorure */}
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(90deg, #0A0A0A 0%, #0A0A0A 30%, rgba(10,10,10,0.4) 60%, transparent 85%)',
+            background: 'linear-gradient(90deg, #0A0A0A 0%, #0A0A0A 45%, rgba(10,10,10,0.55) 65%, rgba(10,10,10,0.15) 85%, rgba(10,10,10,0.15) 100%)',
           }}
         />
 
