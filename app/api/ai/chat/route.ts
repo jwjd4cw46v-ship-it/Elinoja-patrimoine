@@ -7,7 +7,7 @@ import { AI_TOOLS, SYSTEM_PROMPT } from '@/types/ai'
 export const maxDuration = 60
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
-const MODEL = 'mistral-small-latest'
+const MODEL = process.env.MISTRAL_MODEL || 'mistral-small-latest'
 const MAX_HISTORY = 12          // nombre max de messages d'historique envoyés
 const MAX_TOOL_RESULT = 8000    // taille max (caractères) d'un résultat d'outil renvoyé au modèle
 
@@ -123,7 +123,8 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok || !response.body) {
       const err = await response.text()
-      console.error('MISTRAL ERROR', response.status, err)
+      console.error('MISTRAL ERROR', response.status, 'model:', MODEL, err)
+      console.error('MISTRAL HEADERS', JSON.stringify(Object.fromEntries(response.headers.entries())))
       return new Response(JSON.stringify({ error: err }), { status: response.status === 429 ? 429 : 500 })
     }
 
