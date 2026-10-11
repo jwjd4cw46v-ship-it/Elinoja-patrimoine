@@ -17,6 +17,20 @@ const USER_ID_TOOLS = [
   'getPortfolioSummary',
 ]
 
+// fetch Mistral avec retry automatique sur 429 (limite de débit du palier gratuit)
+async function fetchMistral(body: object, headers: Record<string, string>, maxRetries = 3) {
+  let res: Response
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    res = await fetch(MISTRAL_API_URL, { method: 'POST', headers, body: JSON.stringify(body) })
+    if (res.status !== 429 || attempt === maxRetries) return res
+    const retryAfter = Number(res.headers.get('retry-after'))
+    const wait = retryAfter > 0 ? retryAfter * 1000 : 1500 * (attempt + 1)
+    console.warn(`MISTRAL 429, nouvelle tentative dans ${wait} ms (${attempt + 1}/${maxRetries})`)
+    await new Promise(r => setTimeout(r, wait))
+  }
+  return res!
+}
+
 // Lit un flux SSE Mistral avec buffer et appelle onChunk pour chaque chunk JSON
 async function readSSE(
   body: ReadableStream<Uint8Array>,
@@ -80,24 +94,20 @@ export async function POST(req: NextRequest) {
       'Authorization': `Bearer ${apiKey}`,
     }
 
-    const response = await fetch(MISTRAL_API_URL, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model:       MODEL,
-        messages:    openaiMessages,
-        tools:       AI_TOOLS,
-        tool_choice: 'auto',
-        stream:      true,
-        temperature: 0.3,
-        max_tokens:  2000,
-      }),
-    })
+    const response = await fetchMistral({
+      model:       MODEL,
+      messages:    openaiMessages,
+      tools:       AI_TOOLS,
+      tool_choice: 'auto',
+      stream:      true,
+      temperature: 0.3,
+      max_tokens:  2000,
+    }, headers)
 
     if (!response.ok || !response.body) {
       const err = await response.text()
       console.error('MISTRAL ERROR', response.status, err)
-      return new Response(JSON.stringify({ error: err }), { status: 500 })
+      return new Response(JSON.stringify({ error: err }), { status: response.status === 429 ? 429 : 500 })
     }
 
     const encoder = new TextEncoder()
@@ -183,17 +193,13 @@ export async function POST(req: NextRequest) {
             ]
 
             // 2e appel : réponse finale
-            const response2 = await fetch(MISTRAL_API_URL, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                model:       MODEL,
-                messages:    messagesWithTools,
-                temperature: 0.3,
-                max_tokens:  2000,
-                stream:      true,
-              }),
-            })
+            const response2 = await fetchMistral({
+              model:       MODEL,
+              messages:    messagesWithTools,
+              temperature: 0.3,
+              max_tokens:  2000,
+              stream:      true,
+            }, headers)
 
             if (!response2.ok || !response2.body) {
               const err = await response2.text()
