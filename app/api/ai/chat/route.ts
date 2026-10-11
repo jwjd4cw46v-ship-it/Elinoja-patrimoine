@@ -263,3 +263,27 @@ async function saveMessage(
   })
   if (error) console.error('SAVE MESSAGE ERROR', error)
 }
+
+// ⚠️ DIAGNOSTIC TEMPORAIRE : à retirer une fois le problème réglé
+export async function GET() {
+  const out: Record<string, any> = {
+    hasMistralKey:   !!process.env.MISTRAL_API_KEY,
+    hasSupabaseUrl:  !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    hasSupabaseAnon: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  }
+  try {
+    const supabase = await createClient()
+    out.supabaseAuth = typeof supabase?.auth?.getUser
+  } catch (e: any) {
+    out.supabaseError = e?.message
+  }
+  try {
+    const r = await fetch('https://api.mistral.ai/v1/models', {
+      headers: { Authorization: `Bearer ${process.env.MISTRAL_API_KEY}` },
+    })
+    out.mistralStatus = r.status
+  } catch (e: any) {
+    out.mistralError = e?.message
+  }
+  return Response.json(out)
+}
