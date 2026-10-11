@@ -8,6 +8,8 @@ export const maxDuration = 60
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
 const MODEL = 'mistral-small-latest'
+const MAX_HISTORY = 12          // nombre max de messages d'historique envoyés
+const MAX_TOOL_RESULT = 8000    // taille max (caractères) d'un résultat d'outil renvoyé au modèle
 
 const USER_ID_TOOLS = [
   'getWatchlistAlerts',
@@ -16,6 +18,19 @@ const USER_ID_TOOLS = [
   'getPositionAlerts',
   'getPortfolioSummary',
 ]
+
+// Garde les derniers messages, en commençant toujours par un message "user"
+// (évite un message "tool" orphelin, que Mistral refuserait)
+function trimHistory(messages: any[]) {
+  let trimmed = messages.slice(-MAX_HISTORY)
+  const firstUser = trimmed.findIndex(m => m.role === 'user')
+  if (firstUser > 0) trimmed = trimmed.slice(firstUser)
+  return trimmed
+}
+
+function truncate(str: string, max = MAX_TOOL_RESULT) {
+  return str.length > max ? str.slice(0, max) + '…[tronqué]' : str
+}
 
 // fetch Mistral avec retry automatique sur 429 (limite de débit du palier gratuit)
 async function fetchMistral(body: object, headers: Record<string, string>, maxRetries = 3) {
@@ -81,7 +96,7 @@ export async function POST(req: NextRequest) {
         role: 'system',
         content: SYSTEM_PROMPT + `\n\nContexte utilisateur:\n- userId: ${user.id}\n- email: ${user.email}`,
       },
-      ...(messages ?? []).map((m: any) => ({
+      ...trimHistory(messages ?? []).map((m: any) => ({
         role:    m.role,
         content: m.content ?? '',
         ...(m.toolCalls    ? { tool_calls:   m.toolCalls    } : {}),
@@ -93,6 +108,8 @@ export async function POST(req: NextRequest) {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${apiKey}`,
     }
+
+    console.log('MISTRAL PAYLOAD chars:', JSON.stringify({ m: openaiMessages, t: AI_TOOLS }).length, 'messages:', openaiMessages.length)
 
     const response = await fetchMistral({
       model:       MODEL,
@@ -188,7 +205,7 @@ export async function POST(req: NextRequest) {
                 role:         'tool',
                 tool_call_id: tc.id,
                 name:         tc.function.name,
-                content:      JSON.stringify(result),
+                content:      truncate(JSON.stringify(result)),
               })),
             ]
 
