@@ -7,34 +7,84 @@ import { AI_TOOLS, SYSTEM_PROMPT } from '@/types/ai'
 export const maxDuration = 60
 
 const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions'
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY!
+const MODEL = 'mistral-large-latest'
+
+const USER_ID_TOOLS = [
+  'getWatchlistAlerts',
+  'getPositions',
+  'getPositionDetail',
+  'getPositionAlerts',
+  'getPortfolioSummary',
+]
+
+// Lit un flux SSE Mistral avec buffer et appelle onChunk pour chaque chunk JSON
+async function readSSE(
+  body: ReadableStream<Uint8Array>,
+  onChunk: (chunk: any) => void,
+) {
+  const reader  = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  const handleLine = (line: string) => {
+    if (!line.startsWith('data: ')) return
+    const raw = line.slice(6).trim()
+    if (!raw || raw === '[DONE]') return
+    try { onChunk(JSON.parse(raw)) } catch { /* chunk partiel ignoré */ }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) handleLine(line)
+  }
+  if (buffer) handleLine(buffer)
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createClient()
+    const apiKey = process.env.MISTRAL_API_KEY
+    if (!apiKey) {
+      console.error('MISTRAL_API_KEY manquante')
+      return new Response(
+        JSON.stringify({ error: 'MISTRAL_API_KEY manquante côté serveur' }),
+        { status: 500 },
+      )
+    }
+
+    // await : fonctionne que createClient soit sync ou async
+    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return new Response('Unauthorized', { status: 401 })
 
     const { messages, conversationId } = await req.json()
 
     const openaiMessages = [
-      { role: 'system', content: SYSTEM_PROMPT + `\n\nContexte utilisateur:\n- userId: ${user.id}\n- email: ${user.email}` },
-      ...messages.map((m: any) => ({
+      {
+        role: 'system',
+        content: SYSTEM_PROMPT + `\n\nContexte utilisateur:\n- userId: ${user.id}\n- email: ${user.email}`,
+      },
+      ...(messages ?? []).map((m: any) => ({
         role:    m.role,
-        content: m.content,
-        ...(m.toolCalls    ? { tool_calls:    m.toolCalls    } : {}),
-        ...(m.tool_call_id ? { tool_call_id:  m.tool_call_id } : {}),
+        content: m.content ?? '',
+        ...(m.toolCalls    ? { tool_calls:   m.toolCalls    } : {}),
+        ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),
       })),
     ]
 
+    const headers = {
+      'Content-Type':  'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    }
+
     const response = await fetch(MISTRAL_API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${MISTRAL_API_KEY}`,
-      },
+      headers,
       body: JSON.stringify({
-        model:       'mistral-large-latest',
+        model:       MODEL,
         messages:    openaiMessages,
         tools:       AI_TOOLS,
         tool_choice: 'auto',
@@ -44,8 +94,9 @@ export async function POST(req: NextRequest) {
       }),
     })
 
-    if (!response.ok) {
+    if (!response.ok || !response.body) {
       const err = await response.text()
+      console.error('MISTRAL ERROR', response.status, err)
       return new Response(JSON.stringify({ error: err }), { status: 500 })
     }
 
@@ -53,11 +104,7 @@ export async function POST(req: NextRequest) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        const reader  = response.body!.getReader()
-        const decoder = new TextDecoder()
-
-        let buffer        = ''
-        let toolCalls:    any[] = []
+        let toolCalls: any[] = []
         let finishReason: string | null = null
         let assistantText = ''
 
@@ -66,44 +113,33 @@ export async function POST(req: NextRequest) {
         }
 
         try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
+          // 1er appel : texte + tool calls
+          await readSSE(response.body!, chunk => {
+            const choice = chunk.choices?.[0]
+            const delta  = choice?.delta
+            finishReason = choice?.finish_reason ?? finishReason
 
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() ?? ''
+            if (delta?.content) {
+              assistantText += delta.content
+              send({ type: 'text', text: delta.content })
+            }
 
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue
-              const raw = line.slice(6).trim()
-              if (raw === '[DONE]') continue
-
-              let chunk: any
-              try { chunk = JSON.parse(raw) } catch { continue }
-
-              const delta = chunk.choices?.[0]?.delta
-              finishReason = chunk.choices?.[0]?.finish_reason ?? finishReason
-
-              if (delta?.content) {
-                assistantText += delta.content
-                send({ type: 'text', text: delta.content })
-              }
-
-              if (delta?.tool_calls) {
-                for (const tc of delta.tool_calls) {
-                  if (!toolCalls[tc.index]) {
-                    toolCalls[tc.index] = { id: '', type: 'function', function: { name: '', arguments: '' } }
-                  }
-                  if (tc.id)                  toolCalls[tc.index].id                   = tc.id
-                  if (tc.function?.name)      toolCalls[tc.index].function.name        = tc.function.name
-                  if (tc.function?.arguments) toolCalls[tc.index].function.arguments  += tc.function.arguments
+            if (delta?.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const i = tc.index ?? 0
+                if (!toolCalls[i]) {
+                  toolCalls[i] = { id: '', type: 'function', function: { name: '', arguments: '' } }
                 }
+                if (tc.id)                  toolCalls[i].id                  = tc.id
+                if (tc.function?.name)      toolCalls[i].function.name       = tc.function.name
+                if (tc.function?.arguments) toolCalls[i].function.arguments += tc.function.arguments
               }
             }
-          }
+          })
 
-          if (finishReason === 'tool_calls' && toolCalls.length > 0) {
+          toolCalls = toolCalls.filter(Boolean)
+
+          if (toolCalls.length > 0) {
             for (const tc of toolCalls) {
               send({ type: 'tool_start', toolName: tc.function.name, toolCallId: tc.id })
             }
@@ -113,24 +149,31 @@ export async function POST(req: NextRequest) {
                 let args: Record<string, any> = {}
                 try { args = JSON.parse(tc.function.arguments || '{}') } catch {}
 
-                // Injection automatique du userId pour tous les tools qui en ont besoin
-                if (['getWatchlistAlerts', 'getPositions', 'getPositionDetail', 'getPositionAlerts', 'getPortfolioSummary'].includes(tc.function.name)) {
-                  args.userId = user.id  // forcer même si déjà présent
+                // Injection forcée du userId
+                if (USER_ID_TOOLS.includes(tc.function.name)) {
+                  args.userId = user.id
                 }
-                const result = await executeTool(tc.function.name, args)
 
-                if (tc.function.name === 'navigateTo' && result.url) {
+                let result: any
+                try {
+                  result = await executeTool(tc.function.name, args)
+                } catch (e: any) {
+                  console.error('TOOL ERROR', tc.function.name, e)
+                  result = { error: e?.message ?? 'Erreur outil' }
+                }
+
+                if (tc.function.name === 'navigateTo' && result?.url) {
                   send({ type: 'navigate', url: result.url })
                 }
 
                 send({ type: 'tool_result', toolCallId: tc.id, toolName: tc.function.name, result })
                 return { tc, result }
-              })
+              }),
             )
 
             const messagesWithTools = [
               ...openaiMessages,
-              { role: 'assistant', content: assistantText || null, tool_calls: toolCalls },
+              { role: 'assistant', content: assistantText || '', tool_calls: toolCalls },
               ...results.map(({ tc, result }) => ({
                 role:         'tool',
                 tool_call_id: tc.id,
@@ -139,14 +182,12 @@ export async function POST(req: NextRequest) {
               })),
             ]
 
+            // 2e appel : réponse finale
             const response2 = await fetch(MISTRAL_API_URL, {
               method: 'POST',
-              headers: {
-                'Content-Type':  'application/json',
-                'Authorization': `Bearer ${MISTRAL_API_KEY}`,
-              },
+              headers,
               body: JSON.stringify({
-                model:       'mistral-large-latest',
+                model:       MODEL,
                 messages:    messagesWithTools,
                 temperature: 0.3,
                 max_tokens:  2000,
@@ -154,41 +195,36 @@ export async function POST(req: NextRequest) {
               }),
             })
 
-            const reader2  = response2.body!.getReader()
-            let finalText  = ''
-
-            while (true) {
-              const { done, value } = await reader2.read()
-              if (done) break
-              const text  = decoder.decode(value, { stream: true })
-              const lines = text.split('\n')
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue
-                const raw = line.slice(6).trim()
-                if (raw === '[DONE]') continue
-                let chunk: any
-                try { chunk = JSON.parse(raw) } catch { continue }
-                const delta2 = chunk.choices?.[0]?.delta
-                if (delta2?.content) {
-                  finalText += delta2.content
-                  send({ type: 'text', text: delta2.content })
-                }
-              }
+            if (!response2.ok || !response2.body) {
+              const err = await response2.text()
+              console.error('MISTRAL ERROR (2e appel)', response2.status, err)
+              throw new Error(`Mistral ${response2.status}: ${err}`)
             }
+
+            let finalText = ''
+            await readSSE(response2.body, chunk => {
+              const content = chunk.choices?.[0]?.delta?.content
+              if (content) {
+                finalText += content
+                send({ type: 'text', text: content })
+              }
+            })
 
             if (conversationId) {
-              await saveMessage(supabase, conversationId, user.id, 'assistant', finalText, toolCalls, results.map(r => r.result))
+              await saveMessage(
+                supabase, conversationId, user.id, 'assistant',
+                finalText, toolCalls, results.map(r => r.result),
+              )
             }
-          } else {
-            if (conversationId && assistantText) {
-              await saveMessage(supabase, conversationId, user.id, 'assistant', assistantText)
-            }
+          } else if (conversationId && assistantText) {
+            await saveMessage(supabase, conversationId, user.id, 'assistant', assistantText)
           }
 
           send({ type: 'done' })
           controller.close()
         } catch (err: any) {
-          send({ type: 'error', message: err.message })
+          console.error('STREAM ERROR', err)
+          send({ type: 'error', message: err?.message ?? String(err) })
           controller.close()
         }
       },
@@ -202,7 +238,8 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 })
+    console.error('CHAT ROUTE ERROR', err)
+    return new Response(JSON.stringify({ error: err?.message ?? String(err) }), { status: 500 })
   }
 }
 
@@ -215,7 +252,7 @@ async function saveMessage(
   toolCalls?: any[],
   toolResults?: any[],
 ) {
-  await supabase.from('ai_messages').insert({
+  const { error } = await supabase.from('ai_messages').insert({
     conversation_id: conversationId,
     user_id:         userId,
     role,
@@ -224,4 +261,5 @@ async function saveMessage(
     tool_results: toolResults ? JSON.stringify(toolResults) : null,
     created_at:   new Date().toISOString(),
   })
+  if (error) console.error('SAVE MESSAGE ERROR', error)
 }
